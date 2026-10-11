@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, expect, test, vi } from 'vitest'
 import App from './App'
 import type { Process, Resource } from './api'
@@ -47,8 +47,8 @@ test('labels synthetic data and forwards trace controls to Dataset, retaining cy
   expect(traceCalls[0].searchParams.get('max_depth')).toBe('7')
   expect(traceCalls[0].searchParams.get('max_processes')).toBe('25')
   fireEvent.click(screen.getByRole('button',{name:'Process Mold cast'}))
-  expect(screen.getByText('Required presence')).toBeInTheDocument()
-  expect(screen.getByText('Guaranteed (1/1)')).toBeInTheDocument()
+  expect(within(screen.getByRole('complementary')).getByText('Required presence')).toBeInTheDocument()
+  expect(within(screen.getByRole('complementary')).getByText('Guaranteed (1/1)')).toBeInTheDocument()
 })
 
 test('typing iron dust and iron plate selects concrete IDs, and later editing invalidates the selection', async () => {

@@ -91,6 +91,12 @@ and no-route, identical-resource and limit states are explicit. Fewest steps
 does not mean best yield or minimum energy. Full recipe inputs and co-products
 remain available for developer inspection.
 
+Each graph tile represents a whole recipe, with its input slots, required
+tools, outputs, quantities, chances and machine parameters together. Tiles
+connect directly through shared materials. The selected route comes first,
+with supporting recipes and recycling shown as context. Resource identities
+remain available inside the recipes and in the inspector.
+
 ## Agent interface
 
 Configure an MCP client to launch the virtual-environment Python with these
