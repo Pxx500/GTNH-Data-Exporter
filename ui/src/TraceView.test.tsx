@@ -35,7 +35,7 @@ test('whole recipe tiles retain OR slots and co-products while supported group e
   const furnaceTile = screen.getByRole('article',{name:'Recipe Furnace'})
   expect(within(furnaceTile).getByText('Amount 2')).toBeInTheDocument()
   expect(within(furnaceTile).getByText('Amount 3')).toBeInTheDocument()
-  expect(within(furnaceTile).getByText('Chance 1/4')).toBeInTheDocument()
+  expect(within(furnaceTile).getByText('Chance 25%')).toBeInTheDocument()
   const alloyTile = screen.getByRole('article',{name:'Recipe Alloy Smelter'})
   expect(within(alloyTile).getByText('Amount 9')).toBeInTheDocument()
   expect(within(alloyTile).getByText('Amount 4')).toBeInTheDocument()

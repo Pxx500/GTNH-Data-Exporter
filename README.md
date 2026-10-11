@@ -96,6 +96,9 @@ tools, outputs, quantities, chances and machine parameters together. Tiles
 connect directly through shared materials. The selected route comes first,
 with supporting recipes and recycling shown as context. Resource identities
 remain available inside the recipes and in the inspector.
+The UI omits routine 100% chances and default flags. Exceptional chances
+appear as percentages, while unknown chances remain explicit. Exact fractions
+and technical fields remain available in the full recipe record.
 
 ## Agent interface
 

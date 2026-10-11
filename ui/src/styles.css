@@ -101,7 +101,7 @@ label input { margin-top: 6px; }
 .detail-title { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
 .detail-title > .badge { white-space: nowrap; }
 .detail-title h3 { overflow-wrap: anywhere; }
-.metrics { display: grid; grid-template-columns: repeat(3, 1fr); background: #f4f7fa; border-radius: 8px; padding: 12px; gap: 10px; }
+.metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(80px, 1fr)); background: #f4f7fa; border-radius: 8px; padding: 12px; gap: 10px; }
 dt { font-size: 10px; color: var(--muted); }
 dd { margin: 4px 0 0; font-size: 12px; font-weight: 600; overflow-wrap: anywhere; }
 .slot-list { display: grid; gap: 10px; }
@@ -219,6 +219,7 @@ footer { text-align: center; color: #8593a5; font-size: 10px; padding: 12px 24px
 .context-recipe .recipe-tile-toolbar { background: #f0f3f7; border-color: var(--border); }
 .recipe-tile-toolbar button { margin-left: auto; font-size: 10px; padding: 3px 6px; }
 .recipe-tile .process-detail { padding: 10px; }
+.recipe-tile .detail-title .eyebrow, .recipe-tile .detail-title code, .recipe-tile .resource-ref code { display: none; }
 .recipe-tile .detail-title h3 { font-size: 14px; margin-bottom: 3px; }
 .recipe-tile .eyebrow { font-size: 9px; letter-spacing: .6px; margin-bottom: 3px; }
 .recipe-tile .detail-title code { font-size: 9px; }
@@ -236,8 +237,8 @@ footer { text-align: center; color: #8593a5; font-size: 10px; padding: 12px 24px
 .recipe-tile .resource-ref code { font-size: 8px; margin-top: 2px; }
 .recipe-tile .quantity { font-size: 10px; }
 .recipe-tile .badge { font-size: 9px; }
-.recipe-tile .json-data { padding: 4px 0; }
-.recipe-tile .choice > .json-data, .recipe-tile .slot > .json-data { display: none; }
+.recipe-tile .json-data { display: none; }
+.recipe-tile .slot:only-child .slot-heading:has(> strong:only-child) { display: none; }
 .recipe-tile .group { font-size: 9px; margin-top: 4px; }
 .choice-or { display: block; color: #607898; font-size: 9px; font-weight: 700; letter-spacing: .8px; margin-bottom: 5px; }
 .direct-recipe-connections { padding: 22px 0 0; }

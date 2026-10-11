@@ -48,7 +48,7 @@ test('labels synthetic data and forwards trace controls to Dataset, retaining cy
   expect(traceCalls[0].searchParams.get('max_processes')).toBe('25')
   fireEvent.click(screen.getByRole('button',{name:'Process Mold cast'}))
   expect(within(screen.getByRole('complementary')).getByText('Required presence')).toBeInTheDocument()
-  expect(within(screen.getByRole('complementary')).getByText('Guaranteed (1/1)')).toBeInTheDocument()
+  expect(within(screen.getByRole('complementary')).queryByText('Guaranteed (1/1)')).not.toBeInTheDocument()
 })
 
 test('typing iron dust and iron plate selects concrete IDs, and later editing invalidates the selection', async () => {

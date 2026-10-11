@@ -1,6 +1,23 @@
-import { render, screen } from '@testing-library/react'
-import { expect, test, vi } from 'vitest'
+import { cleanup, render, screen } from '@testing-library/react'
+import { afterEach, expect, test, vi } from 'vitest'
 import { ProcessDetail } from './Details'
+
+afterEach(() => {cleanup(); vi.unstubAllGlobals()})
+
+test('omits routine defaults and displays exceptional chances as percentages', () => {
+  const process = {id:'process',family:'test',display_name:'Recipe',inputs:[{role:'consume',consumption_chance:{numerator:10000,denominator:10000},choices:[{resource_id:null,amount:9,match:{mode:'exact',nbt_sensitive:false},consumption_chance:{numerator:1,denominator:2}}]}],outputs:[{resource_id:'item',amount:1,chance:{numerator:1,denominator:1}},{resource_id:'item',amount:2,chance:{numerator:2500,denominator:10000}},{resource_id:'item',amount:0,chance:{numerator:0,denominator:10000}}],duration_ticks:20,eu_per_tick:4,amperage:1,executable:true,conditions:{},provenance:{}}
+  render(<ProcessDetail process={process} resources={new Map([['item',{id:'item',kind:'item',registry_name:'test:item',display_name:'Item',metadata:0,nbt:null,provenance:{}}]])}/>)
+  expect(screen.queryAllByText(/Guaranteed|10000\/10000/)).toHaveLength(0)
+  expect(screen.queryByText('Executable')).not.toBeInTheDocument()
+  expect(screen.queryByText('Consumed')).not.toBeInTheDocument()
+  expect(screen.queryByText('NBT-sensitive: no')).not.toBeInTheDocument()
+  expect(screen.queryByText('Amperage')).not.toBeInTheDocument()
+  expect(screen.getByText('Consumption chance 50%')).toBeInTheDocument()
+  expect(screen.getByText('Chance 25%')).toBeInTheDocument()
+  expect(screen.getByText('Chance 0%')).toBeInTheDocument()
+  expect(screen.getByText('Amount 9')).toBeInTheDocument()
+  expect(screen.getByText('20 ticks')).toBeInTheDocument()
+})
 
 test('preserves presence, per-alternative amounts and unknown output chance', async () => {
   vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({snapshot_id:'test', item:{id:'mold',kind:'item',registry_name:'test:mold',display_name:'Mold'}}))))
@@ -10,6 +27,6 @@ test('preserves presence, per-alternative amounts and unknown output chance', as
   expect(screen.getByText('Chance unknown')).toBeInTheDocument()
   expect(screen.getByText('Execution unknown')).toBeInTheDocument()
   expect(screen.getByText('native_unknown')).toBeInTheDocument()
-  expect(screen.getByText('Consumption chance 1/2')).toBeInTheDocument()
-  expect(screen.getByText('NBT-sensitive: yes')).toBeInTheDocument()
+  expect(screen.getByText('Consumption chance 50%')).toBeInTheDocument()
+  expect(screen.getByText('NBT-sensitive')).toBeInTheDocument()
 })
