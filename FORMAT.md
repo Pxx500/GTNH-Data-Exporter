@@ -116,6 +116,34 @@ mean all recipes or all acquisition routes in the pack are understood.
 Dynamic recipe behavior, unresolved matching and other-mod acquisition must
 remain visible. High record counts are not evidence of complete semantics.
 
+## Independent NEI reference
+
+An opt-in paired capture adds `nei-reference/summary.json` and three gzip
+JSONL streams: `handlers.jsonl.gz`, `signatures.jsonl.gz` and
+`handler-views.jsonl.gz`. This reference is separate from the authoritative
+six-stream snapshot and does not become another recipe identity model.
+
+The summary binds `canonical_snapshot_id` and `canonical_pack` to the exact
+canonical manifest. It records the native NEI version and JAR hash, readiness,
+projection labels, counts, failures and compressed stream checksums. Reference
+files publish before the canonical manifest. Partial handler or record errors
+remain explicit through `complete: false` and failure counters.
+
+`native_recipe_id_api` signatures invoke NEI's native RecipeId API. They are
+not an invocation of `/recipeid fast-dump`, and its blacklist is not applied.
+Raw views preserve `ingredients`, `result` and `other_stacks`
+separately. Auxiliary stacks can be furnace fuel, so they do not universally
+represent products. GT-specific views retain real quantities and native
+presentation fields. Generic presentation chances are not production chances.
+
+The comparator validates all canonical and reference streams and the paired
+cohort before applying its version-pinned adapter allowlist. It reports
+matching, differing, missing and unsupported projections separately, with
+bounded examples and scope limits. Default thresholds require no differences,
+missing matches or capture failures. An unmapped predicate is not an exact
+negative. NEI NBTJson is not injective, so ambiguous projections remain
+unsupported rather than being equated by display name or lossy NBT decoding.
+
 ## Dataset operations
 
 The same operations serve HTTP, CLI and MCP. Opening a Dataset fixes one

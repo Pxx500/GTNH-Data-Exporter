@@ -17,6 +17,7 @@ def main() -> int:
     parser.add_argument("--output", type=Path, help="New snapshot directory")
     parser.add_argument("--java-home", type=Path, help="Build JDK required by GTNHGradle")
     parser.add_argument("--python", type=Path, help="Python with gtnh-data installed")
+    parser.add_argument("--nei-reference", action="store_true", help="Also capture a separate NEI handler reference for validation")
     args = parser.parse_args()
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     output = (args.output or root / "exports" / f"{stamp}-{uuid.uuid4().hex[:8]}").resolve()
@@ -34,12 +35,17 @@ def main() -> int:
     if args.java_home:
         command.append(f"-Dorg.gradle.java.home={args.java_home.resolve()}")
     command.extend(["runFullPack", "-PdataAutorun=true", f"-PdataOutputDir={output}"])
+    if args.nei_reference:
+        command.append("-PdataNeiReference=true")
     print(f"Capturing new snapshot at {output}", flush=True)
     result = subprocess.run(command, cwd=root / "exporter", check=False)
     if result.returncode:
         return result.returncode
     if not (output / "manifest.json").is_file():
         print("The game exited without publishing a snapshot manifest", file=sys.stderr)
+        return 1
+    if args.nei_reference and not (output / "nei-reference" / "summary.json").is_file():
+        print("The game exited without publishing the requested NEI reference summary", file=sys.stderr)
         return 1
     result = subprocess.run(
         [str(interpreter), "-m", "gtnh_data", "import", str(output),

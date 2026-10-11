@@ -78,6 +78,36 @@ python/.venv/Scripts/python.exe -m gtnh_data import PATH_TO_SNAPSHOT --database 
 python/.venv/Scripts/python.exe -m gtnh_data status --database exports/index.sqlite
 ```
 
+## Compare against NEI
+
+Capture an independent NEI reference from the same running pack:
+
+```powershell
+python/.venv/Scripts/python.exe scripts/export_full_pack.py --output exports/paired-capture --nei-reference --java-home "C:/Program Files/Java/jdk-25.0.4.1"
+python/.venv/Scripts/python.exe scripts/compare_nei.py exports/paired-capture --report exports/paired-capture/comparison.json
+```
+
+The reference records registered handler inventories, native RecipeId API
+signatures and raw handler views. It retains ingredients, result stacks and
+auxiliary stacks separately. It does not render images. Both captures share
+the canonical snapshot ID and pack manifest. The comparator verifies their
+compressed checksums and counts before comparing source-proven projections.
+
+The current adapters cover four exact GT recipe maps and the exact NEI
+furnace handler. Other handlers remain unverified. RecipeId signatures omit
+quantities and alternatives, and NEI's NBT projection loses type information.
+Neither signature agreement nor display agreement proves pack-wide execution
+semantics. See [FORMAT.md](FORMAT.md) for the reference contract.
+
+The paired full-pack run on 2026-10-12 captured 366 handlers and 284,358
+views/signatures in a 277.35-second pipeline. Comparison took about 11 seconds
+and found 44,923 matching projections, 26 differences and 148 views without
+a supported canonical match. Five recipes caused both stack and signature
+capture failures, so the reference is incomplete and validation fails.
+The remaining discrepancies include unmapped ingredient and wildcard display
+behavior. They are investigation results, not confirmed missing recipes.
+The comparator exits 1 for failed thresholds and 2 for invalid evidence.
+
 ## Human interface
 
 ```powershell

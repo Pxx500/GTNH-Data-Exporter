@@ -11,6 +11,7 @@ import cpw.mods.fml.common.event.FMLServerStoppedEvent;
 import cpw.mods.fml.common.eventhandler.EventPriority;
 import cpw.mods.fml.common.eventhandler.SubscribeEvent;
 import cpw.mods.fml.common.gameevent.TickEvent;
+import com.google.gson.JsonObject;
 import gregtech.api.enums.GTValues;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -36,6 +37,11 @@ public final class DataExporterMod {
     private String worldName;
     private final CountDownLatch bootstrapSettled = new CountDownLatch(1);
     private final AtomicBoolean failureReported = new AtomicBoolean();
+    private final boolean neiReference = Boolean.getBoolean("gtnh.data.neiReference");
+    private final CountDownLatch referenceSettled = new CountDownLatch(1);
+    private volatile SnapshotWriter pendingWriter;
+    private JsonObject pendingManifest;
+    private Path pendingDirectory;
 
     @Mod.EventHandler
     public void initialize(FMLInitializationEvent event) {
@@ -58,6 +64,10 @@ public final class DataExporterMod {
 
     @SubscribeEvent
     public void clientTick(TickEvent.ClientTickEvent event) {
+        if (event.phase == TickEvent.Phase.END && pendingWriter != null) {
+            finishReferenceCapture();
+            return;
+        }
         if (event.phase != TickEvent.Phase.END || worldRequested || !loadComplete
             || !Loader.instance().hasReachedState(LoaderState.AVAILABLE)) return;
         worldRequested = true;
@@ -83,30 +93,71 @@ public final class DataExporterMod {
             || !GTValues.worldTickHappened) return;
         Minecraft client = Minecraft.getMinecraft();
         if (client.theWorld == null || client.thePlayer == null || !client.isIntegratedServerRunning()) return;
+        if (neiReference && !NeiReferenceCapture.isReady()) return;
         captureStarted = true;
         bootstrapSettled.countDown();
         try {
+            if (neiReference) startReferenceDeadline();
             String output = System.getProperty("gtnh.data.outputDir");
             if (output == null || output.trim().isEmpty()) throw new IllegalArgumentException("gtnh.data.outputDir is required");
             Path directory = Paths.get(output).toAbsolutePath();
             if (directory.getParent() != null) java.nio.file.Files.createDirectories(directory.getParent());
             LOG.info("GT first-world callbacks finished and client attached. Capturing native data at {}", directory);
-            try (SnapshotWriter writer = new SnapshotWriter(directory)) {
+            SnapshotWriter writer = new SnapshotWriter(directory);
+            try {
                 NativeCapture capture = new NativeCapture(writer);
                 capture.capture();
-                writer.publish(capture.manifest(client.mcDataDir.toPath(), worldName,
-                    client.getIntegratedServer().worldServerForDimension(0).getSeed()));
+                JsonObject manifest = capture.manifest(client.mcDataDir.toPath(), worldName,
+                    client.getIntegratedServer().worldServerForDimension(0).getSeed());
+                if (neiReference) {
+                    writer.close();
+                    pendingManifest = manifest;
+                    pendingDirectory = directory;
+                    // Volatile handoff publishes the completed server capture to the client thread.
+                    pendingWriter = writer;
+                    return;
+                }
+                writer.publish(manifest);
+            } finally {
+                writer.close();
             }
             LOG.info("GTNH data snapshot published at {}", directory.resolve("manifest.json"));
             FMLCommonHandler.instance().exitJava(0, false);
         } catch (Throwable failure) { fail(failure); }
     }
 
+    private void finishReferenceCapture() {
+        SnapshotWriter writer = pendingWriter;
+        pendingWriter = null;
+        try {
+            LOG.info("Capturing NEI reference on the client thread at {}", pendingDirectory);
+            NeiReferenceCapture.capture(pendingDirectory.resolve("nei-reference"), pendingManifest);
+            writer.publish(pendingManifest);
+            referenceSettled.countDown();
+            LOG.info("Paired canonical snapshot and NEI reference published at {}", pendingDirectory);
+            FMLCommonHandler.instance().exitJava(0, false);
+        } catch (Throwable failure) { fail(failure); }
+    }
+
     private void fail(Throwable failure) {
         bootstrapSettled.countDown();
+        referenceSettled.countDown();
         if (!failureReported.compareAndSet(false, true)) return;
         LOG.error("GTNH data capture failed. No valid snapshot has been published", failure);
         FMLCommonHandler.instance().exitJava(2, false);
+    }
+
+    private void startReferenceDeadline() {
+        final long seconds = Long.parseLong(System.getProperty("gtnh.data.neiCaptureTimeoutSeconds", "180"));
+        if (seconds <= 0) throw new IllegalArgumentException("gtnh.data.neiCaptureTimeoutSeconds must be positive");
+        Thread watchdog = new Thread(() -> {
+            try {
+                if (!referenceSettled.await(seconds, TimeUnit.SECONDS)) fail(new IllegalStateException(
+                    "Paired native/NEI capture exceeded " + seconds + " seconds, possibly in a blocked handler query"));
+            } catch (InterruptedException interrupted) { Thread.currentThread().interrupt(); }
+        }, "gtnh-data-nei-capture-deadline");
+        watchdog.setDaemon(true);
+        watchdog.start();
     }
 
     private void startBootstrapDeadline() {

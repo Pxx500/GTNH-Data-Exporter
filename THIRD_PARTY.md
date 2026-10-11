@@ -34,6 +34,7 @@ affected files.
 | jsdom and React type declarations | Versions in ui/package-lock.json | MIT |
 | Gradle wrapper | 9.2.1 | Apache-2.0, existing notices in wrapper scripts |
 | GTNHGradle / Pxx500GTNHGradle | Plugin 2.0.19 and local included build | LGPL v2.1 |
+| NotEnoughItems, host API | 2.8.159-GTNH | LGPL-3.0-or-later declaration in upstream README |
 
 UI package license metadata was checked in the actual lockfile. Python
 direct versions are pinned in pyproject.toml. Upstream license texts:
@@ -58,6 +59,11 @@ declarations and file-specific origins. Their implementation was not copied
 into the current independent capture adapters. The actual GTNH pack retains
 its own per-mod licenses. Public distribution of captured quests, textures
 or other content needs separate provenance and permission checks.
+
+The NEI reference adapter calls the installed mod's public APIs. NEI source
+was inspected at commit `550e85c456ff2a2ac92c47af4235ad3aa46beecb` to establish
+the native projection semantics. No NEI implementation source is copied or
+embedded. The tested runtime JAR identifies LGPLv3 in its mod metadata.
 
 This records the inspected direct dependencies and source reuse. A future
 binary release that bundles dependencies requires a license inventory of the

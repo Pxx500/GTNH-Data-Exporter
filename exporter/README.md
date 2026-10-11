@@ -39,6 +39,55 @@ Ordinary `runFullPack` does not activate capture. A JVM caller can instead set
 already exist. Failed output directories never have a published manifest and
 are retained for diagnostics. Parent automation owns game execution.
 
+Add `-PdataNeiReference=true` to the autorun invocation for a paired NEI
+validation reference. The equivalent JVM property is
+`gtnh.data.neiReference=true`. This mode waits for `NEIClientConfig.isLoaded()`
+and `ItemList.loadFinished` before the canonical server capture. It then
+captures the NEI reference on the client thread and publishes the canonical
+manifest after the reference summary. The existing bootstrap deadline covers
+NEI readiness. `gtnh.data.neiCaptureTimeoutSeconds`, default 180 seconds, bounds
+the paired capture and fails the process if a native query blocks.
+
+The fresh `nei-reference/` child contains `handlers.jsonl.gz`,
+`signatures.jsonl.gz`, `handler-views.jsonl.gz` and `summary.json`. These are
+separate from the six canonical streams. The summary binds the same canonical
+snapshot ID and pack/config digest cohort, plus per-file checksums and counts.
+Handler errors, empty queries and projection failures remain distinct. A
+completed partial reference can publish with `complete=false`. Fatal I/O or a
+deadline failure exits with code 2 without a canonical manifest.
+
+Signatures use `Recipe.of(handler,index).getRecipeId().toJsonObject()` and are
+labelled `native_recipe_id_api`. This is an API projection, not an actual
+`/recipeid` command dump. All registered crafting and serial crafting handlers
+are queried through their native all-recipes contract. The command's
+recipe-ID blacklist is not applied, and the summary says so.
+
+Handler views preserve ingredient, result and other-stack presentation
+categories separately. Every raw `PositionedStack.items` alternative uses
+NEI's own `StackInfo.itemStackToNBT` and `NBTJson` conversion. This JSON retains
+NEI's projection ambiguities and is independent from canonical typed NBT.
+Other stacks can be fuels or auxiliary presentation, not necessarily outputs.
+Native `getChance()` values are presentation data whose default can be 10000,
+not verified runtime probabilities. Exact `GTNEIDefaultHandler` records map
+through public `getRecipeMap()` to the full canonical `gregtech:` family.
+Public frontend properties and GT `FixedPositionedStack.realStackSize` retain
+quantity/unification presentation context without replacing the raw stack JSON.
+Custom frontends, filters and getters still need scoped comparison support.
+
+The NEI reference extension compiled against the consuming module's explicit
+`NotEnoughItems:2.8.159-GTNH:dev` dependency. The module model and documented
+library-search source CLI found its actual attached sources. The generic
+library-search launcher failed to prepare the nested module, and that failure
+is retained in `build/nei-library-search.log`. `test build` passed with the
+three existing contract tests. IntelliJ completed with 34 advisory findings.
+Direct installed PMD, using the same audit rules and 115 actual compile
+classpath entries, completed with 43 advisory findings and no processing or
+configuration errors. The combined runner still skips PMD because its Git-root
+lookup misses this module's wrapper. New findings concern method/class
+complexity, duplicate close handling and style, not observed capture failures.
+No audit suppressions were added. These checks establish compilation and
+static analysis, not runtime NEI coverage or equivalence.
+
 ## Current coverage
 
 - The live GT recipe-map catalog and all entries are visited, including fake,
