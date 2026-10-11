@@ -29,6 +29,8 @@ inputs are explicitly unresolved. Mining-drop transformations are not captured.
 GUI, HTTP, CLI and MCP share the same Dataset operations. The UI does not
 implement its own recipe matcher or graph discovery. No embeddings or remote
 service are required. See [FORMAT.md](FORMAT.md) for the shared contract.
+Potential later extensions are recorded in [FUTURE.md](FUTURE.md). The current
+focus is faithful capture, offline lookup and bounded material paths.
 
 ## Install the offline tools
 
