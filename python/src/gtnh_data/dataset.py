@@ -554,6 +554,84 @@ class Dataset:
         with self._connect() as connection:
             return self._page(connection, "environments", where, values, offset=offset, limit=limit)
 
+    @staticmethod
+    def _positive_output(output):
+        return output['amount'] > 0 and (output['chance'] is None or output['chance']['numerator'] > 0)
+
+    def _find_route(self, connection, start_id, target_id, max_depth):
+        search_limit = 10000
+        search = {"examined_processes": 0, "limit": search_limit, "truncated": False}
+        route = {"status": "same_resource" if start_id == target_id else "not_found",
+                 "strategy": "shortest_known_dependency_path", "resource_ids": [start_id] if start_id == target_id else [],
+                 "process_ids": []}
+        if start_id == target_id:
+            return route, search, []
+        clause, values = self._using_clause(connection, start_id)
+        consumers = {row[0] for row in connection.execute(
+            "SELECT id FROM records WHERE collection='processes' AND " + clause + " AND json_extract(payload,'$.executable') IS NOT 0", values)}
+        if not consumers:
+            return route, search, []
+        queue = deque([(target_id, 0)])
+        visited = {target_id}
+        parents = {}
+        records = {}
+        choices = {}
+        reasons = set()
+        winner = None
+        while queue and winner is None:
+            resource_id, depth = queue.popleft()
+            producers = connection.execute("""SELECT DISTINCT process_id FROM outputs JOIN records
+                ON records.collection='processes' AND records.id=outputs.process_id
+                WHERE resource_id=? AND json_extract(payload,'$.executable') IS NOT 0 ORDER BY process_id""", (resource_id,)).fetchall()
+            if depth >= max_depth:
+                if producers:
+                    reasons.add("depth")
+                continue
+            for row in producers:
+                process_id = row[0]
+                if process_id not in records:
+                    if len(records) >= search_limit:
+                        reasons.add("search_process_limit")
+                        queue.clear()
+                        break
+                    records[process_id] = self._record(connection, "processes", process_id)
+                record = records[process_id]
+                if not any(output["resource_id"] == resource_id and self._positive_output(output) for output in record["outputs"]):
+                    continue
+                input_ids = set()
+                for slot in record["inputs"]:
+                    for choice in slot["choices"]:
+                        match = choice["match"]
+                        if choice["amount"] <= 0 or match["mode"] == "native_unknown":
+                            continue
+                        if match["mode"] in ("ore_dict", "unified") and not match.get("group_id"):
+                            continue
+                        key = _json(choice)
+                        if key not in choices:
+                            choices[key] = self._choice_resources(connection, choice)
+                        input_ids.update(choices[key])
+                if process_id in consumers and start_id in input_ids:
+                    winner = (resource_id, process_id)
+                    break
+                for input_id in sorted(input_ids):
+                    if input_id not in visited:
+                        visited.add(input_id)
+                        parents[input_id] = (resource_id, process_id)
+                        queue.append((input_id, depth + 1))
+        search["examined_processes"] = len(records)
+        if winner is not None:
+            resource_id, process_id = winner
+            route.update(status="found", resource_ids=[start_id, resource_id], process_ids=[process_id])
+            while resource_id != target_id:
+                resource_id, process_id = parents[resource_id]
+                route["resource_ids"].append(resource_id)
+                route["process_ids"].append(process_id)
+            reasons.clear()
+        elif reasons:
+            route["status"] = "incomplete"
+        search["truncated"] = bool(reasons)
+        return route, search, sorted(reasons)
+
     def trace_processes(self, *, start_id, target_id, max_depth=12, max_processes=300):
         if isinstance(max_depth, bool) or not isinstance(max_depth, int) or not 1 <= max_depth <= 64:
             raise DatasetError("max_depth must be between 1 and 64")
@@ -564,15 +642,20 @@ class Dataset:
             processes = {}
             edges = {}
             input_slots = {}
-            truncated = False
+            route, search, limit_reasons = self._find_route(connection, start_id, target_id, max_depth)
+            if len(set(route["process_ids"])) > max_processes:
+                route.update(status="incomplete", resource_ids=[], process_ids=[])
+                limit_reasons.append("route_process_limit")
+            primary_resources = set(route["resource_ids"])
             unresolved = set()
 
             def admit(id, depth):
-                nonlocal truncated
                 if id in processes:
                     return False
                 if depth > max_depth or len(processes) >= max_processes:
-                    truncated = True
+                    reason = "context_depth" if depth > max_depth else "context_process_limit"
+                    if reason not in limit_reasons:
+                        limit_reasons.append(reason)
                     return False
                 record = self._record(connection, "processes", id)
                 if record["executable"] is False:
@@ -585,7 +668,8 @@ class Dataset:
                     candidates = set()
                     for choice_index, choice in enumerate(slot["choices"]):
                         for resource_id in self._choice_resources(connection, choice):
-                            resources.setdefault(resource_id, self._record(connection, "resources", resource_id))
+                            if resource_id not in resources:
+                                resources[resource_id] = self._record(connection, "resources", resource_id)
                             candidates.add(resource_id)
                             edge = {"source": f"resource:{resource_id}", "target": f"process:{id}",
                                     "role": slot["role"], "slot_index": slot_index, "choice_index": choice_index}
@@ -594,40 +678,46 @@ class Dataset:
                 input_slots[id] = slots
                 for output in record["outputs"]:
                     resource_id = output["resource_id"]
-                    resources.setdefault(resource_id, self._record(connection, "resources", resource_id))
+                    if resource_id not in resources:
+                        resources[resource_id] = self._record(connection, "resources", resource_id)
                     edge = {"source": f"process:{id}", "target": f"resource:{resource_id}", "role": "output"}
                     edges[_json(edge)] = edge
                 return True
 
-            queue = deque([(start_id, 0)])
-            visited = {start_id}
-            while queue:
-                resource_id, depth = queue.popleft()
-                if resource_id == target_id and resource_id != start_id:
-                    continue
+            for id in route["process_ids"]:
+                admit(id, 1)
+
+            # Add only direct reentry/alternative recipes between primary resources.
+            # Co-products do not start another forward flood.
+            route_producers = set()
+            route_consumers = set()
+            for resource_id in sorted(primary_resources) if route["status"] == "found" else []:
+                route_producers.update(row[0] for row in connection.execute(
+                    "SELECT process_id FROM outputs WHERE resource_id=?", (resource_id,)))
                 clause, values = self._using_clause(connection, resource_id)
-                rows = connection.execute("SELECT id FROM records WHERE collection='processes' AND " + clause + " AND json_extract(payload,'$.executable') IS NOT 0 ORDER BY id", values)
-                for row in rows:
-                    if admit(row[0], depth + 1):
-                        for output in processes[row[0]]["outputs"]:
-                            if output["resource_id"] not in visited:
-                                visited.add(output["resource_id"])
-                                queue.append((output["resource_id"], depth + 1))
+                route_consumers.update(row[0] for row in connection.execute(
+                    "SELECT id FROM records WHERE collection='processes' AND " + clause + " AND json_extract(payload,'$.executable') IS NOT 0", values))
+            for id in sorted(route_producers & route_consumers):
+                admit(id, 1)
 
             # Included processes retain every AND-input and every OR-choice.
             # Expand their producers, without treating missing co-inputs as supplied.
-            dependencies = deque((id, 1) for slots in input_slots.values() for choices in slots for id in sorted(choices))
+            def side_inputs(id):
+                return (resource_id for slot, candidates in zip(processes[id]["inputs"], input_slots[id])
+                        if slot["role"] == "consume" and not candidates & primary_resources
+                        for resource_id in sorted(candidates))
+
+            dependencies = deque((id, 1) for process_id in processes for id in side_inputs(process_id))
             dependency_depths = {}
             while dependencies:
                 resource_id, depth = dependencies.popleft()
-                if resource_id == start_id or dependency_depths.get(resource_id, max_depth + 1) <= depth:
+                if resource_id in primary_resources or dependency_depths.get(resource_id, max_depth + 1) <= depth:
                     continue
                 dependency_depths[resource_id] = depth
                 rows = connection.execute("SELECT DISTINCT process_id FROM outputs JOIN records ON records.collection='processes' AND records.id=outputs.process_id WHERE resource_id=? AND json_extract(payload,'$.executable') IS NOT 0 ORDER BY process_id", (resource_id,))
                 for row in rows:
                     if admit(row[0], depth + 1):
-                        for choices in input_slots[row[0]]:
-                            dependencies.extend((id, depth + 1) for id in sorted(choices))
+                        dependencies.extend((id, depth + 1) for id in side_inputs(row[0]))
 
             coverage = [json.loads(row[0]) for row in connection.execute("SELECT payload FROM records WHERE collection='coverage' ORDER BY id")]
             unsupported_count = connection.execute("SELECT COUNT(*) FROM records WHERE collection='processes' AND " + self._unresolved_input_clause()).fetchone()[0]
@@ -670,10 +760,11 @@ class Dataset:
                     if process_id in unresolved or not all(choices & grounded for choices in input_slots[process_id]):
                         continue
                     for output in record["outputs"]:
-                        if output["resource_id"] not in grounded:
+                        if self._positive_output(output) and output["resource_id"] not in grounded:
                             grounded.add(output["resource_id"])
                             changed = True
-            produced = {output["resource_id"] for process_id, record in processes.items() if process_id not in unresolved for output in record["outputs"]}
+            produced = {output["resource_id"] for process_id, record in processes.items() if process_id not in unresolved
+                        for output in record["outputs"] if self._positive_output(output)}
             needed = {id for slots in input_slots.values() for choices in slots for id in choices} | {start_id, target_id}
             leaves = []
             for resource_id in sorted(needed):
@@ -687,7 +778,8 @@ class Dataset:
                 leaves.append(leaf)
             return {"snapshot_id": self.snapshot_id, "start_id": start_id, "target_id": target_id,
                     "resources": [resources[id] for id in sorted(resources)], "processes": [processes[id] for id in sorted(processes)],
-                    "edges": edges_list, "leaves": leaves, "cycles": cycles, "truncated": truncated, "coverage": coverage}
+                      "edges": edges_list, "leaves": leaves, "cycles": cycles, "truncated": bool(limit_reasons), "coverage": coverage,
+                      "route": route, "search": search, "limit_reasons": sorted(limit_reasons)}
 
     def _choice_resources(self, connection, choice):
         match = choice["match"]

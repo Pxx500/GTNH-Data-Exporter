@@ -153,7 +153,8 @@ class DatasetTests(unittest.TestCase):
                 trace = dataset.trace_processes(start_id="one", target_id="product")
                 strict_inputs = {edge["source"] for edge in trace["edges"] if edge["target"] == "process:strict"}
                 self.assertEqual(strict_inputs, {"resource:one"})
-                default_inputs = {edge["source"] for edge in trace["edges"] if edge["target"] == "process:default"}
+                default_trace = dataset.trace_processes(start_id="one", target_id="default-product")
+                default_inputs = {edge["source"] for edge in default_trace["edges"] if edge["target"] == "process:default"}
                 self.assertEqual(default_inputs, {"resource:one", "resource:two"})
 
     def test_trace_preserves_branch_inputs_cycles_and_reports_limits(self):

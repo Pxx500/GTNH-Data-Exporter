@@ -20,7 +20,7 @@ test('labels synthetic data and forwards trace controls to Dataset, retaining cy
     if (url.pathname.startsWith('/api/resources/')) return response({snapshot_id:'test-snapshot',item:resource})
     if (url.pathname === '/api/trace') {
       traceCalls.push(url)
-      return response({snapshot_id:'test-snapshot',start_id:resource.id,target_id:resource.id,resources:[resource],processes:[process],edges:[{source:`resource:${resource.id}`,target:`process:${process.id}`,role:'presence'},{source:`process:${process.id}`,target:`resource:${resource.id}`,role:'output'}],leaves:[{resource_id:resource.id,status:'assumed',sources:[]}],cycles:[[`resource:${resource.id}`,`process:${process.id}`]],truncated:true,coverage:status.coverage})
+      return response({snapshot_id:'test-snapshot',start_id:resource.id,target_id:resource.id,resources:[resource],processes:[process],edges:[{source:`resource:${resource.id}`,target:`process:${process.id}`,role:'presence'},{source:`process:${process.id}`,target:`resource:${resource.id}`,role:'output'}],leaves:[{resource_id:resource.id,status:'assumed',sources:[]}],cycles:[[`resource:${resource.id}`,`process:${process.id}`]],truncated:true,coverage:status.coverage,route:{status:'same_resource',strategy:'shortest_known_dependency_path',resource_ids:[resource.id],process_ids:[]},search:{examined_processes:0,limit:1000,truncated:false},limit_reasons:['context_process_limit']})
     }
     throw new Error(`Unexpected route ${url.pathname}`)
   }))
@@ -39,7 +39,7 @@ test('labels synthetic data and forwards trace controls to Dataset, retaining cy
   fireEvent.change(screen.getByLabelText('Maximum depth'),{target:{value:'7'}})
   fireEvent.change(screen.getByLabelText('Maximum processes'),{target:{value:'25'}})
   fireEvent.click(screen.getByRole('button',{name:'Trace dependencies'}))
-  expect(await screen.findByText('Dependency expansion was truncated')).toBeInTheDocument()
+  expect(await screen.findByText('Bounded trace has omitted work')).toBeInTheDocument()
   expect(screen.getByText('1 cycle groups')).toBeInTheDocument()
   await waitFor(() => expect(traceCalls).toHaveLength(1))
   expect(traceCalls[0].searchParams.get('start_id')).toBe(resource.id)
@@ -61,7 +61,7 @@ test('typing iron dust and iron plate selects concrete IDs, and later editing in
     if (url.pathname === '/api/resources') return response(page(url.searchParams.get('q') === 'iron dust' ? [dust] : url.searchParams.get('q') === 'iron plate' ? [plate] : []))
     if (url.pathname === '/api/environments') return response(page([]))
     if (url.pathname.startsWith('/api/resources/')) return response({snapshot_id:'test-snapshot',item:decodeURIComponent(url.pathname.split('/').pop()!) === dust.id ? dust : plate})
-    if (url.pathname === '/api/trace') {calls.push(url); return response({snapshot_id:'test-snapshot',start_id:dust.id,target_id:plate.id,resources:[],processes:[],edges:[],leaves:[],cycles:[],truncated:false,coverage:[]})}
+    if (url.pathname === '/api/trace') {calls.push(url); return response({snapshot_id:'test-snapshot',start_id:dust.id,target_id:plate.id,resources:[],processes:[],edges:[],leaves:[],cycles:[],truncated:false,coverage:[],route:{status:'not_found',strategy:'shortest_known_dependency_path',resource_ids:[],process_ids:[]},search:{examined_processes:0,limit:1000,truncated:false},limit_reasons:[]})}
     throw new Error(`Unexpected route ${url.pathname}`)
   }))
   render(<App/>)

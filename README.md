@@ -84,6 +84,12 @@ search. Select a suggestion with the mouse or the arrow keys and Enter.
 Suggestions identify the registry, item/fluid kind, metadata and NBT presence
 so equally named variants remain separate. Editing a name clears the selection.
 Trace requests use the selected resource IDs rather than the typed text.
+The trace selects one shortest known dependency route to the target before
+adding supporting recipe context. It does not expand every recipe reachable
+from the supplied start. The route order is separate from the bounded graph,
+and no-route, identical-resource and limit states are explicit. Fewest steps
+does not mean best yield or minimum energy. Full recipe inputs and co-products
+remain available for developer inspection.
 
 ## Agent interface
 

@@ -31,6 +31,9 @@ export interface Trace {
   edges: { source: string; target: string; role: string; [key: string]: unknown }[]
   leaves: { resource_id: string; status: string; sources: string[]; reason?: string }[]
   cycles: string[][]; truncated: boolean; coverage: Coverage[]
+  route: {status: 'found' | 'not_found' | 'incomplete' | 'same_resource'; strategy: 'shortest_known_dependency_path'; resource_ids: string[]; process_ids: string[]}
+  search: {examined_processes: number; limit: number; truncated: boolean}
+  limit_reasons: ('depth' | 'search_process_limit' | 'route_process_limit' | 'context_depth' | 'context_process_limit')[]
 }
 
 export function query(path: string, params: Record<string, string | number | undefined> = {}) {

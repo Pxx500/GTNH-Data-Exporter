@@ -175,7 +175,40 @@ database model or matcher.
 ## Trace result
 
 `{snapshot_id, start_id, target_id, resources, processes, edges, leaves,
-cycles, truncated, coverage}`
+cycles, truncated, coverage, route, search, limit_reasons}`
+
+`route` contains `status`, `strategy`, ordered `resource_ids` and ordered
+`process_ids`. The strategy is `shortest_known_dependency_path`: fewest process
+steps through supported ingredient matches, with stable ID ordering for ties.
+The statuses are `found`, `not_found`, `incomplete` and `same_resource`.
+`found` establishes a dependency connection, not inventory feasibility,
+best yield, minimum energy or satisfaction of every machine condition.
+`not_found` is scoped to the captured supported graph. An identical start and
+target gives `same_resource` with one resource and no process steps.
+
+Search runs backward from the target through indexed output references.
+It has a separate safety budget of 10,000 unique inspected producer records.
+`search` reports `examined_processes`, `limit` and `truncated`. `max_depth`
+bounds route steps and supporting dependency expansion. `max_processes`
+bounds the returned graph. The full primary path is reserved before context.
+If that path cannot fit, the result is `incomplete` with no broken partial
+path represented as found. Native-unknown matches, ungrouped unified matches,
+disabled recipes and definite zero outputs cannot establish route edges.
+Zero-amount and zero-chance outputs also cannot ground a dependency cycle or
+count as material production. Their raw records remain available for inspection.
+
+Context retains complete selected recipe slots and co-products, direct
+alternative/reentry recipes between primary resources, and bounded producers
+of other consumed ingredients. An OR slot already matched on the primary path
+does not trigger manufacturing every other alternative. Presence and tool
+requirements remain explicit leaves for inspection. Their production is not
+automatically expanded. Co-products do not start another forward traversal.
+
+`limit_reasons` distinguishes `depth`, `search_process_limit`,
+`route_process_limit`, `context_depth` and `context_process_limit`.
+Top-level `truncated` is true if any of these limits applies. A found primary
+route can coexist with truncated supporting context. Neither alternatives
+nor cycles are claimed exhaustive across the whole snapshot.
 
 Edges identify resource/process nodes using `{source, target, role}`.
 Node references are `resource:<raw ID>` and `process:<raw ID>`.
