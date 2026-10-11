@@ -18,6 +18,8 @@ The manifest has `schema_version: 1`, `snapshot_id`, `created_at`,
 `capture` (exporter version and lifecycle/context), `pack` (actual mod
 versions and hashes, config/script digests where captured), and `files`.
 The `files` object maps each exact filename to `{sha256, records}`.
+Runtime capture includes `world_seed` as a decimal string, preserving all
+64 bits of the isolated world's seed.
 Checksums cover the compressed bytes. Publish the manifest only after
 closing all streams. Never treat an interrupted directory as a valid snapshot.
 
@@ -62,6 +64,10 @@ be null and membership is carried by `match.group_id`. Presence amount is
 the amount required to be present, not amount consumed. Preserve native
 amount zero separately if useful for provenance. Tool wear and returned
 containers are explicit extensions, never silently treated as consumed items.
+An unregistered native item is retained as a `native_unknown` choice with
+`resource_id: null` and a `native_item` record containing its class, amount,
+metadata, typed NBT and display name. It does not become a fabricated registry
+resource. A missing group reference is omitted rather than emitted as null.
 `match.nbt_sensitive` can explicitly specify native NBT behavior. Exact
 matching compares NBT unless this field is false. Wildcard matching ignores
 metadata and follows the same explicit NBT setting. A group's wildcard

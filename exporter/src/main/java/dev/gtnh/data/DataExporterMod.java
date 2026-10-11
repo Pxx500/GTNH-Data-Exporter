@@ -70,7 +70,8 @@ public final class DataExporterMod {
         LOG.info("GTNH data capture bootstraps isolated world {} after FML load-complete", worldName);
         try {
             startBootstrapDeadline();
-            WorldSettings settings = new WorldSettings(0L, WorldSettings.GameType.CREATIVE, false, false, WorldType.FLAT);
+            // GT world generators use XSTR, whose zero seed produces an all-zero stream.
+            WorldSettings settings = new WorldSettings(1L, WorldSettings.GameType.CREATIVE, false, false, WorldType.FLAT);
             settings.enableCommands();
             client.launchIntegratedServer(worldName, worldName, settings);
         } catch (Throwable failure) { fail(failure); }
@@ -93,7 +94,8 @@ public final class DataExporterMod {
             try (SnapshotWriter writer = new SnapshotWriter(directory)) {
                 NativeCapture capture = new NativeCapture(writer);
                 capture.capture();
-                writer.publish(capture.manifest(client.mcDataDir.toPath(), worldName));
+                writer.publish(capture.manifest(client.mcDataDir.toPath(), worldName,
+                    client.getIntegratedServer().worldServerForDimension(0).getSeed()));
             }
             LOG.info("GTNH data snapshot published at {}", directory.resolve("manifest.json"));
             FMLCommonHandler.instance().exitJava(0, false);

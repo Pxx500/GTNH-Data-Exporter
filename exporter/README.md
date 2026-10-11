@@ -17,6 +17,11 @@ deadline also reports failure and exits with code 2 even if client world launch
 blocks. `gtnh.data.bootstrapTimeoutSeconds` sets that error deadline, default
 180 seconds. The deadline never establishes readiness or starts a fallback run.
 
+The isolated world uses a fixed nonzero seed. GT's XSTR generator degenerates
+to an all-zero stream for seed zero, which caused repeated ruin generation and
+a native enchantment failure during the original bootstrap. The manifest
+records the actual server seed as an exact decimal string.
+
 ## Build and run
 
 Run Gradle only through the agreed Context Mode runner. This module uses
@@ -45,6 +50,8 @@ are retained for diagnostics. Parent automation owns game execution.
 - Known vanilla/Forge shaped/shapeless crafting is captured. Dynamic/custom
   crafting records remain explicitly unresolved. Returned containers/tool wear
   are native-unknown rather than silently claimed to be consumed
+- Unregistered native item inputs retain their class, amount, metadata, typed
+  NBT and display name as `native_unknown`. They have no fabricated registry ID
 - Active GT normal/small ore lists and underground-fluid config rules are
   exported. Ore outputs identify generated blocks, not mining drops
 - The registered Forge dimension catalog includes unloaded dimensions. GT
@@ -92,3 +99,21 @@ established. Parent verification covers the final build after probe removal.
 
 The adapted MIT source is attributed in `NativeCapture.java` and the full
 notice is retained in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
+## Successful full-pack capture
+
+The corrected bootstrap and collector completed a real run on 2026-10-11.
+The manifest published after about seven seconds of capture. The game exited
+successfully and the Python importer validated all checksums, record counts
+and references before activating the SQLite index. Full pipeline time was
+140.62 seconds. Local evidence is retained under `../exports/runtime-native-inputs`.
+
+Counts are 122,835 resources, 186,528 groups, 257,788 processes, 224 sources,
+119 environments and 185 coverage records. Five unregistered ItemDoor inputs
+are explicitly unresolved. All 609 null group references found in the earlier
+failed artifact are corrected by omitting absent group references. The failed
+artifacts remain diagnostic evidence and were never published as datasets.
+
+This establishes a working full-pack runtime capture for the implemented
+domains. Custom crafting and non-GT machine semantics remain partial or
+unsupported. Record counts alone do not prove full recipe coverage.

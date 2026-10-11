@@ -475,23 +475,30 @@ class Dataset:
     def _using_clause(self, connection, resource_id):
         self._record(connection, "resources", resource_id)
         return """id IN (
-            SELECT process_id FROM inputs WHERE
-                (mode='exact' AND (resource_id=? OR (nbt_sensitive=0 AND resource_id IN (
-                    SELECT anchor.id FROM resources anchor JOIN resources requested ON requested.id=?
-                    WHERE anchor.kind=requested.kind AND anchor.registry_name=requested.registry_name AND anchor.metadata IS requested.metadata
-                )))) OR
-                (mode IN ('ore_dict','unified') AND group_id IN (
-                    SELECT members.group_id FROM members JOIN resources member ON member.id=members.resource_id JOIN resources requested ON requested.id=?
-                    LEFT JOIN resources anchor ON anchor.id=inputs.resource_id
-                    WHERE member.kind=requested.kind AND member.registry_name=requested.registry_name
+            WITH requested AS (SELECT * FROM resources WHERE id=?)
+            SELECT inputs.process_id FROM requested JOIN inputs ON inputs.resource_id=requested.id
+                WHERE inputs.mode='exact'
+            UNION
+            SELECT inputs.process_id FROM requested
+                JOIN resources anchor ON anchor.kind=requested.kind AND anchor.registry_name=requested.registry_name
+                    AND anchor.metadata IS requested.metadata
+                JOIN inputs ON inputs.resource_id=anchor.id
+                WHERE inputs.mode='exact' AND inputs.nbt_sensitive=0
+            UNION
+            SELECT inputs.process_id FROM requested
+                JOIN resources member ON member.kind=requested.kind AND member.registry_name=requested.registry_name
                     AND (member.metadata IS requested.metadata OR member.metadata=32767)
+                JOIN members ON members.resource_id=member.id
+                JOIN inputs ON inputs.group_id=members.group_id
+                LEFT JOIN resources anchor ON anchor.id=inputs.resource_id
+                WHERE inputs.mode IN ('ore_dict','unified')
                     AND (inputs.nbt_sensitive IS NOT 1 OR requested.nbt=COALESCE(anchor.nbt,member.nbt))
-                )) OR
-                (mode='wildcard' AND resource_id IN (
-                    SELECT anchor.id FROM resources anchor JOIN resources requested ON requested.id=?
-                    WHERE anchor.kind=requested.kind AND anchor.registry_name=requested.registry_name AND (inputs.nbt_sensitive=0 OR anchor.nbt=requested.nbt)
-                ))
-        )""", (resource_id, resource_id, resource_id, resource_id)
+            UNION
+            SELECT inputs.process_id FROM requested
+                JOIN resources anchor ON anchor.kind=requested.kind AND anchor.registry_name=requested.registry_name
+                JOIN inputs ON inputs.resource_id=anchor.id
+                WHERE inputs.mode='wildcard' AND (inputs.nbt_sensitive=0 OR anchor.nbt=requested.nbt)
+        )""", (resource_id,)
 
     @staticmethod
     def _unresolved_input_clause():

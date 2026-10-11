@@ -7,7 +7,6 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import cpw.mods.fml.common.Loader;
 import cpw.mods.fml.common.ModContainer;
-import cpw.mods.fml.common.registry.GameRegistry;
 import gregtech.api.recipe.RecipeMap;
 import gregtech.api.recipe.RecipeMetadataKey;
 import gregtech.api.util.GTOreDictUnificator;
@@ -26,6 +25,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import net.minecraft.item.ItemStack;
+import net.minecraft.item.Item;
 import net.minecraft.item.crafting.CraftingManager;
 import net.minecraft.item.crafting.FurnaceRecipes;
 import net.minecraft.item.crafting.IRecipe;
@@ -72,7 +72,7 @@ final class NativeCapture {
             "Mob drops, trades, other-mod worldgen, mining drop distributions and saved deposits are not captured");
     }
 
-    JsonObject manifest(Path gameDirectory, String worldName) throws IOException {
+    JsonObject manifest(Path gameDirectory, String worldName, long worldSeed) throws IOException {
         JsonArray mods = new JsonArray();
         Map<Path, String> hashes = new HashMap<>();
         for (ModContainer mod : Loader.instance().getModList()) {
@@ -102,16 +102,16 @@ final class NativeCapture {
             "created_at", Instant.now().toString(),
             "capture", object("exporter_version", Tags.VERSION, "lifecycle", "integrated-world-server-tick-end",
                 "load_complete", true, "server_started", true, "gt_first_world_tick_complete", true,
-                "client_world_attached", true, "isolated_world", worldName, "images", false),
+                "client_world_attached", true, "isolated_world", worldName,
+                "world_seed", Long.toString(worldSeed), "images", false),
             "pack", object("mods", mods, "config_script_digests", configs,
                 "context", "configured native registries, no observed deposit scan"));
     }
 
     String item(ItemStack stack) throws IOException {
         if (stack == null) return null;
-        GameRegistry.UniqueIdentifier unique = GameRegistry.findUniqueIdentifierFor(stack.getItem());
-        if (unique == null) throw new IllegalArgumentException("Unregistered native item: " + stack);
-        String name = unique.modId + ":" + unique.name;
+        String name = Item.itemRegistry.getNameForObject(stack.getItem());
+        if (name == null) throw new IllegalArgumentException("Unregistered native item: " + stack.getItem().getClass().getName());
         JsonElement nbt = TypedNbt.encode(stack.getTagCompound());
         return resource("item", name, stack.getItemDamage(), nbt, displayName(stack, name));
     }
@@ -260,15 +260,23 @@ final class NativeCapture {
         for (ItemStack stack : stacks) if (stack != null && stack.stackSize != 0) presence = false;
         for (ItemStack stack : stacks) {
             if (stack == null) continue;
+            if (Item.itemRegistry.getNameForObject(stack.getItem()) == null) {
+                choices.add(object("resource_id", null, "amount", presence ? 1 : stack.stackSize,
+                    "native_amount", stack.stackSize, "match", object("mode", "native_unknown"),
+                    "native_item", nativeValue(stack)));
+                continue;
+            }
             String resource = item(stack);
             boolean needsNbt = sensitive;
             String group = null;
             String mode = stack.getItemDamage() == OreDictionary.WILDCARD_VALUE ? "wildcard" : "exact";
             if (oreId >= 0) { group = oreGroups.get(OreDictionary.getOreName(oreId)); mode = "ore_dict"; }
             else if (unify && !needsNbt) { group = unifiedGroup(stack); mode = "unified"; }
+            JsonObject match = object("mode", mode, "nbt_sensitive", needsNbt);
+            if (group != null) match.addProperty("group_id", group);
             choices.add(object("resource_id", resource, "amount", presence ? 1 : stack.stackSize,
                 "native_amount", stack.stackSize,
-                "match", object("mode", mode, "group_id", group, "nbt_sensitive", needsNbt)));
+                "match", match));
         }
         return object("role", presence ? "presence" : "consume", "choices", choices);
     }
@@ -367,7 +375,15 @@ final class NativeCapture {
     }
 
     private JsonElement nativeValue(Object value) throws IOException {
-        if (value instanceof ItemStack) return object("type", "item_stack", "resource_id", item((ItemStack) value), "amount", ((ItemStack) value).stackSize);
+        if (value instanceof ItemStack) {
+            ItemStack stack = (ItemStack) value;
+            if (Item.itemRegistry.getNameForObject(stack.getItem()) == null)
+                return object("type", "item_stack", "resource_id", null, "amount", stack.stackSize,
+                    "status", "unregistered", "item_class", stack.getItem().getClass().getName(),
+                    "metadata", stack.getItemDamage(), "nbt", TypedNbt.encode(stack.getTagCompound()),
+                    "display_name", displayName(stack, stack.getItem().getClass().getName()));
+            return object("type", "item_stack", "resource_id", item(stack), "amount", stack.stackSize);
+        }
         if (value instanceof FluidStack) return object("type", "fluid_stack", "resource_id", fluid((FluidStack) value), "amount", ((FluidStack) value).amount);
         if (value == null || value instanceof String || value instanceof Number || value instanceof Boolean)
             return SnapshotWriter.JSON.toJsonTree(value);

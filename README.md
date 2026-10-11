@@ -3,9 +3,16 @@
 Capture a versioned GregTech New Horizons dataset, then explore it with a
 human UI or query it through MCP and CLI while Minecraft is closed.
 
-This repository is implementing the first working capture/query slice.
+This repository provides a working first capture/query slice, verified against
+the running full GTNH pack on 2026-10-11. The first validated snapshot contains
+257,788 process records and 122,835 resources. Its six compressed data streams
+total 9.73 MB. Build, launch, capture, shutdown and import took 140.62 seconds
+on the local setup. These timings describe this captured scope and machine.
 Coverage is reported per source. An export is not a declaration that every
 recipe family or acquisition route in the pack has been reproduced.
+Custom crafting wrappers and non-GT machine integrations remain important
+coverage gaps. The current raw crafting catalog includes 46,564 records whose
+inputs are explicitly unresolved. Mining-drop transformations are not captured.
 
 ## Stack
 
