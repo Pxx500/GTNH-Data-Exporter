@@ -139,10 +139,27 @@ dd { margin: 4px 0 0; font-size: 12px; font-weight: 600; overflow-wrap: anywhere
 .warning-text { color: #976e2f; font-size: 11px; }
 .loading { color: var(--muted); font-size: 12px; padding: 12px; }
 .trace-workspace, .environment-workspace { padding: 22px; }
+.trace-workspace { overflow: visible; }
 .trace-workspace > .panel-heading, .environment-workspace > .panel-heading { padding: 0 0 20px; }
 .trace-controls { display: grid; grid-template-columns: 2fr 2fr 1fr 1fr auto; gap: 12px; align-items: end; }
 .trace-controls input { font-size: 12px; }
 .trace-controls button { font-size: 12px; }
+.resource-picker { position: relative; align-self: start; }
+.picker-input { position: relative; margin-top: 6px; }
+.picker-input input { padding-right: 33px; }
+.picker-clear { position: absolute; right: 3px; top: 3px; bottom: 3px; border: 0; background: transparent; padding: 0 7px; font-size: 17px !important; }
+.picker-identity { min-height: 36px; margin-top: 6px; font-size: 10px; color: var(--muted); overflow-wrap: anywhere; }
+.picker-identity code { display: block; font-size: 9px; }
+.picker-identity button { font-size: 9px; padding: 2px 4px; }
+.picker-menu { position: absolute; top: 65px; left: 0; width: max(100%, 310px); max-width: min(460px, calc(100vw - 60px)); z-index: 10; background: #fff; box-shadow: 0 8px 24px #152f4930; border: 1px solid #b9cbdc; border-radius: 8px; overflow: hidden; }
+.picker-menu ul { margin: 0; padding: 4px; list-style: none; max-height: 350px; overflow: auto; }
+.picker-menu li { cursor: pointer; padding: 9px 10px; border-radius: 5px; }
+.picker-menu li:hover, .picker-menu li[aria-selected=true] { background: #e8f5f1; }
+.picker-menu li strong, .picker-menu li span, .picker-menu li code { display: block; overflow-wrap: anywhere; }
+.picker-menu li strong { font-size: 12px; }
+.picker-menu li span { color: var(--muted); font-size: 10px; margin-top: 3px; }
+.picker-menu li code { font-size: 9px; margin-top: 3px; }
+.picker-menu p { padding: 9px 12px; margin: 0; font-size: 11px; color: var(--muted); }
 .trace-summary { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin: 24px 0 14px; }
 .trace-summary code { margin-left: auto; }
 .graph-toolbar { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px; font-size: 11px; padding: 10px 0; }

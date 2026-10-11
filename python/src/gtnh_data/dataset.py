@@ -10,8 +10,11 @@ import os
 import re
 import sqlite3
 import tempfile
+import threading
+import unicodedata
 from collections import deque
 from contextlib import contextmanager
+from functools import lru_cache
 from pathlib import Path
 
 COLLECTIONS = ("resources", "groups", "processes", "sources", "environments", "coverage")
@@ -25,11 +28,39 @@ def _json(value):
     return json.dumps(value, ensure_ascii=False, separators=(",", ":"), sort_keys=True, allow_nan=False)
 
 
+@lru_cache(maxsize=16384)
+def _search_text(value):
+    return "".join(char for char in unicodedata.normalize("NFD", value.lower()) if not unicodedata.combining(char))
+
+
+@lru_cache(maxsize=16384)
+def _search_words(value):
+    return tuple(re.findall(r"[^\W_]+", _search_text(value)))
+
+
+def _deletions(word):
+    return {word, *(word[:index] + word[index + 1:] for index in range(len(word)))}
+
+
+def _one_edit(left, right):
+    if abs(len(left) - len(right)) > 1:
+        return False
+    if len(left) == len(right):
+        mismatches = [index for index, pair in enumerate(zip(left, right)) if pair[0] != pair[1]]
+        return len(mismatches) <= 1 or (len(mismatches) == 2 and mismatches[1] == mismatches[0] + 1
+            and left[mismatches[0]] == right[mismatches[1]] and left[mismatches[1]] == right[mismatches[0]])
+    shorter, longer = sorted((left, right), key=len)
+    index = next((index for index, pair in enumerate(zip(shorter, longer)) if pair[0] != pair[1]), len(shorter))
+    return shorter[index:] == longer[index + 1:]
+
+
 class Dataset:
     """One snapshot, with a fresh read-only connection for every operation."""
 
     def __init__(self, database: str | Path):
         self.path = Path(database).resolve()
+        self._search_vocabulary = None
+        self._search_lock = threading.Lock()
         if not self.path.is_file():
             raise DatasetError(f"No imported dataset at {self.path}")
         with self._connect() as connection:
@@ -375,12 +406,71 @@ class Dataset:
     def find_resources(self, *, q="", kind=None, offset=0, limit=50):
         if kind not in (None, "item", "fluid"):
             raise DatasetError("kind must be item or fluid")
-        where, parameters = self._search_clause(q)
-        if kind is not None:
-            where += " AND json_extract(payload,'$.kind')=?"
-            parameters += (kind,)
+        self._pagination(offset, limit)
+        tokens = _search_words(q)
         with self._connect() as connection:
-            return self._page(connection, "resources", where, parameters, offset=offset, limit=limit)
+            if not tokens:
+                return self._page(connection, "resources", "json_extract(payload,'$.kind')=?" if kind else "1", (kind,) if kind else (), offset=offset, limit=limit)
+            alternatives = self._resource_search_terms(connection, tokens)
+            expression = " AND ".join("(" + " OR ".join(f'"{word}"*' for word in sorted(words)) + ")" for words in alternatives)
+            clause = "search MATCH ? AND search.collection='resources'"
+            parameters = (expression,)
+            if kind:
+                clause += " AND resources.kind=?"
+                parameters += (kind,)
+            tables = "search JOIN resources ON resources.id=search.id JOIN records ON records.collection='resources' AND records.id=search.id"
+            total = connection.execute(f"SELECT COUNT(*) FROM {tables} WHERE {clause}", parameters).fetchone()[0]
+            connection.create_function("resource_search_rank", 4, self._resource_search_rank(q, tokens, alternatives), deterministic=True)
+            rows = connection.execute(f"""SELECT records.payload FROM {tables} WHERE {clause}
+                ORDER BY resource_search_rank(resources.id,resources.registry_name,json_extract(records.payload,'$.display_name'),search.text),resources.id
+                LIMIT ? OFFSET ?""", (*parameters, limit, offset))
+            return {"snapshot_id": self.snapshot_id, "items": [json.loads(row[0]) for row in rows], "total": total, "offset": offset, "limit": limit}
+
+    def _resource_search_terms(self, connection, tokens):
+        # The existing FTS index is authoritative. This temporary view leaves the imported database unchanged.
+        with self._search_lock:
+            if self._search_vocabulary is None:
+                connection.execute("CREATE VIRTUAL TABLE temp.resource_terms USING fts5vocab(main,search,row)")
+                vocabulary = {}
+                for row in connection.execute("SELECT term FROM temp.resource_terms"):
+                    word = row[0]
+                    if 3 <= len(word) <= 64 and word.isalpha():
+                        for deletion in _deletions(word):
+                            vocabulary.setdefault(deletion, set()).add(word)
+                self._search_vocabulary = vocabulary
+        alternatives = []
+        for token in tokens:
+            words = {token}
+            if 3 <= len(token) <= 64 and token.isalpha():
+                candidates = set().union(*(self._search_vocabulary.get(deletion, ()) for deletion in _deletions(token)))
+                words.update(word for word in candidates if _one_edit(token, word))
+            alternatives.append(words)
+        return alternatives
+
+    @staticmethod
+    def _resource_search_rank(q, tokens, alternatives):
+        literal = _search_text(q.strip())
+
+        def rank(id, registry, display, text):
+            display = display or ""
+            display_words = _search_words(display)
+            if literal == _search_text(id):
+                return 0
+            if literal == _search_text(registry):
+                return 1
+            if tokens == display_words:
+                return 2
+            if sorted(tokens) == sorted(display_words):
+                return 3
+            words = _search_words(text)
+            costs = [min((0 if word == token else 1 if word.startswith(token) else 2
+                for word in words if any(word.startswith(alternative) for alternative in choices)), default=3)
+                for token, choices in zip(tokens, alternatives)]
+            tier = 4 if max(costs) == 0 else 5 if max(costs) == 1 else 6
+            in_display = all(any(word.startswith(alternative) for word in display_words for alternative in choices) for choices in alternatives)
+            return tier * 1000000 + costs.count(2) * 10000 + (0 if in_display else 1000) + costs.count(1) * 100 + min(len(display_words), 99)
+
+        return rank
 
     def _using_clause(self, connection, resource_id):
         self._record(connection, "resources", resource_id)

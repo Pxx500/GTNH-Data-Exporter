@@ -41,21 +41,21 @@ export function query(path: string, params: Record<string, string | number | und
 
 export function useRequest<T>(url: string | null) {
   const [revision, setRevision] = useState(0)
-  const [state, setState] = useState<{data?: T; loading: boolean; error?: string}>({loading: !!url})
+  const [state, setState] = useState<{url: string | null; data?: T; loading: boolean; error?: string}>({url, loading: !!url})
   useEffect(() => {
-    if (!url) { setState({loading: false}); return }
+    if (!url) { setState({url, loading: false}); return }
     const controller = new AbortController()
-    setState({loading: true})
+    setState({url, loading: true})
     fetch(url, {signal: controller.signal})
       .then(async response => {
         const body = await response.json()
         if (!response.ok) throw new Error(typeof body.detail === 'string' ? body.detail : JSON.stringify(body.detail ?? body))
         return body as T
       })
-      .then(data => { if (!controller.signal.aborted) setState({data, loading: false}) })
-      .catch(error => { if (!controller.signal.aborted) setState({loading: false, error: error instanceof Error ? error.message : String(error)}) })
+      .then(data => { if (!controller.signal.aborted) setState({url, data, loading: false}) })
+      .catch(error => { if (!controller.signal.aborted) setState({url, loading: false, error: error instanceof Error ? error.message : String(error)}) })
     return () => controller.abort()
   }, [url, revision])
   const reload = useCallback(() => setRevision(value => value + 1), [])
-  return {...state, reload}
+  return state.url === url ? {...state, reload} : {loading: !!url, data: undefined, error: undefined, reload}
 }

@@ -132,6 +132,23 @@ and coverage as an array of coverage records. Filtered process lists also
 report `matching_complete` and `unresolved_matches` where native predicates
 cannot be evaluated. These flags do not substitute for source coverage.
 
+`find_resources(q=...)` searches display names, registry identifiers and
+snapshot resource IDs. Words can be reordered or shortened to prefixes.
+Alphabetic words of 3 to 64 characters also accept one insertion, deletion,
+substitution or adjacent transposition, such as `iron pltae`.
+Results rank exact resource IDs, exact registry identifiers, full display
+names, reordered display names, exact tokens, prefixes and typo matches in
+that order. Resource ID breaks ties. Pagination follows this order and
+`total` counts every matching resource. Broad queries cost more because all
+matching candidates are ranked. No import or schema change is required.
+
+Search proposes concrete identities. Equally named metadata or NBT variants
+remain distinct. Callers choose an ID before process lookup or tracing.
+The GUI performs that selection through autocomplete. MCP and CLI callers
+use `find_resources` followed by the operation on the chosen ID.
+This is lexical discovery with typo tolerance, without synonym inference,
+translation or embeddings. It does not change ingredient matching semantics.
+
 HTTP routes are read-only under `/api`:
 
 - `/status`

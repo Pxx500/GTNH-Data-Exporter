@@ -72,6 +72,12 @@ resources for a process graph. Recipe details preserve alternative input
 slots, presence requirements, all outputs, chances and structured conditions.
 The UI shows source coverage and graph truncation.
 
+The trace fields autocomplete resource names through the shared Dataset
+search. Select a suggestion with the mouse or the arrow keys and Enter.
+Suggestions identify the registry, item/fluid kind, metadata and NBT presence
+so equally named variants remain separate. Editing a name clears the selection.
+Trace requests use the selected resource IDs rather than the typed text.
+
 ## Agent interface
 
 Configure an MCP client to launch the virtual-environment Python with these

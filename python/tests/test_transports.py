@@ -21,7 +21,7 @@ class TransportTests(unittest.TestCase):
         self.addCleanup(temporary.cleanup)
         self.root = Path(temporary.name)
         self.database = self.root / "dataset.sqlite"
-        self.dataset = Dataset.import_snapshot(snapshot(self.root / "capture", resources=[resource("a"), resource("b")],
+        self.dataset = Dataset.import_snapshot(snapshot(self.root / "capture", resources=[dict(resource("a"), display_name="Iron Plate"), resource("b")],
                                                        processes=[process("convert", [slot(choice("a"))], ["b"])]), self.database)
 
     def test_http_is_same_owner_with_pagination_spa_and_errors(self):
@@ -33,6 +33,9 @@ class TransportTests(unittest.TestCase):
             self.assertEqual(response.status_code, 200)
             self.assertEqual(response.json(), self.dataset.find_processes(input_id="a"))
             self.assertEqual(client.get("/api/resources?limit=1&offset=1").json(), self.dataset.find_resources(limit=1, offset=1))
+            search = client.get("/api/resources", params={"q": "iron pltae", "limit": 8}).json()
+            self.assertEqual(search, self.dataset.find_resources(q="iron pltae", limit=8))
+            self.assertEqual([item["id"] for item in search["items"]], ["a"])
             self.assertEqual(client.get("/api/resources/a").json(), self.dataset.get_resource("a"))
             self.assertEqual(client.get("/api/trace?start_id=a&target_id=b").json(), self.dataset.trace_processes(start_id="a", target_id="b"))
             self.assertEqual(client.get("/api/resources?limit=501").status_code, 400)
@@ -51,6 +54,10 @@ class TransportTests(unittest.TestCase):
                     result = await session.call_tool("find_processes", {"input_id": "a"})
                     self.assertFalse(result.is_error)
                     self.assertEqual(result.structured_content, self.dataset.find_processes(input_id="a"))
+                    result = await session.call_tool("find_resources", {"q": "iron pltae", "limit": 8})
+                    self.assertFalse(result.is_error)
+                    self.assertEqual(result.structured_content, self.dataset.find_resources(q="iron pltae", limit=8))
+                    self.assertEqual([item["id"] for item in result.structured_content["items"]], ["a"])
                     result = await session.call_tool("trace_processes", {"start_id": "a", "target_id": "b"})
                     self.assertEqual(result.structured_content, self.dataset.trace_processes(start_id="a", target_id="b"))
                     error = await session.call_tool("get_resource", {"id": "missing"})
