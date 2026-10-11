@@ -1,6 +1,8 @@
 # Third-party source and dependency notices
 
-New project code is covered by the root MIT license. This does not relicense
+Project code is covered by GNU LGPL version 3 only (`LGPL-3.0-only`).
+See [LICENSE](LICENSE) and the incorporated GPLv3 terms in [COPYING](COPYING).
+This does not relicense
 upstream code, build tools, installed dependencies or exported modpack content.
 
 ## Reused source

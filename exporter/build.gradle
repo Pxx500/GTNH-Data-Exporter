@@ -10,6 +10,18 @@ dependencies {
     testImplementation('junit:junit:4.13.2')
 }
 
+tasks.named('processResources') {
+    from(['../LICENSE', '../COPYING', 'THIRD_PARTY_NOTICES.md']) {
+        into('META-INF')
+    }
+}
+
+tasks.named('sourcesJar') {
+    from(['../LICENSE', '../COPYING', 'THIRD_PARTY_NOTICES.md']) {
+        into('META-INF')
+    }
+}
+
 tasks.named('runFullPack') {
     dependsOn('build')
     if (providers.gradleProperty('dataAutorun').getOrElse('false').toBoolean()) {

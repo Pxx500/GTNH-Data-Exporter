@@ -103,7 +103,10 @@ co-product, a dimension condition and a cycle.
 
 ## License
 
-New project code is MIT. Reused code retains its original notices and license.
+Project code is licensed under GNU LGPL version 3 only (`LGPL-3.0-only`).
+Copyright (c) 2026 Pxx500 and GTNH Data Exporter contributors.
+The license text is in [LICENSE](LICENSE), with the incorporated GPLv3 terms
+in [COPYING](COPYING). Reused code retains its original notices and license.
 Using or exporting a mod does not relicense that mod's JAR, textures, quests
 or other content. See [THIRD_PARTY.md](THIRD_PARTY.md) for inspected direct
 dependencies and reused-source notices.

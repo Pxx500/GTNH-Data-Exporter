@@ -28,4 +28,6 @@ resolution and announces that limit if additional records exist. The separate
 environment catalog is paginated.
 
 No snapshot or synthetic production data is bundled. The UI and its own source
-are MIT licensed. Third-party package licenses are retained by npm dependencies.
+are licensed under GNU LGPL version 3 only (`LGPL-3.0-only`). See [LICENSE](LICENSE)
+and the incorporated GPLv3 terms in [../COPYING](../COPYING).
+Third-party package licenses are retained by npm dependencies.
