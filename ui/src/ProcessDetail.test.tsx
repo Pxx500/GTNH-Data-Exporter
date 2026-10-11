@@ -4,6 +4,12 @@ import { ProcessDetail } from './Details'
 
 afterEach(() => {cleanup(); vi.unstubAllGlobals()})
 
+test('labels native output templates separately from resolved recipe outputs', () => {
+  render(<ProcessDetail process={{id:'template',family:'minecraft:crafting',display_name:'Crafting',inputs:[],outputs:[{resource_id:'item',amount:1,chance:null}],duration_ticks:null,eu_per_tick:null,amperage:null,executable:null,conditions:{dynamic_output:'unresolved'},provenance:{}}} resources={new Map([['item',{id:'item',kind:'item',registry_name:'test:item',display_name:'Item',metadata:0,nbt:null,provenance:{}}]])}/>)
+  expect(screen.getByRole('heading', {name:'Output templates'})).toBeInTheDocument()
+  expect(screen.getByText('Runtime result is unresolved. Shown outputs are native display templates.')).toBeInTheDocument()
+})
+
 test('omits routine defaults and displays exceptional chances as percentages', () => {
   const process = {id:'process',family:'test',display_name:'Recipe',inputs:[{role:'consume',consumption_chance:{numerator:10000,denominator:10000},choices:[{resource_id:null,amount:9,match:{mode:'exact',nbt_sensitive:false},consumption_chance:{numerator:1,denominator:2}}]}],outputs:[{resource_id:'item',amount:1,chance:{numerator:1,denominator:1}},{resource_id:'item',amount:2,chance:{numerator:2500,denominator:10000}},{resource_id:'item',amount:0,chance:{numerator:0,denominator:10000}}],duration_ticks:20,eu_per_tick:4,amperage:1,executable:true,conditions:{},provenance:{}}
   render(<ProcessDetail process={process} resources={new Map([['item',{id:'item',kind:'item',registry_name:'test:item',display_name:'Item',metadata:0,nbt:null,provenance:{}}]])}/>)

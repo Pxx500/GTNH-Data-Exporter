@@ -26,17 +26,10 @@ import java.util.Set;
 import java.util.UUID;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Item;
-import net.minecraft.item.crafting.CraftingManager;
 import net.minecraft.item.crafting.FurnaceRecipes;
-import net.minecraft.item.crafting.IRecipe;
-import net.minecraft.item.crafting.ShapedRecipes;
-import net.minecraft.item.crafting.ShapelessRecipes;
 import net.minecraft.util.StatCollector;
-import net.minecraftforge.fluids.FluidRegistry;
 import net.minecraftforge.fluids.FluidStack;
 import net.minecraftforge.oredict.OreDictionary;
-import net.minecraftforge.oredict.ShapedOreRecipe;
-import net.minecraftforge.oredict.ShapelessOreRecipe;
 
 /**
  * Independent canonical capture. The native crafting dispatch and GT registry enumeration
@@ -59,7 +52,7 @@ final class NativeCapture {
         oreDictionary();
         gregTech();
         assemblyLine();
-        crafting();
+        new CraftingCapture(this).capture();
         smelting();
         new WorldgenCapture(this, writer).capture();
         coverage("resources", "partial", writer.count("resources"),
@@ -254,7 +247,7 @@ final class NativeCapture {
             "Real production registry and research captured. Machine progression and data-stick interpretation remain native");
     }
 
-    private JsonObject itemSlot(ItemStack[] stacks, int oreId, boolean sensitive, boolean unify) throws IOException {
+    JsonObject itemSlot(ItemStack[] stacks, int oreId, boolean sensitive, boolean unify) throws IOException {
         JsonArray choices = new JsonArray();
         boolean presence = stacks.length > 0;
         for (ItemStack stack : stacks) if (stack != null && stack.stackSize != 0) presence = false;
@@ -309,56 +302,6 @@ final class NativeCapture {
         return object("role", presence ? "presence" : "consume", "choices", choices);
     }
 
-    private void crafting() throws IOException {
-        long count = 0;
-        @SuppressWarnings("unchecked") List<IRecipe> recipes = CraftingManager.getInstance().getRecipeList();
-        for (IRecipe recipe : new ArrayList<>(recipes)) {
-            JsonArray inputs = new JsonArray();
-            Iterable<?> raw = null;
-            JsonObject conditions = object("native_class", recipe.getClass().getName(), "container_returns", "native_unknown");
-            boolean known = true;
-            if (recipe.getClass() == ShapedRecipes.class) {
-                ShapedRecipes shaped = (ShapedRecipes) recipe;
-                raw = java.util.Arrays.asList(shaped.recipeItems);
-                conditions.addProperty("width", shaped.recipeWidth);
-                conditions.addProperty("height", shaped.recipeHeight);
-            } else if (recipe.getClass() == ShapelessRecipes.class) raw = ((ShapelessRecipes) recipe).recipeItems;
-            else if (recipe.getClass() == ShapedOreRecipe.class) raw = java.util.Arrays.asList(((ShapedOreRecipe) recipe).getInput());
-            else if (recipe.getClass() == ShapelessOreRecipe.class) raw = ((ShapelessOreRecipe) recipe).getInput();
-            else { known = false; conditions.addProperty("dynamic_inputs", "unresolved"); }
-            if (raw != null) {
-                int slot = 0;
-                for (Object value : raw) {
-                    if (value != null) {
-                        List<ItemStack> alternatives = new ArrayList<>();
-                        if (value instanceof ItemStack) alternatives.add((ItemStack) value);
-                        else if (value instanceof Iterable) for (Object alternative : (Iterable<?>) value)
-                            if (alternative instanceof ItemStack) alternatives.add((ItemStack) alternative);
-                        if (alternatives.isEmpty()) { known = false; conditions.addProperty("unknown_ingredient", String.valueOf(value)); }
-                        else {
-                            ItemStack[] normalized = new ItemStack[alternatives.size()];
-                            for (int index = 0; index < normalized.length; index++) {
-                                normalized[index] = alternatives.get(index).copy(); normalized[index].stackSize = 1;
-                            }
-                            JsonObject input = itemSlot(normalized, -1, false, false);
-                            input.addProperty("native_slot", slot); inputs.add(input);
-                        }
-                    }
-                    slot++;
-                }
-            }
-            JsonArray outputs = new JsonArray();
-            ItemStack output = recipe.getRecipeOutput();
-            if (output != null) outputs.add(object("resource_id", item(output), "amount", output.stackSize,
-                "chance", object("numerator", 1, "denominator", 1)));
-            else { known = false; conditions.addProperty("dynamic_output", "unresolved"); }
-            emitProcess("minecraft:crafting", "Crafting", inputs, outputs, null, null, null,
-                known ? Boolean.TRUE : null, conditions, object("owner", "CraftingManager", "index", count));
-            count++;
-        }
-        coverage("minecraft.crafting", "partial", count, "All IRecipe records catalogued. Only native shaped/shapeless and Forge ore recipes interpreted, dynamic classes unresolved");
-    }
-
     private void smelting() throws IOException {
         @SuppressWarnings("unchecked") Map<ItemStack, ItemStack> recipes = FurnaceRecipes.smelting().getSmeltingList();
         long count = 0;
@@ -400,7 +343,7 @@ final class NativeCapture {
 
     private JsonObject chance(int nativeChance) { return object("numerator", nativeChance, "denominator", 10000); }
 
-    private void emitProcess(String family, String label, JsonArray inputs, JsonArray outputs, Integer duration,
+    void emitProcess(String family, String label, JsonArray inputs, JsonArray outputs, Integer duration,
         Integer energy, Integer amperage, Boolean executable, JsonObject conditions, JsonObject provenance) throws IOException {
         writer.append("processes", object("id", "p" + processNumber++, "family", family, "display_name", label,
             "inputs", inputs, "outputs", outputs, "duration_ticks", duration, "eu_per_tick", energy,

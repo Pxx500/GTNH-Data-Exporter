@@ -39,13 +39,17 @@ export function OutputRows({outputs, onSelect, resources}: {outputs: Output[]; o
 }
 export function ProcessDetail({process, onSelect, resources}: {process: Process; onSelect?: (id: string) => void; resources?: ReadonlyMap<string, Resource>}) {
   const roles: Record<string, string> = {presence: 'Required presence', tool: 'Tool'}
+  const conditions = process.conditions
+  const outputTemplates = conditions !== null && typeof conditions === 'object' && 'dynamic_output' in conditions
+    && conditions.dynamic_output === 'unresolved' && process.outputs.length > 0
   return <section className="process-detail">
     <div className="detail-title"><div><p className="eyebrow">{process.family}</p><h3>{process.display_name || process.id}</h3><code>{process.id}</code></div>{process.executable !== true && <Badge tone={process.executable === false ? 'warning' : 'muted'}>{process.executable === false ? 'Informational / fake' : 'Execution unknown'}</Badge>}</div>
     {(process.duration_ticks != null || process.eu_per_tick != null || (process.amperage != null && process.amperage !== 1)) && <dl className="metrics">{process.duration_ticks != null && <div><dt>Duration</dt><dd>{process.duration_ticks.toLocaleString()} ticks</dd></div>}{process.eu_per_tick != null && <div><dt>Energy</dt><dd>{process.eu_per_tick.toLocaleString()} EU/t</dd></div>}{process.amperage != null && process.amperage !== 1 && <div><dt>Amperage</dt><dd>{process.amperage}</dd></div>}</dl>}
+    {outputTemplates && <p className="notice warning">Runtime result is unresolved. Shown outputs are native display templates.</p>}
     <div className="recipe-io"><div className="recipe-inputs"><h4 title="All slots are required. Choose one alternative within each slot.">Inputs</h4>
     {process.inputs.length === 0 && <p className="empty-inline">No input slots captured.</p>}
     <div className="slot-list">{process.inputs.map((slot, index) => <section className="slot" key={index}><div className="slot-heading"><strong>Slot {index + 1}</strong>{slot.role !== 'consume' && <Badge tone="presence">{roles[slot.role] || slot.role}</Badge>}{slot.consumption_chance !== undefined && <Chance value={slot.consumption_chance} label="Consumption chance"/>} {slot.choices.length > 1 && <small>{slot.choices.length} alternatives</small>}</div>{slot.choices.map((choice, choiceIndex) => <div className="choice" key={choiceIndex}>{choiceIndex > 0 && <span className="choice-or">OR</span>}{choice.resource_id !== null && <ResourceRef id={choice.resource_id} onSelect={onSelect} resources={resources}/>}<div className="choice-meta"><Amount value={choice.amount}/>{!['exact','unified','ore_dict'].includes(choice.match.mode) && <Badge>{choice.match.mode}</Badge>}{choice.match.nbt_sensitive === true && <Badge>NBT-sensitive</Badge>}{choice.consumption_chance !== undefined && <Chance value={choice.consumption_chance} label="Consumption chance"/>}</div>{choice.match.group_id && <GroupRef id={choice.match.group_id} onSelect={onSelect} resources={resources}/>}<JsonData label="Choice fields" value={choice}/></div>)}<JsonData label="Slot fields" value={slot}/></section>)}</div>
-    </div><div className="recipe-outputs"><h4>Outputs</h4><OutputRows outputs={process.outputs} onSelect={onSelect} resources={resources}/></div></div>
+    </div><div className="recipe-outputs"><h4>{outputTemplates ? 'Output templates' : 'Outputs'}</h4><OutputRows outputs={process.outputs} onSelect={onSelect} resources={resources}/></div></div>
     <JsonData label="Conditions and research" value={process.conditions}/><JsonData label="Provenance" value={process.provenance}/><JsonData label="Full process record, including extension fields" value={process}/>
   </section>
 }

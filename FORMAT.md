@@ -214,6 +214,16 @@ does not repeat a resource or process, so cycles cannot create infinite
 enumeration. Bounds and incomplete capture can leave further paths unknown.
 Native-unknown matches, ungrouped unified/ore-dictionary matches, disabled
 recipes and definite zero outputs cannot establish material transitions.
+Recipes with `conditions.dynamic_output="unresolved"` also cannot establish
+transitions. Their output records may describe native display templates,
+which remain inspectable without being treated as verified runtime products.
+Trace coverage reports these recipes under `trace.outputs`. An unresolved
+producer keeps its boundary unresolved when no captured source establishes it.
+GT crafting may retain declared inherited predicates in `declared_match`
+while its authoritative `match.mode` remains `native_unknown`. Those declared
+predicates do not establish complete matching when inventory validators or
+cross-slot NBT conditions remain uninterpreted. `declared_stack_size` retains
+the original declaration beside normalized crafting input quantities.
 Zero-amount and zero-chance outputs also cannot ground a dependency cycle or
 count as material production. Their raw records remain available for inspection.
 

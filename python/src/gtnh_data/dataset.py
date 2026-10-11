@@ -587,7 +587,8 @@ class Dataset:
                         break
                     records[process_id] = self._record(connection, "processes", process_id)
                 record = records[process_id]
-                if record["executable"] is False or not any(output["resource_id"] == resource_id and self._positive_output(output) for output in record["outputs"]):
+                if (record["executable"] is False or record["conditions"].get("dynamic_output") == "unresolved"
+                        or not any(output["resource_id"] == resource_id and self._positive_output(output) for output in record["outputs"])):
                     continue
                 captured = {key: value for key, value in record.items() if key != "id"}
                 captured["provenance"] = {key: value for key, value in record["provenance"].items() if key != "index"}
@@ -792,6 +793,12 @@ class Dataset:
                 coverage.append({"id": "dataset:unresolved-matching", "domain": "trace.matching", "status": "partial",
                                  "records": unsupported_count, "reason": "Unsupported ingredient predicates can leave undiscovered routes in this snapshot",
                                  "provenance": {"owner": "Dataset"}})
+            unresolved_output_count = connection.execute("SELECT COUNT(*) FROM records WHERE collection='processes' AND "
+                                                        "json_extract(payload,'$.conditions.dynamic_output')='unresolved'").fetchone()[0]
+            if unresolved_output_count:
+                coverage.append({"id": "dataset:unresolved-outputs", "domain": "trace.outputs", "status": "partial",
+                                 "records": unresolved_output_count, "reason": "Unresolved dynamic outputs cannot establish material paths",
+                                 "provenance": {"owner": "Dataset"}})
             edges_list = sorted(edges.values(), key=lambda edge: (edge["source"], edge["target"], edge["role"], edge.get("slot_index", -1), edge.get("choice_index", -1)))
             cycles = self._cycles(edges_list)
             cyclic_resources = {node.removeprefix("resource:") for component in cycles for node in component if node.startswith("resource:")}
@@ -809,7 +816,8 @@ class Dataset:
                 rows = connection.execute("SELECT DISTINCT payload FROM records JOIN source_outputs ON source_outputs.source_id=records.id WHERE collection='sources' AND resource_id=? ORDER BY records.id", (resource_id,))
                 sources = [json.loads(row[0]) for row in rows]
                 source_ids[resource_id] = [source["id"] for source in sources]
-                if connection.execute("SELECT 1 FROM records WHERE collection='processes' AND id IN (SELECT process_id FROM outputs WHERE resource_id=?) AND " + self._unresolved_input_clause() + " LIMIT 1", (resource_id,)).fetchone():
+                if connection.execute("SELECT 1 FROM records WHERE collection='processes' AND id IN (SELECT process_id FROM outputs WHERE resource_id=?) AND (" + self._unresolved_input_clause()
+                                      + " OR json_extract(payload,'$.conditions.dynamic_output')='unresolved') LIMIT 1", (resource_id,)).fetchone():
                     unresolved_boundaries.add(resource_id)
                 if resource_id == start_id:
                     source_states[resource_id] = "assumed"
@@ -845,7 +853,7 @@ class Dataset:
                 if resource_id in cyclic_resources and resource_id not in grounded:
                     leaf["reason"] = "A cycle needs an external acquisition source or an explicit supplied seed"
                 elif resource_id in unresolved_outputs | unresolved_boundaries and leaf["status"] == "unresolved":
-                    leaf["reason"] = "Producer inputs or matching are unresolved"
+                    leaf["reason"] = "Producer inputs, matching or outputs are unresolved"
                 leaves.append(leaf)
             return {"snapshot_id": self.snapshot_id, "start_id": start_id, "target_id": target_id,
                     "resources": [resources[id] for id in sorted(resources)], "processes": [processes[id] for id in sorted(processes)],

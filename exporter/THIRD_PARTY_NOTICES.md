@@ -1,7 +1,8 @@
 # Calculation Oracle reuse
 
-The native crafting dispatch and GT recipe-map enumeration in
-`src/main/java/dev/gtnh/data/NativeCapture.java` were adapted from
+The native crafting dispatch in `src/main/java/dev/gtnh/data/CraftingCapture.java`
+and GT recipe-map enumeration in `src/main/java/dev/gtnh/data/NativeCapture.java`
+were adapted from
 `tools/dataset-pipeline/gtnh-calc-oracle/src/main/java/dev/gtnhplanner/calcoracle/GtnhCalcOracleExporter.java`
 in [Samiracle64/gtnh-factory-flow](https://github.com/Samiracle64/gtnh-factory-flow).
 The Gradle scaffold follows that project's Calculation Oracle module.

@@ -50,6 +50,16 @@ are retained for diagnostics. Parent automation owns game execution.
 - Known vanilla/Forge shaped/shapeless crafting is captured. Dynamic/custom
   crafting records remain explicitly unresolved. Returned containers/tool wear
   are native-unknown rather than silently claimed to be consumed
+- Exact `GTShapedRecipe` and `GTShapelessRecipe` classes expose their inherited
+  declared input slots and alternatives. Keeping-NBT shaped recipes and all GT
+  shapeless recipes retain `native_unknown` matching with declared anchors,
+  because NBT correlation and the private shapeless inventory validator are
+  not evaluated. Other subclasses remain opaque
+- GT crafting outputs are native templates with `dynamic_output=unresolved`,
+  unknown chance and unknown execution status. Native item updates, electric
+  charge transfer and configured enchantments are not evaluated. The query
+  engine can use the declared catalog for lookup but excludes these output
+  templates from confirmed material paths
 - Unregistered native item inputs retain their class, amount, metadata, typed
   NBT and display name as `native_unknown`. They have no fabricated registry ID
 - Active GT normal/small ore lists and underground-fluid config rules are
@@ -83,6 +93,22 @@ red-first TDD cycle. Logs are under local `build/verification.log` and
 `build/test-results/test/`. Build verification does not prove game capture.
 The parent runs consolidated Java audit and the real full-pack smoke test.
 
+For the exact GT crafting catalog extension, a plain JUnit fixture could not
+initialize Forge's live registries without LaunchWrapper. It failed before
+capture, so it was removed rather than reported as a behavioral regression
+test. The existing three contract tests and build are rerun. The real full-pack
+smoke must verify declared slots and unresolved matching/output flags.
+
+The extension passed `test build` on 2026-10-12 with all three existing tests.
+IntelliJ completed its recheck with 27 advisory findings. Its new constructor
+reachability warning overlooks the Forge lifecycle entry point. The combined
+runner skipped PMD because it resolves the Git root rather than this nested
+Gradle module. A separate installed PMD run used the same bundled ruleset and
+115 entries from the exported compile classpath. It completed without
+processing or configuration errors. Complexity and nesting findings remain
+advisory, including six for the crafting catalog method. No audit suppressions
+or native runtime evaluation were added to hide these findings.
+
 The first full-pack run on 2026-10-11 failed before capture during Galacticraft
 server-start initialization of Ross128b. The native ruin chest called
 EnchantmentHelper with an enchantment candidate set whose total weight was
@@ -97,7 +123,8 @@ been removed, with diagnostic logs retained. The compatibility-filtered set
 at the actual throw is unknown, so the exact offending enchantment is not
 established. Parent verification covers the final build after probe removal.
 
-The adapted MIT source is attributed in `NativeCapture.java` and the full
+The adapted MIT source is attributed in `NativeCapture.java` and
+`CraftingCapture.java`, and the full
 notice is retained in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 ## Successful full-pack capture

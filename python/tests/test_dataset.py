@@ -123,6 +123,22 @@ class DatasetTests(unittest.TestCase):
                 self.assertEqual(lookup["unresolved_matches"], 1)
                 self.assertTrue(any(entry["domain"] == "trace.matching" and entry["status"] == "partial" for entry in trace["coverage"]))
 
+    def test_dynamic_output_template_is_inspectable_but_cannot_establish_a_path(self):
+        template = process("template", [slot(choice("start"))], ["product"], executable=None,
+                           conditions={"dynamic_output": "unresolved"})
+        coverage = [{"id": "sources", "domain": "acquisition", "status": "complete", "records": 0,
+                     "reason": "No sources in this fixture", "provenance": {}}]
+        dataset = Dataset.import_snapshot(snapshot(self.root / "capture", resources=[resource("start"), resource("product")],
+                                                   processes=[template], coverage=coverage), self.root / "db.sqlite")
+        self.assertEqual([item["id"] for item in dataset.find_processes(input_id="start")["items"]], ["template"])
+        self.assertEqual(dataset.get_process("template")["item"]["outputs"], template["outputs"])
+        trace = dataset.trace_processes(start_id="start", target_id="product")
+        self.assertEqual(trace["paths"], [])
+        self.assertEqual(trace["processes"], [])
+        leaves = {leaf["resource_id"]: leaf for leaf in trace["leaves"]}
+        self.assertEqual(leaves["product"]["status"], "unresolved")
+        self.assertTrue(any(entry["domain"] == "trace.outputs" and entry["status"] == "partial" for entry in trace["coverage"]))
+
     def test_wildcard_group_members_connect_the_concrete_trace_resource(self):
         resources = [resource("group-wild", registry_name="test:log", metadata=32767),
                      resource("concrete-log", registry_name="test:log", metadata=4), resource("plank")]

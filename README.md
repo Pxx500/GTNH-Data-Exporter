@@ -11,8 +11,17 @@ on the local setup. These timings describe this captured scope and machine.
 Coverage is reported per source. An export is not a declaration that every
 recipe family or acquisition route in the pack has been reproduced.
 Custom crafting wrappers and non-GT machine integrations remain important
-coverage gaps. The current raw crafting catalog includes 46,564 records whose
-inputs are explicitly unresolved. Mining-drop transformations are not captured.
+coverage gaps. The first raw crafting catalog included 46,564 records with
+unresolved inputs. The collector now captures declared inputs for the exact
+GT shaped and shapeless classes. Their dynamic matching and runtime output
+transformations remain explicit gaps. Mining-drop transformations are not captured.
+
+A later full-pack run verified declared inputs in all 34,881 GT shaped and
+2,702 GT shapeless records. That snapshot has 257,788 processes and 122,972
+resources. Its compressed streams total 10.46 MiB. Capture took about nine
+seconds and the full build/launch/capture/import pipeline took 153.18 seconds.
+Native display output templates remain inspectable, with a visible GUI
+notice, but cannot establish material paths until runtime outputs are resolved.
 
 ## Stack
 
