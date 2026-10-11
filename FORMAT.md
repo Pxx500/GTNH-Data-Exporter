@@ -175,40 +175,68 @@ database model or matcher.
 ## Trace result
 
 `{snapshot_id, start_id, target_id, resources, processes, edges, leaves,
-cycles, truncated, coverage, route, search, limit_reasons}`
+cycles, truncated, coverage, route, paths, search, limit_reasons,
+duplicate_process_records}`
 
 `route` contains `status`, `strategy`, ordered `resource_ids` and ordered
 `process_ids`. The strategy is `shortest_known_dependency_path`: fewest process
-steps through supported ingredient matches, with stable ID ordering for ties.
+steps in the discovered graph through supported positive consumed inputs,
+with stable ID ordering for ties. Presence and tool inputs are requirements,
+not material-flow transitions.
 The statuses are `found`, `not_found`, `incomplete` and `same_resource`.
-`found` establishes a dependency connection, not inventory feasibility,
-best yield, minimum energy or satisfaction of every machine condition.
+`found` establishes a dependency connection, not best yield, minimum energy,
+batch feasibility or satisfaction of every machine condition.
 `not_found` is scoped to the captured supported graph. An identical start and
 target gives `same_resource` with one resource and no process steps.
 
-Search runs backward from the target through indexed output references.
-It has a separate safety budget of 10,000 unique inspected producer records.
-`search` reports `examined_processes`, `limit` and `truncated`. `max_depth`
-bounds route steps and supporting dependency expansion. `max_processes`
-bounds the returned graph. The full primary path is reserved before context.
-If that path cannot fit, the result is `incomplete` with no broken partial
-path represented as found. Native-unknown matches, ungrouped unified matches,
-disabled recipes and definite zero outputs cannot establish route edges.
+`paths` contains ordered `{resource_ids, process_ids}` records. `route`
+identifies the first qualifying path. The returned process IDs are exactly
+the union of complete emitted paths. Only transitions belonging to those
+paths become recipe-to-recipe connections in the GUI.
+
+`max_paths` defaults to 8 and accepts 1..100. `max_extra_steps` defaults to 2
+and accepts 0..64, relative to the shortest qualifying path. `max_depth`
+accepts 1..64 and bounds total path steps. `max_processes` accepts 1..5000
+and bounds the union of distinct recipes. Each path is included whole or
+omitted. A path that cannot fit is never represented as a successful fragment.
+
+`required_resource_ids` and `excluded_resource_ids` are arrays of exact
+snapshot resource IDs. Every required ID must occur along the material path,
+and every excluded ID must be absent. Intrinsic side ingredients, presence
+requirements and co-products do not satisfy an intermediate constraint.
+HTTP uses repeated singular `required_resource_id` and `excluded_resource_id`
+query parameters. CLI uses repeatable `--required-resource-id` and
+`--excluded-resource-id`. MCP uses the plural array arguments.
+
+Search discovers target ancestors once per resource through indexed output
+references, then enumerates simple paths in the discovered graph. A path
+does not repeat a resource or process, so cycles cannot create infinite
+enumeration. Bounds and incomplete capture can leave further paths unknown.
+Native-unknown matches, ungrouped unified/ore-dictionary matches, disabled
+recipes and definite zero outputs cannot establish material transitions.
 Zero-amount and zero-chance outputs also cannot ground a dependency cycle or
 count as material production. Their raw records remain available for inspection.
 
-Context retains complete selected recipe slots and co-products, direct
-alternative/reentry recipes between primary resources, and bounded producers
-of other consumed ingredients. An OR slot already matched on the primary path
-does not trigger manufacturing every other alternative. Presence and tool
-requirements remain explicit leaves for inspection. Their production is not
-automatically expanded. Co-products do not start another forward traversal.
+Included recipes retain complete AND slots, OR choices, presence/tool
+requirements, co-products and conditions. These records can expose unsupplied
+side ingredients. They do not automatically admit additional producers,
+recycling recipes or alternatives outside an emitted A-to-B path.
 
-`limit_reasons` distinguishes `depth`, `search_process_limit`,
-`route_process_limit`, `context_depth` and `context_process_limit`.
-Top-level `truncated` is true if any of these limits applies. A found primary
-route can coexist with truncated supporting context. Neither alternatives
-nor cycles are claimed exhaustive across the whole snapshot.
+`duplicate_process_records` contains `{representative_id, duplicate_ids}`.
+Only identical captured recipe data is grouped, ignoring record ID and
+`provenance.index`. Other provenance, classes, amounts, matching, chances,
+energy and conditions remain part of equality. The raw catalog is unchanged.
+
+`search` reports `examined_processes`/`limit` (10,000),
+`examined_states`/`state_limit` (20,000), `queued_states`, `peak_queue`,
+`expansion_work`/`work_limit` (100,000),
+`enumeration_work`/`enumeration_limit` (100,000), and `truncated`.
+
+`limit_reasons` distinguishes `depth`, `path_limit`, `path_process_limit`,
+`search_process_limit`, `search_state_limit`, `search_work_limit` and
+`search_enumeration_limit`. Top-level `truncated` is true if any applies.
+Found paths can coexist with an incomplete search for further paths.
+Paths and cycles are not claimed exhaustive across the whole snapshot.
 
 Edges identify resource/process nodes using `{source, target, role}`.
 Node references are `resource:<raw ID>` and `process:<raw ID>`.
@@ -223,7 +251,7 @@ Leaf status is
 `assumed`, `available`, `conditional`, `unresolved` or `no_known_source`.
 The last status is scoped to captured data and is never a proof of global
 impossibility with incomplete source coverage. Cycles alone do not establish
-a material source. Truncation is explicit and includes dependency expansion.
+a material source. Truncation is explicit for discovery and enumeration.
 Discovery is not a whole-factory optimization or a proof of progression.
 
 ## Stack decision

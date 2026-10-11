@@ -39,6 +39,10 @@ def parser():
             command.add_argument("--target-id", required=True)
             command.add_argument("--max-depth", type=int, default=12)
             command.add_argument("--max-processes", type=int, default=300)
+            command.add_argument("--max-paths", type=int, default=8)
+            command.add_argument("--max-extra-steps", type=int, default=2)
+            command.add_argument("--required-resource-id", action="append", dest="required_resource_ids", default=[])
+            command.add_argument("--excluded-resource-id", action="append", dest="excluded_resource_ids", default=[])
         if name == "serve":
             command.add_argument("--ui-dist", type=Path, default=Path(__file__).with_name("ui_dist"))
             command.add_argument("--port", type=int, default=8765)

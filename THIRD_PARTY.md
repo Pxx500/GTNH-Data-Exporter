@@ -22,6 +22,8 @@ affected files.
 | Dependency | Current version | License |
 | --- | --- | --- |
 | React and React DOM | 19.3.0 | MIT |
+| React Flow | 12.12.0 | MIT |
+| Dagre | 3.1.1 | MIT |
 | Vite | 8.3.4 | MIT |
 | TypeScript | 7.0.2 | Apache-2.0 |
 | FastAPI | 0.143.0 | MIT |
@@ -41,6 +43,14 @@ direct versions are pinned in pyproject.toml. Upstream license texts:
 [TypeScript](https://github.com/microsoft/TypeScript/blob/main/LICENSE.txt),
 [React](https://github.com/react/react/blob/main/LICENSE),
 [Vite](https://github.com/vitejs/vite/blob/main/LICENSE).
+
+React Flow and Dagre versions and licenses were checked against their pinned
+npm records and installed package license files. Their graph dependencies
+use MIT, ISC and BSD-3-Clause. The retained texts are in
+[ui/public/THIRD_PARTY_NOTICES.txt](ui/public/THIRD_PARTY_NOTICES.txt), which
+Vite copies into the GUI distribution. Source licenses:
+[React Flow](https://github.com/xyflow/xyflow/blob/main/LICENSE) and
+[Dagre](https://github.com/dagrejs/dagre/blob/master/LICENSE).
 
 Java uses existing host APIs and libraries rather than embedding GT5,
 Minecraft, Forge or Gson into the exporter JAR. GT5 and NEI have LGPL

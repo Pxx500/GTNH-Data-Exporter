@@ -88,14 +88,14 @@ class DatasetTests(unittest.TestCase):
 
     def test_dependency_cycle_cannot_ground_its_own_seed(self):
         rows = [resource(id) for id in ("start", "locked", "loop", "product")]
-        processes = [process("finish", [slot(choice("start")), slot(choice("locked"))], ["product"]),
+        processes = [process("finish", [slot(choice("start")), slot(choice("locked"))], ["product", "locked"]),
                      process("cycle-out", [slot(choice("locked"))], ["loop"]),
                      process("cycle-in", [slot(choice("loop"))], ["locked"])]
         dataset = Dataset.import_snapshot(snapshot(self.root / "capture", resources=rows, processes=processes), self.root / "db.sqlite")
         trace = dataset.trace_processes(start_id="start", target_id="product")
         leaves = {r["resource_id"]: r for r in trace["leaves"]}
         self.assertEqual(leaves["locked"]["status"], "unresolved")
-        self.assertEqual(leaves["loop"]["status"], "unresolved")
+        self.assertEqual({p['id'] for p in trace['processes']}, {'finish'})
         self.assertTrue(trace["cycles"])
         self.assertFalse(trace["truncated"])
 
@@ -117,8 +117,7 @@ class DatasetTests(unittest.TestCase):
                 leaves = {leaf["resource_id"]: leaf for leaf in trace["leaves"]}
                 self.assertIn("locked", leaves)
                 self.assertEqual(leaves["locked"]["status"], "unresolved")
-                if with_cycle:
-                    self.assertEqual(leaves["loop"]["status"], "unresolved")
+                self.assertEqual({p['id'] for p in trace['processes']}, {'finish'})
                 lookup = dataset.find_processes(input_id="start")
                 self.assertFalse(lookup["matching_complete"])
                 self.assertEqual(lookup["unresolved_matches"], 1)
@@ -160,7 +159,7 @@ class DatasetTests(unittest.TestCase):
     def test_trace_preserves_branch_inputs_cycles_and_reports_limits(self):
         rows = [resource(id) for id in ("ore", "mold", "acid", "a", "b", "product", "byproduct")]
         processes = [process("smelt", [slot(choice("ore")), slot(choice("mold"), role="presence"), slot(choice("acid"))], ["a", "byproduct"]),
-                     process("forward", [slot(choice("a"))], ["b"]),
+                     process("forward", [slot(choice("a"))], ["b", "a"]),
                      process("recycle", [slot(choice("b"))], ["a"]),
                      process("finish", [slot(choice("b"))], ["product"], conditions={"cleanroom": True})]
         sources = [{"id": "mold-source", "kind": "trade", "display_name": "mold", "outputs": [{"resource_id": "mold"}],
@@ -169,13 +168,13 @@ class DatasetTests(unittest.TestCase):
                      "reason": "other mods not captured", "provenance": {}}]
         dataset = Dataset.import_snapshot(snapshot(self.root / "capture", resources=rows, processes=processes, sources=sources, coverage=coverage), self.root / "db.sqlite")
         result = dataset.trace_processes(start_id="ore", target_id="product")
-        self.assertEqual({r["id"] for r in result["processes"]}, {"smelt", "forward", "recycle", "finish"})
+        self.assertEqual({r["id"] for r in result["processes"]}, {"smelt", "forward", "finish"})
         self.assertIn("byproduct", {r["id"] for r in result["resources"]})
         leaves = {r["resource_id"]: r for r in result["leaves"]}
         self.assertEqual(leaves["ore"]["status"], "assumed")
         self.assertEqual(leaves["mold"]["status"], "conditional")
         self.assertEqual(leaves["acid"]["status"], "unresolved")
-        self.assertTrue(any({"resource:a", "resource:b", "process:forward", "process:recycle"} <= set(cycle) for cycle in result["cycles"]))
+        self.assertTrue(any({"resource:a", "process:forward"} <= set(cycle) for cycle in result["cycles"]))
         self.assertFalse(result["truncated"])
         limited = dataset.trace_processes(start_id="ore", target_id="product", max_depth=1, max_processes=1)
         self.assertTrue(limited["truncated"])

@@ -10,45 +10,90 @@ const status = {snapshot_id:'test-snapshot',manifest:{created_at:'2026-10-11',ca
 function response(value: unknown, code=200) { return new Response(JSON.stringify(value), {status:code,headers:{'Content-Type':'application/json'}}) }
 function page(items: unknown[]) {return {snapshot_id:'test-snapshot',items,total:items.length,limit:30,offset:0}}
 
-test('labels synthetic data and forwards trace controls to Dataset, retaining cycles and truncation', async () => {
-  const traceCalls: URL[] = []
-  vi.stubGlobal('fetch', vi.fn(async (input: string) => {
-    const url = new URL(input,'http://localhost')
-    if (url.pathname === '/api/status') return response(status)
-    if (url.pathname === '/api/resources') return response(page([resource]))
-    if (url.pathname === '/api/environments') return response(page([]))
-    if (url.pathname.startsWith('/api/resources/')) return response({snapshot_id:'test-snapshot',item:resource})
-    if (url.pathname === '/api/trace') {
+test('labels synthetic data and forwards trace controls to Dataset while retaining complete-path bounds', async () => {
+  const targetResource={...resource,id:'result-id',display_name:'Test output'}
+  const recipe={...process,inputs:[{role:'consume',choices:[{resource_id:resource.id,amount:1,match:{mode:'exact'}}]},...process.inputs],outputs:[{resource_id:targetResource.id,amount:1,chance:{numerator:1,denominator:1}}]}
+  const traceCalls: URL[]=[]
+  vi.stubGlobal('fetch',vi.fn(async(input:string)=>{
+    const url=new URL(input,'http://localhost')
+    if(url.pathname==='/api/status')return response(status)
+    if(url.pathname==='/api/resources')return response(page(url.searchParams.get('q')==='Test output' ? [targetResource] : [resource]))
+    if(url.pathname==='/api/environments')return response(page([]))
+    if(url.pathname.startsWith('/api/resources/'))return response({snapshot_id:'test-snapshot',item:url.pathname.endsWith('result-id') ? targetResource : resource})
+    if(url.pathname==='/api/trace'){
       traceCalls.push(url)
-      return response({snapshot_id:'test-snapshot',start_id:resource.id,target_id:resource.id,resources:[resource],processes:[process],edges:[{source:`resource:${resource.id}`,target:`process:${process.id}`,role:'presence'},{source:`process:${process.id}`,target:`resource:${resource.id}`,role:'output'}],leaves:[{resource_id:resource.id,status:'assumed',sources:[]}],cycles:[[`resource:${resource.id}`,`process:${process.id}`]],truncated:true,coverage:status.coverage,route:{status:'same_resource',strategy:'shortest_known_dependency_path',resource_ids:[resource.id],process_ids:[]},search:{examined_processes:0,limit:1000,truncated:false},limit_reasons:['context_process_limit']})
+      return response({snapshot_id:'test-snapshot',start_id:resource.id,target_id:targetResource.id,resources:[resource,targetResource],processes:[recipe],edges:[],leaves:[],cycles:[],truncated:true,coverage:status.coverage,route:{status:'found',strategy:'shortest_known_dependency_path',resource_ids:[resource.id,targetResource.id],process_ids:[recipe.id]},paths:[{resource_ids:[resource.id,targetResource.id],process_ids:[recipe.id]}],search:{examined_processes:37,limit:1000,truncated:false},limit_reasons:['path_process_limit']})
     }
     throw new Error(`Unexpected route ${url.pathname}`)
   }))
   render(<App/>)
   expect(await screen.findByText('Synthetic verification data')).toBeInTheDocument()
-  expect(screen.getByText('Pack: Synthetic contract fixture')).toBeInTheDocument()
   fireEvent.click(screen.getByRole('button',{name:/^Trace$/}))
-  const start = screen.getByLabelText('Supplied start resource')
-  fireEvent.focus(start)
-  fireEvent.change(start,{target:{value:'Test mold'}})
+  const start=screen.getByLabelText('Supplied start resource')
+  fireEvent.focus(start);fireEvent.change(start,{target:{value:'Test mold'}})
   fireEvent.click(await screen.findByRole('option',{name:/Test mold/}))
-  const target = screen.getByLabelText('Target resource')
-  fireEvent.focus(target)
-  fireEvent.change(target,{target:{value:'Test mold'}})
-  fireEvent.click(await screen.findByRole('option',{name:/Test mold/}))
+  const target=screen.getByLabelText('Target resource')
+  fireEvent.focus(target);fireEvent.change(target,{target:{value:'Test output'}})
+  fireEvent.click(await screen.findByRole('option',{name:/Test output/}))
   fireEvent.change(screen.getByLabelText('Maximum depth'),{target:{value:'7'}})
   fireEvent.change(screen.getByLabelText('Maximum processes'),{target:{value:'25'}})
+  fireEvent.change(screen.getByLabelText('Paths'),{target:{value:'4'}})
+  fireEvent.change(screen.getByLabelText('Additional steps'),{target:{value:'3'}})
   fireEvent.click(screen.getByRole('button',{name:'Trace dependencies'}))
   expect(await screen.findByText('Bounded trace has omitted work')).toBeInTheDocument()
-  expect(screen.getByText('1 cycle groups')).toBeInTheDocument()
-  await waitFor(() => expect(traceCalls).toHaveLength(1))
   expect(traceCalls[0].searchParams.get('start_id')).toBe(resource.id)
-  expect(traceCalls[0].searchParams.get('target_id')).toBe(resource.id)
+  expect(traceCalls[0].searchParams.get('target_id')).toBe(targetResource.id)
   expect(traceCalls[0].searchParams.get('max_depth')).toBe('7')
   expect(traceCalls[0].searchParams.get('max_processes')).toBe('25')
+  expect(traceCalls[0].searchParams.get('max_paths')).toBe('4')
+  expect(traceCalls[0].searchParams.get('max_extra_steps')).toBe('3')
   fireEvent.click(screen.getByRole('button',{name:'Process Mold cast'}))
   expect(within(screen.getByRole('complementary')).getByText('Required presence')).toBeInTheDocument()
-  expect(within(screen.getByRole('complementary')).queryByText('Guaranteed (1/1)')).not.toBeInTheDocument()
+  expect(within(screen.getByRole('complementary')).queryByText(/Chance 100%/)).not.toBeInTheDocument()
+})
+
+test('concrete intermediate tags forward repeated IDs and changing filters invalidates the displayed result', async () => {
+  const catalog = ['Start ore','Target plate','Iron Dust','Purified Dust','Iron Nugget'].map((display_name,index)=>({...resource,id:`opaque:${index}`,display_name,metadata:index}))
+  const calls: URL[]=[]
+  vi.stubGlobal('fetch',vi.fn(async(input:string)=>{
+    const url=new URL(input,'http://localhost')
+    if(url.pathname==='/api/status')return response(status)
+    if(url.pathname==='/api/environments')return response(page([]))
+    if(url.pathname==='/api/resources')return response(page(catalog.filter(item=>item.display_name===url.searchParams.get('q'))))
+    if(url.pathname.startsWith('/api/resources/'))return response({snapshot_id:'test-snapshot',item:catalog.find(item=>item.id===decodeURIComponent(url.pathname.split('/').pop()!))})
+    if(url.pathname==='/api/trace'){
+      calls.push(url)
+      return response({snapshot_id:'test-snapshot',start_id:catalog[0].id,target_id:catalog[1].id,resources:catalog,processes:[],edges:[],leaves:[],cycles:[],truncated:false,coverage:[],route:{status:'not_found',strategy:'shortest_known_dependency_path',resource_ids:[],process_ids:[]},paths:[],search:{examined_processes:5,limit:10000,truncated:false},limit_reasons:[]})
+    }
+    throw new Error(`Unexpected route ${url.pathname}`)
+  }))
+  render(<App/>)
+  await screen.findByText('Synthetic verification data')
+  fireEvent.click(screen.getByRole('button',{name:/^Trace$/}))
+  async function choose(label:string,name:string){
+    const input=screen.getByRole('combobox',{name:label})
+    fireEvent.focus(input)
+    fireEvent.change(input,{target:{value:name}})
+    fireEvent.click(await screen.findByRole('option',{name:new RegExp(name)}))
+  }
+  await choose('Supplied start resource','Start ore')
+  await choose('Target resource','Target plate')
+  await choose('Required intermediate','Iron Dust')
+  fireEvent.click(screen.getByRole('button',{name:'Add required material'}))
+  await choose('Required intermediate','Purified Dust')
+  fireEvent.click(screen.getByRole('button',{name:'Add required material'}))
+  await choose('Excluded intermediate','Iron Nugget')
+  fireEvent.click(screen.getByRole('button',{name:'Add excluded material'}))
+  fireEvent.click(screen.getByRole('button',{name:'Trace dependencies'}))
+  expect(await screen.findByRole('heading',{name:'No known route found'})).toBeInTheDocument()
+  expect(calls[0].searchParams.getAll('required_resource_id')).toEqual(['opaque:2','opaque:3'])
+  expect(calls[0].searchParams.getAll('excluded_resource_id')).toEqual(['opaque:4'])
+  fireEvent.click(screen.getByRole('button',{name:'Remove required material opaque:2'}))
+  expect(screen.queryByRole('heading',{name:'No known route found'})).not.toBeInTheDocument()
+  expect(screen.getByText(/Search selections or filters changed/)).toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button',{name:'Trace dependencies'}))
+  await screen.findByRole('heading',{name:'No known route found'})
+  expect(calls[1].searchParams.getAll('required_resource_id')).toEqual(['opaque:3'])
 })
 
 test('typing iron dust and iron plate selects concrete IDs, and later editing invalidates the selection', async () => {
@@ -61,7 +106,7 @@ test('typing iron dust and iron plate selects concrete IDs, and later editing in
     if (url.pathname === '/api/resources') return response(page(url.searchParams.get('q') === 'iron dust' ? [dust] : url.searchParams.get('q') === 'iron plate' ? [plate] : []))
     if (url.pathname === '/api/environments') return response(page([]))
     if (url.pathname.startsWith('/api/resources/')) return response({snapshot_id:'test-snapshot',item:decodeURIComponent(url.pathname.split('/').pop()!) === dust.id ? dust : plate})
-    if (url.pathname === '/api/trace') {calls.push(url); return response({snapshot_id:'test-snapshot',start_id:dust.id,target_id:plate.id,resources:[],processes:[],edges:[],leaves:[],cycles:[],truncated:false,coverage:[],route:{status:'not_found',strategy:'shortest_known_dependency_path',resource_ids:[],process_ids:[]},search:{examined_processes:0,limit:1000,truncated:false},limit_reasons:[]})}
+    if (url.pathname === '/api/trace') {calls.push(url); return response({snapshot_id:'test-snapshot',start_id:dust.id,target_id:plate.id,resources:[],processes:[],edges:[],leaves:[],cycles:[],truncated:false,coverage:[],route:{status:'not_found',strategy:'shortest_known_dependency_path',resource_ids:[],process_ids:[]},search:{examined_processes:0,limit:1000,truncated:false},limit_reasons:[],paths:[]})}
     throw new Error(`Unexpected route ${url.pathname}`)
   }))
   render(<App/>)

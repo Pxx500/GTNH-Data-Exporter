@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Query, Request
 from fastapi.responses import FileResponse, JSONResponse
 
 from .dataset import Dataset, DatasetError
@@ -50,8 +50,11 @@ def create_app(dataset: Dataset, ui_dist: str | Path | None = None) -> FastAPI:
         return dataset.find_environments(q=q, offset=offset, limit=limit)
 
     @app.get("/api/trace")
-    def trace(start_id: str, target_id: str, max_depth: int = 12, max_processes: int = 300):
-        return dataset.trace_processes(start_id=start_id, target_id=target_id, max_depth=max_depth, max_processes=max_processes)
+    def trace(start_id: str, target_id: str, max_depth: int = 12, max_processes: int = 300, max_paths: int = 8,
+              max_extra_steps: int = 2, required_resource_id: list[str] = Query(default=[]), excluded_resource_id: list[str] = Query(default=[])):
+        return dataset.trace_processes(start_id=start_id, target_id=target_id, max_depth=max_depth, max_processes=max_processes,
+                                       max_paths=max_paths, max_extra_steps=max_extra_steps,
+                                       required_resource_ids=required_resource_id, excluded_resource_ids=excluded_resource_id)
 
     if ui_dist is not None:
         directory = Path(ui_dist).resolve()

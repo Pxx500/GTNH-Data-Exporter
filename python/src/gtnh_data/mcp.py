@@ -27,7 +27,9 @@ OPERATIONS = {
     "get_group": ("Read a canonical matching group and its members", _schema({"id": STRING}, ("id",))),
     "find_sources": ("Find configured acquisition sources, not observed world deposits", _schema({"resource_id": OPTIONAL_STRING, "environment_id": OPTIONAL_STRING, **PAGING})),
     "find_environments": ("Search the registered environment catalog", _schema({"q": STRING, **PAGING})),
-    "trace_processes": ("Discover a finite process graph with co-input leaves, cycles and source coverage. Not an inventory or throughput proof", _schema({"start_id": STRING, "target_id": STRING, "max_depth": {"type": "integer", "minimum": 1, "maximum": 64, "default": 12}, "max_processes": {"type": "integer", "minimum": 1, "maximum": 5000, "default": 300}}, ("start_id", "target_id"))),
+    "trace_processes": ("Find complete shortest-first consume dependency paths with required or excluded materials. Full recipe inputs remain requirements. Not an inventory, yield or throughput proof", _schema({"start_id": STRING, "target_id": STRING, "max_depth": {"type": "integer", "minimum": 1, "maximum": 64, "default": 12}, "max_processes": {"type": "integer", "minimum": 1, "maximum": 5000, "default": 300},
+                            "max_paths": {"type": "integer", "minimum": 1, "maximum": 100, "default": 8}, "max_extra_steps": {"type": "integer", "minimum": 0, "maximum": 64, "default": 2},
+                            "required_resource_ids": {"type": "array", "items": STRING}, "excluded_resource_ids": {"type": "array", "items": STRING}}, ("start_id", "target_id"))),
 }
 
 

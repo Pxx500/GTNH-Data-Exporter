@@ -84,18 +84,20 @@ search. Select a suggestion with the mouse or the arrow keys and Enter.
 Suggestions identify the registry, item/fluid kind, metadata and NBT presence
 so equally named variants remain separate. Editing a name clears the selection.
 Trace requests use the selected resource IDs rather than the typed text.
-The trace selects one shortest known dependency route to the target before
-adding supporting recipe context. It does not expand every recipe reachable
-from the supplied start. The route order is separate from the bounded graph,
-and no-route, identical-resource and limit states are explicit. Fewest steps
-does not mean best yield or minimum energy. Full recipe inputs and co-products
-remain available for developer inspection.
+The trace finds several bounded material paths to the target. Require or
+exclude intermediate resources using autocomplete, limit the number of
+paths, and set how many extra steps may follow the shortest qualifying path.
+Filters run in Dataset before results are selected. Fewest steps does not
+mean best yield or minimum energy. No-route, identical-resource and search
+limits remain explicit. Every included recipe belongs to a returned path.
 
 Each graph tile represents a whole recipe, with its input slots, required
 tools, outputs, quantities, chances and machine parameters together. Tiles
-connect directly through shared materials. The selected route comes first,
-with supporting recipes and recycling shown as context. Resource identities
-remain available inside the recipes and in the inspector.
+connect through transitions belonging to the returned paths. Shared recipes
+appear once on a freely pannable and zoomable map. Drag tiles, fit the view,
+or arrange them automatically. Choose one path to highlight its steps.
+Additional inputs and co-products stay inside each recipe, with identities
+and complete native records available in the inspector.
 The UI omits routine 100% chances and default flags. Exceptional chances
 appear as percentages, while unknown chances remain explicit. Exact fractions
 and technical fields remain available in the full recipe record.
@@ -108,6 +110,16 @@ arguments. Use absolute paths in the client's configuration:
 ```text
 -m gtnh_data mcp --database PATH_TO_INDEX.sqlite
 ```
+
+For Codex, register it with absolute Python and database paths:
+
+```text
+codex mcp add gtnh-data -- ABSOLUTE_PATH_TO_PYTHON -m gtnh_data mcp --database ABSOLUTE_PATH_TO_INDEX.sqlite
+codex mcp get gtnh-data
+```
+
+The registration uses Codex's shared MCP configuration. Start a fresh
+session if an existing session has not loaded the new server.
 
 MCP runs over stdio and does not require the GUI server. Diagnostic output
 must not be written to the protocol's stdout. The CLI exposes the same
@@ -138,3 +150,6 @@ in [COPYING](COPYING). Reused code retains its original notices and license.
 Using or exporting a mod does not relicense that mod's JAR, textures, quests
 or other content. See [THIRD_PARTY.md](THIRD_PARTY.md) for inspected direct
 dependencies and reused-source notices.
+The graph dependencies use MIT, ISC and BSD-3-Clause licenses. Their notices
+are retained in [ui/public/THIRD_PARTY_NOTICES.txt](ui/public/THIRD_PARTY_NOTICES.txt)
+and copied into the GUI distribution.

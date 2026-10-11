@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import type { Environment, Page, Process, Resource, Single, Source, Status, Trace } from './api'
 import { query, useRequest } from './api'
-import { Badge, CoverageList, JsonData, ProcessDetail, RequestState, SourceDetail } from './Details'
+import { Badge, CoverageList, JsonData, ProcessDetail, RequestState, SourceDetail, ResourceRef } from './Details'
 import { TraceView } from './TraceView'
 import { ResourcePicker } from './ResourcePicker'
 
@@ -56,17 +56,39 @@ export default function App() {
         {view === 'trace' && <TraceWorkspace startId={startId} targetId={targetId} setStartId={setStartId} setTargetId={setTargetId} onSelect={selectResource}/>}
         {view === 'environments' && <section className="environment-workspace"><div className="panel-heading"><div><h2>Environment catalog</h2><p>Registered dimensions and generation context. These are definitions, not world observations.</p></div></div><form className="search-form environment-search" onSubmit={event => {event.preventDefault(); setEnvironmentQ(environmentSearch); setEnvironmentOffset(0)}}><label htmlFor="environment-search">Search environments</label><div className="input-action"><input id="environment-search" value={environmentSearch} onChange={event => setEnvironmentSearch(event.target.value)} placeholder="Name, dimension or provider"/><button>Search</button></div></form><RequestState {...environments} retry={environments.reload}/>{environments.data && <><div className="environment-grid">{environments.data.items.map(environment => <article className="environment-card" key={environment.id}><h3>{environment.name}</h3><code>{environment.id}</code><dl><div><dt>Dimension ID</dt><dd>{environment.dimension_id ?? 'Unknown'}</dd></div><div><dt>Provider</dt><dd>{environment.provider ?? 'Unknown'}</dd></div></dl><JsonData label="Properties and provenance" value={environment}/></article>)}</div>{!environments.data.items.length && <p className="empty-inline">No environments match this search.</p>}<Pagination page={environments.data} setOffset={setEnvironmentOffset}/></>}</section>}
       </>}
-    </main><footer>Read-only local explorer · Snapshot-scoped knowledge · Discovery does not prove progression or optimize a whole factory</footer>
+    </main><footer>Read-only local explorer · Snapshot-scoped knowledge · Discovery does not prove progression or optimize a whole factory · <a href="/THIRD_PARTY_NOTICES.txt" target="_blank" rel="noreferrer">Third-party licenses</a></footer>
   </div>
 }
 
-function TraceWorkspace({startId, targetId, setStartId, setTargetId, onSelect}: {startId: string; targetId: string; setStartId: (id: string) => void; setTargetId: (id: string) => void; onSelect: (id: string) => void}) {
-  const [resolvedStart, setResolvedStart] = useState('')
-  const [resolvedTarget, setResolvedTarget] = useState('')
-  const [depth, setDepth] = useState(12)
-  const [maxProcesses, setMaxProcesses] = useState(50)
-  const [url, setUrl] = useState<string | null>(null)
-  const trace = useRequest<Trace>(url)
-  const ready = !!startId && !!targetId && resolvedStart === startId && resolvedTarget === targetId
-  return <section className="trace-workspace"><div className="panel-heading"><div><h2>Trace a dependency graph</h2><p>Type resource names and select a matching item or fluid. The supplied start is an explicit assumption.</p></div></div><form className="trace-controls" onSubmit={event => {event.preventDefault(); if (!ready) return; const next = query('trace', {start_id: startId, target_id: targetId, max_depth: depth, max_processes: maxProcesses}); if (next === url) trace.reload(); else setUrl(next)}}><ResourcePicker label="Supplied start resource" selectedId={startId} onSelect={setStartId} onResolve={setResolvedStart}/><ResourcePicker label="Target resource" selectedId={targetId} onSelect={setTargetId} onResolve={setResolvedTarget}/><label>Maximum depth<input type="number" min="1" value={depth} onChange={event => setDepth(Number(event.target.value))} required/></label><label>Maximum processes<input type="number" min="1" max="300" value={maxProcesses} onChange={event => setMaxProcesses(Number(event.target.value))} required/></label><button className="primary" disabled={trace.loading || !ready}>Trace dependencies</button></form><RequestState {...trace} retry={trace.reload}/>{!url && <div className="empty-state"><span className="empty-symbol">↗</span><h3>A finite view of the captured chain</h3><p>Included processes retain their side inputs, co-products, alternatives and conditions.</p></div>}{trace.data && <>{(trace.data.start_id !== startId || trace.data.target_id !== targetId) && <p className="notice">Showing the previous trace. Select both resources and submit to update the graph.</p>}<TraceView trace={trace.data} onSelect={onSelect}/></>}</section>
+function IntermediateFilter({label, ids, onChange}: {label:string;ids:string[];onChange:(ids:string[])=>void}) {
+  const [draft,setDraft]=useState('')
+  const [resolved,setResolved]=useState('')
+  const [revision,setRevision]=useState(0)
+  return <fieldset className="intermediate-filter"><legend>{label} materials</legend><ResourcePicker key={revision} label={`${label} intermediate`} selectedId={draft} onSelect={setDraft} onResolve={setResolved}/><button type="button" disabled={!draft || resolved!==draft} onClick={()=>{if(!ids.includes(draft))onChange([...ids,draft]);setDraft('');setResolved('');setRevision(value=>value+1)}}>Add {label.toLowerCase()} material</button><ul className="filter-tags">{ids.map(id=><li key={id}><ResourceRef id={id}/><button type="button" aria-label={`Remove ${label.toLowerCase()} material ${id}`} onClick={()=>onChange(ids.filter(value=>value!==id))}>×</button></li>)}</ul></fieldset>
+}
+function TraceWorkspace({startId,targetId,setStartId,setTargetId,onSelect}: {startId:string;targetId:string;setStartId:(id:string)=>void;setTargetId:(id:string)=>void;onSelect:(id:string)=>void}) {
+  const [resolvedStart,setResolvedStart]=useState('')
+  const [resolvedTarget,setResolvedTarget]=useState('')
+  const [depth,setDepth]=useState(12)
+  const [maxProcesses,setMaxProcesses]=useState(50)
+  const [maxPaths,setMaxPaths]=useState(8)
+  const [extraSteps,setExtraSteps]=useState(2)
+  const [required,setRequired]=useState<string[]>([])
+  const [excluded,setExcluded]=useState<string[]>([])
+  const [url,setUrl]=useState<string|null>(null)
+  const trace=useRequest<Trace>(url)
+  const ready=!!startId && !!targetId && resolvedStart===startId && resolvedTarget===targetId
+  const currentUrl=query('trace',{start_id:startId,target_id:targetId,max_depth:depth,max_processes:maxProcesses,max_paths:maxPaths,max_extra_steps:extraSteps,required_resource_id:required,excluded_resource_id:excluded})
+  const current=url===currentUrl
+  return <section className="trace-workspace"><div className="panel-heading"><div><h2>Explore concrete production paths</h2><p>Select endpoints, then require or exclude materials that occur between them.</p></div></div><form onSubmit={event=>{event.preventDefault();if(!ready)return;if(current)trace.reload();else setUrl(currentUrl)}}>
+    <div className="trace-controls"><ResourcePicker label="Supplied start resource" selectedId={startId} onSelect={setStartId} onResolve={setResolvedStart}/><ResourcePicker label="Target resource" selectedId={targetId} onSelect={setTargetId} onResolve={setResolvedTarget}/><label>Maximum depth<input type="number" min="1" value={depth} onChange={event=>setDepth(Number(event.target.value))} required/></label><label>Maximum processes<input type="number" min="1" max="300" value={maxProcesses} onChange={event=>setMaxProcesses(Number(event.target.value))} required/></label><label>Paths<input type="number" min="1" max="100" value={maxPaths} onChange={event=>setMaxPaths(Number(event.target.value))} required/></label><label>Additional steps<input type="number" min="0" max="64" value={extraSteps} onChange={event=>setExtraSteps(Number(event.target.value))} required/></label></div>
+    <p className="help">Additional steps are allowed beyond the shortest qualifying path. Material filters apply to path intermediates, not tools, presence requirements or co-products.</p>
+    <div className="intermediate-filters"><IntermediateFilter label="Required" ids={required} onChange={setRequired}/><IntermediateFilter label="Excluded" ids={excluded} onChange={setExcluded}/></div>
+    <div className="trace-submit"><button className="primary" disabled={!ready || (trace.loading && current)}>Trace dependencies</button></div>
+  </form>
+  {current && <RequestState {...trace} retry={trace.reload}/>}
+  {url && !current && <p className="notice">Search selections or filters changed. Submit to search the Dataset with these settings.</p>}
+  {!url && <div className="empty-state"><h3>Complete paths in one graph</h3><p>Shared recipe tiles are merged. Drag and arrange the graph after the search.</p></div>}
+  {current && trace.data && <TraceView trace={trace.data} onSelect={onSelect}/>}
+  </section>
 }
