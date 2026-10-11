@@ -1,0 +1,12 @@
+.gradle/
+.idea/
+build/
+run/
+exports/
+worktrees/
+*.iml
+*.ipr
+*.iws
+*.log
+.codebase-memory/
+AI/
