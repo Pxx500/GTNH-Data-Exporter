@@ -1,0 +1,52 @@
+import { useState } from 'react'
+import type { Coverage, Environment, Group, Output, Process, Resource, Single, Source } from './api'
+import { query, useRequest } from './api'
+
+export function Badge({children, tone = ''}: {children: React.ReactNode; tone?: string}) {
+  return <span className={`badge ${tone}`}>{children}</span>
+}
+export function JsonData({label, value}: {label: string; value: unknown}) {
+  return <details className="json-data"><summary>{label}</summary><pre>{JSON.stringify(value, null, 2) ?? 'Unknown'}</pre></details>
+}
+export function RequestState({loading, error, retry}: {loading: boolean; error?: string; retry?: () => void}) {
+  if (loading) return <p className="loading" role="status">Loading dataset records…</p>
+  if (error) return <div className="notice error" role="alert"><strong>Could not load data</strong><p>{error}</p>{retry && <button onClick={retry}>Try again</button>}</div>
+  return null
+}
+export function ResourceRef({id, onSelect}: {id: string; onSelect?: (id: string) => void}) {
+  const request = useRequest<Single<Resource>>(query(`resources/${encodeURIComponent(id)}`))
+  const resource = request.data?.item
+  return <span className="resource-ref">{onSelect ? <button className="text-button" onClick={() => onSelect(id)}>{resource?.display_name || resource?.registry_name || id}</button> : <strong>{resource?.display_name || resource?.registry_name || id}</strong>}<code>{resource?.registry_name || id}</code>{request.error && <small className="warning-text">Identity lookup failed: {request.error}</small>}</span>
+}
+function GroupRef({id, onSelect}: {id: string; onSelect?: (id: string) => void}) {
+  const [open, setOpen] = useState(false)
+  const request = useRequest<Single<Group>>(open ? query(`groups/${encodeURIComponent(id)}`) : null)
+  return <details className="group" onToggle={event => setOpen(event.currentTarget.open)}><summary>Group: {request.data?.item.name || id}</summary><RequestState {...request} retry={request.reload}/>{open && request.data && <><p>{request.data.item.kind} · {request.data.item.members.length} members</p><ul>{request.data.item.members.map(member => <li key={member}><ResourceRef id={member} onSelect={onSelect}/></li>)}</ul><JsonData label="Group record" value={request.data.item}/></>}</details>
+}
+function Amount({value}: {value: number | null | undefined}) {
+  return <span className="quantity">{value == null ? 'Amount unknown' : `Amount ${value.toLocaleString()}`}</span>
+}
+function ConsumptionChance({value}: {value: {numerator: number; denominator: number} | null}) {
+  return <Badge tone="presence">{value === null ? 'Consumption chance unknown' : `Consumption chance ${value.numerator}/${value.denominator}`}</Badge>
+}
+export function OutputRows({outputs, onSelect}: {outputs: Output[]; onSelect?: (id: string) => void}) {
+  return <div className="output-list">{outputs.map((output, index) => <div className="choice" key={index}><ResourceRef id={output.resource_id} onSelect={onSelect}/><div className="choice-meta"><Amount value={output.amount}/><Badge>{output.chance == null ? 'Chance unknown' : output.chance.denominator === output.chance.numerator ? `Guaranteed (${output.chance.numerator}/${output.chance.denominator})` : `Chance ${output.chance.numerator}/${output.chance.denominator}`}</Badge></div><JsonData label="Output fields" value={output}/></div>)}</div>
+}
+export function ProcessDetail({process, onSelect}: {process: Process; onSelect?: (id: string) => void}) {
+  const roles: Record<string, string> = {consume: 'Consumed', presence: 'Required presence', tool: 'Tool'}
+  return <section className="process-detail">
+    <div className="detail-title"><div><p className="eyebrow">{process.family}</p><h3>{process.display_name || process.id}</h3><code>{process.id}</code></div><Badge tone={process.executable === false ? 'warning' : process.executable === null ? 'muted' : 'good'}>{process.executable === null ? 'Execution unknown' : process.executable ? 'Executable' : 'Informational / fake'}</Badge></div>
+    <dl className="metrics"><div><dt>Duration</dt><dd>{process.duration_ticks == null ? 'Unknown' : `${process.duration_ticks.toLocaleString()} ticks`}</dd></div><div><dt>Energy</dt><dd>{process.eu_per_tick == null ? 'Unknown' : `${process.eu_per_tick.toLocaleString()} EU/t`}</dd></div><div><dt>Amperage</dt><dd>{process.amperage == null ? 'Unknown' : process.amperage}</dd></div></dl>
+    <h4>Input slots <span>All slots are required. Choose one alternative within each slot.</span></h4>
+    {process.inputs.length === 0 && <p className="empty-inline">No input slots captured.</p>}
+    <div className="slot-list">{process.inputs.map((slot, index) => <section className="slot" key={index}><div className="slot-heading"><strong>Slot {index + 1}</strong><Badge tone={slot.role === 'consume' ? '' : 'presence'}>{roles[slot.role] || slot.role}</Badge>{slot.consumption_chance !== undefined && <ConsumptionChance value={slot.consumption_chance}/>} {slot.choices.length > 1 && <small>{slot.choices.length} alternatives</small>}</div>{slot.choices.map((choice, choiceIndex) => <div className="choice" key={choiceIndex}>{choice.resource_id !== null && <ResourceRef id={choice.resource_id} onSelect={onSelect}/>}<div className="choice-meta"><Amount value={choice.amount}/><Badge>{choice.match.mode}</Badge>{choice.match.nbt_sensitive !== undefined && <Badge>NBT-sensitive: {choice.match.nbt_sensitive ? 'yes' : 'no'}</Badge>}{choice.consumption_chance !== undefined && <ConsumptionChance value={choice.consumption_chance}/>}</div>{choice.match.group_id && <GroupRef id={choice.match.group_id} onSelect={onSelect}/>}<JsonData label="Choice fields" value={choice}/></div>)}<JsonData label="Slot fields" value={slot}/></section>)}</div>
+    <h4>Outputs <span>Co-products belong to the same process.</span></h4><OutputRows outputs={process.outputs} onSelect={onSelect}/>
+    <JsonData label="Conditions and research" value={process.conditions}/><JsonData label="Provenance" value={process.provenance}/><JsonData label="Full process record, including extension fields" value={process}/>
+  </section>
+}
+export function SourceDetail({source, environments, onSelect}: {source: Source; environments: Environment[]; onSelect?: (id: string) => void}) {
+  return <article className="source-card"><div className="detail-title"><div><p className="eyebrow">{source.kind}</p><h3>{source.display_name || source.id}</h3><code>{source.id}</code></div><Badge tone={source.status === 'active' ? 'good' : 'warning'}>{source.status}</Badge></div><h4>Possible outputs</h4><OutputRows outputs={source.outputs} onSelect={onSelect}/><h4>Environments</h4>{source.environment_ids.length ? <ul className="environment-refs">{source.environment_ids.map(id => {const environment = environments.find(item => item.id === id); return <li key={id}>{environment?.name || id}<small>{environment ? `Dimension ${environment.dimension_id ?? 'unknown'} · Provider ${environment.provider ?? 'unknown'}` : 'Environment record not in the loaded catalog'}</small><code>{id}</code></li>})}</ul> : <p className="empty-inline">No environments captured.</p>}<JsonData label="Source conditions" value={source.conditions}/><JsonData label="Generator parameters and weights" value={source.parameters}/><JsonData label="Full source record" value={source}/></article>
+}
+export function CoverageList({records}: {records: Coverage[]}) {
+  return <div className="coverage-list">{records.map(record => <article key={record.id}><div><strong>{record.domain}</strong><Badge tone={record.status === 'complete' ? 'good' : record.status === 'error' ? 'danger' : 'warning'}>{record.status}</Badge><span>{record.records.toLocaleString()} records</span></div>{record.reason && <p>{record.reason}</p>}<JsonData label="Coverage evidence" value={record}/></article>)}</div>
+}

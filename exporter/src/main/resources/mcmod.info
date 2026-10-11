@@ -1,0 +1,1 @@
+{"modListVersion":2,"modList":[{"modid":"${modId}","name":"${modName}","version":"${modVersion}","mcversion":"${minecraftVersion}","description":"Captures native GTNH data into a versioned offline snapshot","authorList":["Pxx500"],"requiredMods":["gregtech"],"useDependencyInformation":true}]}

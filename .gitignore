@@ -10,3 +10,10 @@ worktrees/
 *.log
 .codebase-memory/
 AI/
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+node_modules/
+dist/
