@@ -45,6 +45,10 @@ def create_app(dataset: Dataset, ui_dist: str | Path | None = None) -> FastAPI:
     def sources(resource_id: str | None = None, environment_id: str | None = None, offset: int = 0, limit: int = 50):
         return dataset.find_sources(resource_id=resource_id, environment_id=environment_id, offset=offset, limit=limit)
 
+    @app.get("/api/sources/{id:path}")
+    def source(id: str):
+        return dataset.get_source(id)
+
     @app.get("/api/environments")
     def environments(q: str = "", offset: int = 0, limit: int = 50):
         return dataset.find_environments(q=q, offset=offset, limit=limit)

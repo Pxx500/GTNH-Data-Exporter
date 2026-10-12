@@ -35,6 +35,7 @@ affected files.
 | Gradle wrapper | 9.2.1 | Apache-2.0, existing notices in wrapper scripts |
 | GTNHGradle / Pxx500GTNHGradle | Plugin 2.0.19 and local included build | LGPL v2.1 |
 | NotEnoughItems, host API | 2.8.159-GTNH | LGPL-3.0-or-later declaration in upstream README |
+| EnderIO, host API | 2.10.49 | LGPL-3.0-or-later GTNH modifications, original public-domain declaration |
 
 UI package license metadata was checked in the actual lockfile. Python
 direct versions are pinned in pyproject.toml. Upstream license texts:
@@ -64,6 +65,14 @@ The NEI reference adapter calls the installed mod's public APIs. NEI source
 was inspected at commit `550e85c456ff2a2ac92c47af4235ad3aa46beecb` to establish
 the native projection semantics. No NEI implementation source is copied or
 embedded. The tested runtime JAR identifies LGPLv3 in its mod metadata.
+
+EnderIO's pinned `LICENSE.txt` declares LGPLv3 or later for GTNH changes and
+public domain for the original source. The runtime JAR also contains an
+Apache-2.0 `META-INF/LICENSE`, a packaging discrepancy retained in the local
+evidence. No EnderIO implementation is copied or bundled. The CoreMod 2.9.88
+host declares GPLv3. Login readiness observes its existing handler through
+Forge and Netty interfaces, without a CoreMod compile dependency or copied
+implementation. Project code retains LGPL-3.0-only.
 
 This records the inspected direct dependencies and source reuse. A future
 binary release that bundles dependencies requires a license inventory of the

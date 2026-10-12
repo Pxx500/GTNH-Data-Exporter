@@ -82,13 +82,18 @@ All co-products remain in one process. Preserve quantities per alternative.
 unknown. Conditions and source-specific metadata are structured objects.
 Timing or energy can be null when absent or not established. Research is
 a condition rather than a consumed item in every production operation.
+EnderIO baselines retain total RF in `conditions.total_rf`, with EU/t and
+duration null. Native float chance thresholds remain beside canonical
+fractions. The no-ball native comparison includes equality on the 24-bit
+`Random.nextFloat()` lattice, and all outputs share the same roll. These
+fractions do not imply independent co-product events or grinding-ball yields.
 
 ### Source
 
 `{id, kind, display_name, outputs, environment_ids, status, conditions,
 parameters, provenance}`
 
-Kinds include `ore_vein`, `small_ore`, `underground_fluid`, `drop`, `trade`.
+Kinds include `ore_vein`, `small_ore`, `underground_fluid`, `ore_mining`, `drop`, `trade`.
 Each output has `resource_id` and optional amount/chance/material-role fields.
 Unknown source yields are not replaced with 1. A generated block and its
 mining drops must remain distinguishable. `status` is `active`, `conditional`,
@@ -100,6 +105,13 @@ An output tagged `resource_semantics: generated_ore_block_not_mining_drop`
 describes a world block. It remains searchable but cannot establish inventory
 availability or seed a dependency cycle. This applies per output, so ordinary
 inventory outputs in the same source retain their own availability semantics.
+Normal GT `ore_mining` sources retain Fortune 0 plain and silk branches.
+`parameters.generated_source_id` links the generator, while
+`generated_resource_id` identifies its world block. Outputs tagged
+`mined_item_baseline` describe native base drops with quantities and certainty
+conditioned on qualifying harvest, not deposit occurrence. Conditions retain
+generation, drop mode, material, stone, natural flag and harvest requirements.
+Tool/event modifiers and final delivery are outside this baseline scope.
 
 ### Environment
 
@@ -157,7 +169,7 @@ the existing usable index. Never accept a silently lossy import.
 
 Initial operations are `status`, `find_resources`, `get_resource`,
 `find_processes`, `get_process`, `get_group`, `find_sources`,
-`find_environments` and `trace_processes`.
+`get_source`, `find_environments` and `trace_processes`.
 
 List results are `{snapshot_id, items, total, limit, offset}`. Use explicit
 pagination, default 50 and maximum 500. Exact-resource lookup includes
@@ -193,7 +205,7 @@ HTTP routes are read-only under `/api`:
 - `/resources?q=&kind=&offset=&limit=` and `/resources/{id}`
 - `/processes?input_id=&output_id=&family=&offset=&limit=` and `/processes/{id}`
 - `/groups/{id}`
-- `/sources?resource_id=&environment_id=&offset=&limit=`
+- `/sources?resource_id=&environment_id=&offset=&limit=` and `/sources/{id}`
 - `/environments?q=&offset=&limit=`
 - `/trace?start_id=&target_id=&max_depth=12&max_processes=300`
 

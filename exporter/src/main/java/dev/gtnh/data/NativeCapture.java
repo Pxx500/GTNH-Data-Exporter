@@ -7,10 +7,12 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import cpw.mods.fml.common.Loader;
 import cpw.mods.fml.common.ModContainer;
+import gregtech.api.enums.Materials;
 import gregtech.api.recipe.RecipeMap;
 import gregtech.api.recipe.RecipeMetadataKey;
 import gregtech.api.util.GTOreDictUnificator;
 import gregtech.api.util.GTRecipe;
+import gregtech.api.util.recipe.Sievert;
 import java.io.IOException;
 import java.lang.reflect.Array;
 import java.nio.file.Files;
@@ -54,13 +56,14 @@ final class NativeCapture {
         assemblyLine();
         new CraftingCapture(this).capture();
         smelting();
+        new EnderIoCapture(this).capture();
         new WorldgenCapture(this, writer).capture();
         coverage("resources", "partial", writer.count("resources"),
             "Resources referenced by captured recipes, ore groups and acquisition definitions. Not an exhaustive NEI item catalog");
         coverage("recipe-semantics", "partial", writer.count("processes"),
             "Dynamic native matching, machine-specific metadata and custom crafting remain unresolved. Uninterpreted metadata: " + unknownMetadata);
         coverage("other-mod-recipes", "unsupported", 0,
-            "Non-GT machine recipes and NEI-only handlers have no native adapter in this first capture");
+            "Other non-GT machine recipes beyond the bounded EnderIO adapter and NEI-only handlers remain unsupported");
         coverage("other-acquisition", "unsupported", 0,
             "Mob drops, trades, other-mod worldgen, mining drop distributions and saved deposits are not captured");
     }
@@ -318,6 +321,12 @@ final class NativeCapture {
     }
 
     private JsonElement nativeValue(Object value) throws IOException {
+        if (value != null && value.getClass() == Sievert.class) {
+            Sievert sievert = (Sievert) value;
+            return object("type", value.getClass().getName(), "sievert", sievert.sievert, "isExact", sievert.isExact);
+        }
+        if (value != null && value.getClass() == Materials.class)
+            return object("type", value.getClass().getName(), "material_name", ((Materials) value).getName());
         if (value instanceof ItemStack) {
             ItemStack stack = (ItemStack) value;
             if (Item.itemRegistry.getNameForObject(stack.getItem()) == null)
@@ -351,7 +360,13 @@ final class NativeCapture {
     }
 
     void coverage(String domain, String status, long records, String reason) throws IOException {
-        writer.append("coverage", object("id", domain, "domain", domain, "status", status, "records", records,
-            "reason", reason, "provenance", object("exporter", Tags.VERSION)));
+        coverage(domain, status, records, reason, null);
+    }
+
+    void coverage(String domain, String status, long records, String reason, JsonObject details) throws IOException {
+        JsonObject record = object("id", domain, "domain", domain, "status", status, "records", records,
+            "reason", reason, "provenance", object("exporter", Tags.VERSION));
+        if (details != null) record.add("details", details);
+        writer.append("coverage", record);
     }
 }

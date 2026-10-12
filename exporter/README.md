@@ -93,6 +93,22 @@ static analysis, not runtime NEI coverage or equivalence.
 - The live GT recipe-map catalog and all entries are visited, including fake,
   hidden and disabled recipes. Fake/disabled entries are non-executable
 - The real Assembly Line registry carries research as a structured condition
+- Native EnderIO Sag Mill no-ball and ordinary Alloy Smelter manager records
+  retain ordered AND slots, OR alternatives, quantities, all products and total
+  RF. Duration and EU/t stay unknown. Machine modes and native first-match
+  selection remain explicit conditions. Grinding-ball variants and the alloy
+  vanilla helper path are unsupported
+- Exact EnderIO `RecipeInput` metadata matching is determined by its public
+  matcher using a copied stack at a verified distinct metadata value. NBT is
+  ignored by the native predicate. Ore Dictionary inputs retain all current
+  public equivalents and their metadata predicates. Unknown/custom predicates
+  and nonpositive/fluid inputs remain unresolved
+- EnderIO output chances preserve the native float threshold, inclusive
+  comparison and shared roll. The canonical probability counts accepted
+  outcomes on `Random.nextFloat()`'s 24-bit lattice, so threshold zero retains
+  one outcome rather than a false definite-zero probability. Nonfinite
+  thresholds remain unsupported. Wrapper UID/class/order evidence accompanies
+  coverage, with private manager bindings disclosed as a public-API limitation
 - Native zero-count ingredients are presence requirements with their original
   zero recorded. Item/fluid alternatives retain individual quantities
 - Item NBT, damage, fluid NBT, output chances and co-products are preserved
@@ -118,15 +134,41 @@ static analysis, not runtime NEI coverage or equivalence.
 - Actual mod versions/source-file hashes and config/script hashes accompany
   the snapshot
 
-This is partial pack coverage. Non-GT machine/NEI-only recipe handlers, other-mod
+This is partial pack coverage. Other machine/NEI-only recipe handlers, other-mod
 acquisition, mining-drop distributions and saved deposits are unsupported.
 Native machine metadata not structurally understood carries its class/text
-and an uninterpreted status. Conditional worldgen is not observed occurrence.
+and an uninterpreted status. Exact native `Sievert` values retain their type,
+integer `sievert` and boolean `isExact`. Exact native `Materials` values retain
+their type and `material_name` from public `getName()`, the native material
+registry key. This is a material identity, not a full material-property model.
+Other unsupported metadata objects and subclasses of these two classes remain
+explicitly uninterpreted.
+Conditional worldgen is not observed occurrence.
 Underground-fluid blacklist/provider matching remains unresolved, with raw
 rules and captured config digests. Referenced resources are not a full NEI
 catalog. Counts are not a claim of complete semantics.
 
 ## Verification
+
+The bounded EnderIO adapter has a pure probability boundary test covering
+threshold zero, one-half, one, negative values and unsupported nonfinite
+values. The combined build passed all four Java tests. The real paired
+capture verified 1,663 Sag Mill and 11 Alloy records, with no unresolved
+inputs/outputs or invalid quantities in this measured set. All 4,403 native
+output identity/amount entries agree with scoped NEI views. Native chances
+and RF remain source-backed fields because generic NEI chances are defaults.
+
+The integrated extension passed `test build` on 2026-10-12 with four Java
+tests. Public API proof comes from attached GT `5.09.54.221` and EnderIO
+`2.10.49` sources. No Forge fixture or production test hook was added.
+IntelliJ reported 38 advisory findings. Direct PMD completed against the
+exported compile classpath with 57 advisory findings and no processing errors.
+After the observed login pipeline naming correction, the build passed again.
+The focused readiness-file checks reported zero IntelliJ findings and three
+PMD complexity advisories. Existing complexity warnings remain. Runtime
+validation verified all 122 Sievert and 157 Materials records in the new
+full-pack snapshot, with no missing fields or uninterpreted instances of
+these exact classes.
 
 The consuming module's actual GT dependency is `5.09.54.221`. Library-search
 successfully exported its attached source inventory after model preparation.

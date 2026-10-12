@@ -381,6 +381,9 @@ class Dataset:
     def get_group(self, id):
         return self._get("groups", id)
 
+    def get_source(self, id):
+        return self._get("sources", id)
+
     def _page(self, connection, collection, where="1", parameters=(), *, offset=0, limit=50):
         self._pagination(offset, limit)
         clause = f"collection=? AND ({where})"

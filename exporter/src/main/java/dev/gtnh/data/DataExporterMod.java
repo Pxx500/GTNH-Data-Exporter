@@ -12,6 +12,8 @@ import cpw.mods.fml.common.eventhandler.EventPriority;
 import cpw.mods.fml.common.eventhandler.SubscribeEvent;
 import cpw.mods.fml.common.gameevent.TickEvent;
 import com.google.gson.JsonObject;
+import codechicken.nei.ItemList;
+import codechicken.nei.NEIClientConfig;
 import gregtech.api.enums.GTValues;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -42,6 +44,7 @@ public final class DataExporterMod {
     private volatile SnapshotWriter pendingWriter;
     private JsonObject pendingManifest;
     private Path pendingDirectory;
+    private volatile NativeLoginReadiness loginReadiness;
 
     @Mod.EventHandler
     public void initialize(FMLInitializationEvent event) {
@@ -80,6 +83,9 @@ public final class DataExporterMod {
         LOG.info("GTNH data capture bootstraps isolated world {} after FML load-complete", worldName);
         try {
             startBootstrapDeadline();
+            loginReadiness = NativeLoginReadiness.install();
+            // Keep this fresh automation client running in the background without saving options.
+            client.gameSettings.pauseOnLostFocus = false;
             // GT world generators use XSTR, whose zero seed produces an all-zero stream.
             WorldSettings settings = new WorldSettings(1L, WorldSettings.GameType.CREATIVE, false, false, WorldType.FLAT);
             settings.enableCommands();
@@ -93,22 +99,27 @@ public final class DataExporterMod {
             || !GTValues.worldTickHappened) return;
         Minecraft client = Minecraft.getMinecraft();
         if (client.theWorld == null || client.thePlayer == null || !client.isIntegratedServerRunning()) return;
-        if (neiReference && !NeiReferenceCapture.isReady()) return;
-        captureStarted = true;
-        bootstrapSettled.countDown();
         try {
+            if (loginReadiness == null || !loginReadiness.isReady()) return;
+            if (neiReference && !NeiReferenceCapture.isReady()) return;
+            captureStarted = true;
+            bootstrapSettled.countDown();
             if (neiReference) startReferenceDeadline();
             String output = System.getProperty("gtnh.data.outputDir");
             if (output == null || output.trim().isEmpty()) throw new IllegalArgumentException("gtnh.data.outputDir is required");
             Path directory = Paths.get(output).toAbsolutePath();
             if (directory.getParent() != null) java.nio.file.Files.createDirectories(directory.getParent());
-            LOG.info("GT first-world callbacks finished and client attached. Capturing native data at {}", directory);
+            LOG.info("GT first-world callbacks and native client login sync finished. Capturing native data at {}", directory);
             SnapshotWriter writer = new SnapshotWriter(directory);
             try {
                 NativeCapture capture = new NativeCapture(writer);
                 capture.capture();
+                capture.coverage("runtime.coremod_login_sync", "complete", 1,
+                    "CoreMod client login policy handler completed before capture: " + loginReadiness.evidence());
                 JsonObject manifest = capture.manifest(client.mcDataDir.toPath(), worldName,
                     client.getIntegratedServer().worldServerForDimension(0).getSeed());
+                manifest.getAsJsonObject("capture").add("native_login_sync", loginReadiness.evidence());
+                manifest.getAsJsonObject("capture").addProperty("pause_on_lost_focus", client.gameSettings.pauseOnLostFocus);
                 if (neiReference) {
                     writer.close();
                     pendingManifest = manifest;
@@ -166,13 +177,24 @@ public final class DataExporterMod {
         Thread watchdog = new Thread(() -> {
             try {
                 if (!bootstrapSettled.await(seconds, TimeUnit.SECONDS)) fail(new IllegalStateException(
-                    "Integrated-world bootstrap exceeded " + seconds + " seconds. loadComplete=" + loadComplete
-                        + ", serverStarted=" + serverStarted + ", gtFirstWorldTick=" + GTValues.worldTickHappened));
+                    "Integrated-world bootstrap exceeded " + seconds + " seconds. " + readinessDiagnostics()));
             } catch (InterruptedException interrupted) {
                 Thread.currentThread().interrupt();
             }
         }, "gtnh-data-bootstrap-deadline");
         watchdog.setDaemon(true);
         watchdog.start();
+    }
+
+    private String readinessDiagnostics() {
+        Minecraft client = Minecraft.getMinecraft();
+        return "loadComplete=" + loadComplete + ", serverStarted=" + serverStarted
+            + ", gtFirstWorldTick=" + GTValues.worldTickHappened
+            + ", clientWorld=" + (client.theWorld != null) + ", clientPlayer=" + (client.thePlayer != null)
+            + ", integratedServerRunning=" + client.isIntegratedServerRunning() + ", gamePaused=" + client.isGamePaused()
+            + ", pauseOnLostFocus=" + client.gameSettings.pauseOnLostFocus
+            + ", neiLoaded=" + NEIClientConfig.isLoaded() + ", itemListFinished=" + ItemList.loadFinished
+            + ", neiReferenceRequested=" + neiReference
+            + ", nativeLoginSync=" + (loginReadiness == null ? "not_installed" : loginReadiness.evidence());
     }
 }

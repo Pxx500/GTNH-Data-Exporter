@@ -3,18 +3,21 @@
 Capture a versioned GregTech New Horizons dataset, then explore it with a
 human UI or query it through MCP and CLI while Minecraft is closed.
 
-This repository provides a working first capture/query slice, verified against
-the running full GTNH pack on 2026-10-11. The first validated snapshot contains
-257,788 process records and 122,835 resources. Its six compressed data streams
-total 9.73 MB. Build, launch, capture, shutdown and import took 140.62 seconds
-on the local setup. These timings describe this captured scope and machine.
+The 2026-10-12 full-pack capture contains 259,462 processes, 122,972 resources
+and 23,122 acquisition-source records. Its six compressed streams total
+11.07 MiB. Build, launch, capture, shutdown and import took 178.72 seconds
+on the local setup. This adds 1,663 native EnderIO Sag Mill baseline recipes,
+11 ordinary Alloy Smelter recipes and 22,898 conditional normal-ore mining
+branches. Public Sievert and Materials metadata is structured in 279 GT
+records. Timings describe this captured scope and machine.
 Coverage is reported per source. An export is not a declaration that every
 recipe family or acquisition route in the pack has been reproduced.
 Custom crafting wrappers and non-GT machine integrations remain important
 coverage gaps. The first raw crafting catalog included 46,564 records with
 unresolved inputs. The collector now captures declared inputs for the exact
 GT shaped and shapeless classes. Their dynamic matching and runtime output
-transformations remain explicit gaps. Mining-drop transformations are not captured.
+transformations remain explicit gaps. Small-ore drop distributions, grinding-ball
+variants and other non-GT machine families are still incomplete or unsupported.
 
 A later full-pack run verified declared inputs in all 34,881 GT shaped and
 2,702 GT shapeless records. That snapshot has 257,788 processes and 122,972
@@ -70,6 +73,11 @@ The script requests an opt-in automatic capture in a new output directory,
 waits for the game to exit, then validates and imports the snapshot. It
 rejects a reused output directory. An old dump cannot count as a successful
 new run. Captures and generated indexes stay under Git-excluded `exports/`.
+The isolated client disables automatic focus-loss pausing in memory and waits
+for the native CoreMod login-policy handler to finish. The gate supports the
+verified CoreMod 2.9.88 protocol and observes its actual Forge handler, including
+the installed ModularUI2 pipeline naming. Unsupported registration fails
+before publication. Autorun requires a fresh isolated client.
 
 To inspect an existing snapshot without launching the game:
 
@@ -139,6 +147,11 @@ appear once on a freely pannable and zoomable map. Drag tiles, fit the view,
 or arrange them automatically. Choose one path to highlight its steps.
 Additional inputs and co-products stay inside each recipe, with identities
 and complete native records available in the inspector.
+Generation definitions describe world blocks. Inventory availability follows
+captured acquisition outputs. Normal-ore mining sources retain separate
+Fortune 0 plain and silk branches, native quantities, harvest requirements,
+dimension context and links to their generator definitions. These are base
+drops before tool/event modifiers, not observed deposits or final harvests.
 The UI omits routine 100% chances and default flags. Exceptional chances
 appear as percentages, while unknown chances remain explicit. Exact fractions
 and technical fields remain available in the full recipe record.
@@ -165,6 +178,9 @@ session if an existing session has not loaded the new server.
 MCP runs over stdio and does not require the GUI server. Diagnostic output
 must not be written to the protocol's stdout. The CLI exposes the same
 operations for clients that prefer ordinary processes and JSON output.
+Use `get_source(id)` to follow a mining source's `generated_source_id` directly
+to its worldgen definition. HTTP exposes `/api/sources/{id}` and CLI accepts
+`sources SOURCE_ID --database PATH_TO_INDEX.sqlite`.
 Successful MCP results place the data once in `structuredContent`, with a
 brief text summary instead of a second full JSON copy.
 

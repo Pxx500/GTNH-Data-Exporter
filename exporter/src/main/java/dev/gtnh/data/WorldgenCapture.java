@@ -8,28 +8,46 @@ import com.google.gson.JsonPrimitive;
 import galacticgreg.api.ModDimensionDef;
 import galacticgreg.registry.GalacticGregRegistry;
 import gregtech.GTMod;
+import gregtech.api.enums.Materials;
 import gregtech.api.interfaces.IOreMaterial;
 import gregtech.api.interfaces.IStoneType;
 import gregtech.api.objects.GTUODimension;
 import gregtech.api.objects.GTUOFluid;
 import gregtech.common.WorldgenGTOreLayer;
 import gregtech.common.WorldgenGTOreSmallPieces;
+import gregtech.common.blocks.GTBlockOre;
+import gregtech.common.ores.GTOreAdapter;
 import gregtech.common.ores.OreInfo;
 import gregtech.common.ores.OreManager;
 import java.io.IOException;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.Random;
+import net.minecraft.block.Block;
 import net.minecraft.item.ItemStack;
 import net.minecraftforge.common.DimensionManager;
 import net.minecraftforge.fluids.FluidStack;
 
-/** Configured native generation only. Never loads dimensions or samples chunk deposits. */
+/** Configured generation and conditional base acquisition. Never samples chunk deposits. */
 final class WorldgenCapture {
+    private static final Random NO_RANDOM_DRAWS = new Random(0L) {
+        private static final long serialVersionUID = 1L;
+        @Override
+        protected int next(int bits) {
+            throw new IllegalStateException("Normal ore Fortune 0 baseline requested a random draw");
+        }
+    };
     private final NativeCapture capture;
     private final SnapshotWriter writer;
     private final Map<String, ModDimensionDef> definitions = new HashMap<>();
     private final java.util.Set<String> environments = new java.util.HashSet<>();
+    private long miningSourceCount;
+    private long unsupportedMiningVariants;
+    private long failedMiningBranches;
+    private final JsonArray miningFailures = new JsonArray();
 
     WorldgenCapture(NativeCapture capture, SnapshotWriter writer) { this.capture = capture; this.writer = writer; }
 
@@ -62,10 +80,11 @@ final class WorldgenCapture {
         long veins = 0;
         for (WorldgenGTOreLayer vein : WorldgenGTOreLayer.sList) {
             JsonArray outputs = new JsonArray();
-            addOre(outputs, vein.mPrimary, false, "primary", vein);
-            addOre(outputs, vein.mSecondary, false, "secondary", vein);
-            addOre(outputs, vein.mBetween, false, "between", vein);
-            addOre(outputs, vein.mSporadic, false, "sporadic", vein);
+            Map<String, ItemStack> generatedBlocks = new LinkedHashMap<>();
+            addOre(outputs, generatedBlocks, vein.mPrimary, "primary", vein);
+            addOre(outputs, generatedBlocks, vein.mSecondary, "secondary", vein);
+            addOre(outputs, generatedBlocks, vein.mBetween, "between", vein);
+            addOre(outputs, generatedBlocks, vein.mSporadic, "sporadic", vein);
             JsonArray contexts = new JsonArray();
             JsonObject heights = new JsonObject();
             JsonObject gates = new JsonObject();
@@ -74,13 +93,16 @@ final class WorldgenCapture {
                 heights.add(name, object("min_y", vein.getMinY(name), "max_y", vein.getMaxY(name)));
                 gates.add(name, dimensionGate(name));
             }
-            writer.append("sources", object("id", "vein:" + vein.getName(), "kind", "ore_vein", "display_name", vein.getName(),
+            String sourceId = "vein:" + vein.getName();
+            JsonObject generationConditions = object("dimension_gates", gates, "biome", vein.mRestrictBiome,
+                "stone_specific", vein.isStoneSpecific(), "region", "native_location_and_terrain_conditions");
+            writer.append("sources", object("id", sourceId, "kind", "ore_vein", "display_name", vein.getName(),
                 "outputs", outputs, "environment_ids", contexts, "status", "conditional",
-                "conditions", object("dimension_gates", gates, "biome", vein.mRestrictBiome,
-                    "stone_specific", vein.isStoneSpecific(), "region", "native_location_and_terrain_conditions"),
+                "conditions", generationConditions,
                 "parameters", object("weight", vein.mWeight, "density", vein.mDensity, "size", vein.mSize, "heights", heights,
                     "weight_semantics", "relative_selection_weight_not_occurrence_probability"),
                 "provenance", object("owner", "WorldgenGTOreLayer.sList", "generator", vein.getName())));
+            emitMiningSources(sourceId, vein.getName(), generatedBlocks, contexts, generationConditions);
             veins++;
         }
         long small = 0;
@@ -125,11 +147,18 @@ final class WorldgenCapture {
         capture.coverage("forge.registered_dimensions", "complete", DimensionManager.getStaticDimensionIDs().length,
             "All registered numeric IDs, including unloaded worlds. Cross-mapping to GT names remains unresolved");
         capture.coverage("gt.worldgen.veins", "partial", veins,
-            "Active runtime list captured. Location gates and mining drop distributions are not interpreted");
+            "Active runtime list captured. Generated blocks are world definitions. Location gates are not interpreted");
         capture.coverage("gt.worldgen.small_ores", "partial", small,
             "Active runtime list and stone resource variants captured. Potential mining drops remain separate unknown acquisition");
         capture.coverage("gt.worldgen.underground_fluids", "partial", fluids,
             "Native config rules captured. Numeric/provider matching, blacklist, seeded fields and depletion observations unresolved");
+        capture.coverage("acquisition.gt_ore_mining_normal", "partial", miningSourceCount,
+            "Conditional GT normal ore Fortune 0 plain/silk native base drops. Tool/event modifiers, positive Fortune and observed deposits are not modeled",
+            object("native_drop_mode", GTMod.proxy.oreDropSystem.name(), "random_evaluation", "random_draws_rejected",
+                "unsupported_generator_variants", unsupportedMiningVariants, "failed_branches", failedMiningBranches,
+                "failure_examples", miningFailures, "records_semantics", "related_source_branches_not_deposit_count"));
+        capture.coverage("acquisition.gt_ore_mining_small", "unsupported", small,
+            "Small ore exclusive weighted selections, roll counts and host-stone side drops require a symbolic distribution. No guaranteed product list emitted");
     }
 
     private String environment(String name) throws IOException {
@@ -147,10 +176,12 @@ final class WorldgenCapture {
                 "respects_ore_heights", definition.respectsOreVeinHeights());
     }
 
-    private void addOre(JsonArray outputs, IOreMaterial material, boolean small, String role, WorldgenGTOreLayer layer) throws IOException {
+    private void addOre(JsonArray outputs, Map<String, ItemStack> generatedBlocks, IOreMaterial material,
+        String role, WorldgenGTOreLayer layer) throws IOException {
         for (IStoneType stone : material.getValidStones()) {
             if (layer.isStoneSpecific() && !layer.canGenerateIn(stone.getCategory())) continue;
-            oreResource(outputs, material, stone, small, role);
+            ItemStack block = oreResource(outputs, material, stone, false, role);
+            if (block != null) generatedBlocks.putIfAbsent(capture.item(block), block);
         }
     }
 
@@ -161,13 +192,72 @@ final class WorldgenCapture {
         }
     }
 
-    private void oreResource(JsonArray outputs, IOreMaterial material, IStoneType stone, boolean small, String role) throws IOException {
+    private ItemStack oreResource(JsonArray outputs, IOreMaterial material, IStoneType stone, boolean small, String role) throws IOException {
         try (OreInfo<IOreMaterial> info = OreInfo.getNewInfo()) {
             info.material = material; info.stoneType = stone; info.isSmall = small; info.isNatural = true;
             ItemStack block = OreManager.getStack(info, 1);
             if (block != null) outputs.add(object("resource_id", capture.item(block), "chance", null,
                 "material", material.getInternalName(), "material_role", role, "stone", stone.toString(),
                 "resource_semantics", "generated_ore_block_not_mining_drop"));
+            return block;
+        }
+    }
+
+    private void emitMiningSources(String generatedSourceId, String label, Map<String, ItemStack> generatedBlocks,
+        JsonArray environments, JsonObject generationConditions) throws IOException {
+        for (Map.Entry<String, ItemStack> entry : generatedBlocks.entrySet()) {
+            Block block = Block.getBlockFromItem(entry.getValue().getItem());
+            try (OreInfo<IOreMaterial> info = OreManager.getOreInfo(entry.getValue())) {
+                if (info == null || info.isSmall || !(info.material instanceof Materials)
+                    || !(OreManager.getAdapter(info) instanceof GTOreAdapter) || !(block instanceof GTBlockOre)) {
+                    unsupportedMiningVariants++;
+                    continue;
+                }
+                GTBlockOre ore = (GTBlockOre) block;
+                int metadata = entry.getValue().getItemDamage();
+                for (boolean silk : new boolean[]{false, true}) {
+                    String id = "mining:" + generatedSourceId + ":" + entry.getKey() + ":fortune0:" + (silk ? "silk" : "plain");
+                    JsonObject mining = object("scope", "native_base_drop", "effective_fortune", 0, "silk_touch", silk,
+                        "ore_drop_system", GTMod.proxy.oreDropSystem.name(),
+                        "effective_drop_mode", silk ? "Block" : GTMod.proxy.oreDropSystem.name(),
+                        "material", info.material.getInternalName(),
+                        "stone", info.stoneType.toString(), "natural", info.isNatural,
+                        "harvest_tool", ore.getHarvestTool(metadata), "minimum_harvest_level", ore.getHarvestLevel(metadata),
+                        "harvest_requirements_scope", "native_block_declared_requirements",
+                        "actor_assumption", "successful_ordinary_harvest_with_suitable_tool",
+                        "tool_and_event_modifiers", "not_modeled");
+                    JsonArray drops = new JsonArray();
+                    String status = "conditional";
+                    String failure = null;
+                    try {
+                        List<ItemStack> nativeDrops = GTOreAdapter.INSTANCE.getOreDrops(NO_RANDOM_DRAWS, info, silk, 0);
+                        if (nativeDrops.isEmpty()) throw new IllegalStateException("Native baseline returned no drops");
+                        for (ItemStack drop : nativeDrops) {
+                            if (drop == null || drop.getItem() == null || drop.stackSize <= 0)
+                                throw new IllegalStateException("Native baseline returned an invalid drop");
+                            drops.add(object("resource_id", capture.item(drop), "amount", drop.stackSize,
+                                "chance", object("numerator", 1, "denominator", 1),
+                                "chance_semantics", "deterministic_given_baseline_harvest_not_deposit_occurrence",
+                                "resource_semantics", "mined_item_baseline"));
+                        }
+                    } catch (RuntimeException exception) {
+                        drops = new JsonArray();
+                        status = "unknown";
+                        failure = exception.getClass().getName() + ": " + exception.getMessage();
+                        failedMiningBranches++;
+                        if (miningFailures.size() < 20) miningFailures.add(object("source_id", id, "failure", failure));
+                    }
+                    writer.append("sources", object("id", id, "kind", "ore_mining", "display_name",
+                        label + (silk ? " baseline silk-touch mining" : " baseline mining"), "outputs", drops,
+                        "environment_ids", environments, "status", status,
+                        "conditions", object("generation", generationConditions, "mining", mining),
+                        "parameters", object("generated_source_id", generatedSourceId, "generated_resource_id", entry.getKey(),
+                            "yield_semantics", "per_encountered_block_before_harvest_modifiers", "failure", failure),
+                        "provenance", object("owner", "GTOreAdapter.getOreDrops", "adapter_class", GTOreAdapter.class.getName(),
+                            "block_class", block.getClass().getName(), "generated_metadata", metadata)));
+                    miningSourceCount++;
+                }
+            }
         }
     }
 }

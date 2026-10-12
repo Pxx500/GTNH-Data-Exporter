@@ -16,7 +16,7 @@ def parser():
         command.add_argument("--database", required=True, type=Path)
         if name == "import":
             command.add_argument("snapshot", type=Path)
-        if name in ("resources", "processes"):
+        if name in ("resources", "processes", "sources"):
             command.add_argument("id", nargs="?")
         if name == "groups":
             command.add_argument("id")
@@ -67,11 +67,11 @@ def main(argv=None):
                 from .mcp import run_stdio
                 asyncio.run(run_stdio(dataset))
                 return 0
-            if command in ("resources", "processes") and arguments.get("id") is not None:
-                operation = "get_resource" if command == "resources" else "get_process"
+            if command in ("resources", "processes", "sources") and arguments.get("id") is not None:
+                operation = {"resources": "get_resource", "processes": "get_process", "sources": "get_source"}[command]
                 arguments = {"id": arguments["id"]}
             else:
-                if command in ("resources", "processes"):
+                if command in ("resources", "processes", "sources"):
                     arguments.pop("id", None)
                 operation = {"status": "status", "resources": "find_resources", "processes": "find_processes", "groups": "get_group",
                              "sources": "find_sources", "environments": "find_environments", "trace": "trace_processes"}[command]
