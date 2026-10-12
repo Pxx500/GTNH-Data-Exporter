@@ -1,6 +1,7 @@
 import tempfile
 import unittest
 import json
+from copy import deepcopy
 from pathlib import Path
 
 from gtnh_data import Dataset, DatasetError
@@ -12,6 +13,156 @@ class DatasetTests(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
+
+    def small_ore_sources(self):
+        generation = {'id': 'generation', 'kind': 'small_ore', 'display_name': 'small ore generation',
+                      'outputs': [{'resource_id': 'generated', 'resource_semantics': 'generated_ore_block_not_mining_drop'}],
+                      'environment_ids': [], 'status': 'conditional', 'conditions': {'dimension': 7}, 'parameters': {}, 'provenance': {}}
+        rule = {'kind': 'gt_small_ore_fortune0', 'version': 1, 'scope': 'per_qualifying_native_base_harvest',
+                'primary': {'kind': 'weighted_draws_with_replacement', 'draw_count': 2, 'total_weight': 3, 'amount_per_draw': 1,
+                            'candidates': [{'resource_id': 'locked', 'weight': 2}, {'resource_id': 'other', 'weight': 1}],
+                            'empty_pool_behavior': 'emit_nothing'},
+                'host': {'kind': 'exclusive_choice', 'outcomes': [
+                    {'native_cases': [{'case': 'none', 'probability': {'numerator': 2, 'denominator': 3}}],
+                     'probability': {'numerator': 2, 'denominator': 3}, 'outputs': []},
+                    {'native_cases': [{'case': 'pure', 'probability': {'numerator': 1, 'denominator': 9}},
+                                      {'case': 'impure', 'probability': {'numerator': 2, 'denominator': 9}}],
+                     'probability': {'numerator': 1, 'denominator': 3}, 'outputs': [{'resource_id': 'dust', 'amount': 1}]}]},
+                'evaluation_order': ['primary', 'host']}
+        mining = {'id': 'mining', 'kind': 'ore_mining', 'display_name': 'stochastic base mining',
+                  'outputs': [{'resource_id': id, 'resource_semantics': 'mined_item_rule_candidate'} for id in ('locked', 'other', 'dust')],
+                  'environment_ids': [], 'status': 'conditional', 'conditions': {'generation': {'dimension': 7}, 'mining': {'fortune': 0}},
+                  'parameters': {'generated_source_id': 'generation', 'generated_resource_id': 'generated', 'output_rule': rule}, 'provenance': {}}
+        return [generation, mining]
+
+    def test_stochastic_mining_candidates_are_searchable_but_do_not_seed_cycles(self):
+        for real_source in (False, True):
+            with self.subTest(real_source=real_source):
+                sources = self.small_ore_sources()
+                if real_source:
+                    sources.append({'id': 'real', 'kind': 'drop', 'display_name': 'inventory item', 'outputs': [{'resource_id': 'locked', 'amount': 1}],
+                                    'environment_ids': [], 'status': 'active', 'conditions': {}, 'parameters': {}, 'provenance': {}})
+                records = [process('first', [slot(choice('start')), slot(choice('locked'))], ['middle']),
+                           process('finish', [slot(choice('middle'))], ['product', 'middle'])]
+                coverage = [{'id': 'sources', 'domain': 'acquisition', 'status': 'complete', 'records': len(sources), 'reason': 'fixture', 'provenance': {}}]
+                dataset = Dataset.import_snapshot(snapshot(self.root / str(real_source),
+                    resources=[resource(id) for id in ('start', 'locked', 'other', 'dust', 'generated', 'middle', 'product')],
+                    sources=sources, processes=records, coverage=coverage), self.root / f'{real_source}.sqlite')
+                self.assertIn(sources[1], dataset.find_sources(resource_id='locked')['items'])
+                self.assertEqual(dataset.get_source('mining')['item'], sources[1])
+                trace = dataset.trace_processes(start_id='start', target_id='product')
+                leaves = {leaf['resource_id']: leaf for leaf in trace['leaves']}
+                self.assertEqual(leaves['locked']['status'], 'available' if real_source else 'unresolved')
+                if real_source:
+                    self.assertNotIn('middle', leaves)
+                else:
+                    self.assertIn('stochastic', leaves['locked']['reason'].lower())
+                    self.assertIn('middle', leaves)
+                    self.assertIn('cycle needs', leaves['middle']['reason'])
+
+    def test_small_ore_rule_rejects_inconsistent_weights_before_activation(self):
+        sources = self.small_ore_sources()
+        sources[1]['parameters']['output_rule']['primary']['total_weight'] = 4
+        with self.assertRaisesRegex(DatasetError, 'weight'):
+            Dataset.import_snapshot(snapshot(self.root / 'invalid-rule', sources=sources,
+                resources=[resource(id) for id in ('generated', 'locked', 'other', 'dust')]), self.root / 'invalid.sqlite')
+
+    def test_small_ore_rule_rejects_malformed_joint_probabilities_candidates_and_references(self):
+        generation, original = self.small_ore_sources()
+        invalid = []
+
+        def changed(name, section, field, value):
+            source = deepcopy(original)
+            rule = source['parameters']['output_rule']
+            (rule if section is None else rule[section])[field] = value
+            invalid.append((name, source))
+
+        for field, value in (('draw_count', 0), ('draw_count', True), ('total_weight', -1), ('amount_per_draw', 2),
+                             ('empty_pool_behavior', 'sample'), ('candidates', [{'resource_id': 'locked', 'weight': 0}])):
+            changed(field + str(value), 'primary', field, value)
+        for field, value in (('version', True), ('version', 2), ('kind', 'unknown'), ('scope', 'inventory'), ('evaluation_order', ['host', 'primary'])):
+            changed(field + str(value), None, field, value)
+        source = deepcopy(original)
+        source['parameters']['output_rule']['host']['outcomes'][1]['probability'] = {'numerator': 2, 'denominator': 3}
+        invalid.append(('outer_probability', source))
+        source = deepcopy(original)
+        source['parameters']['output_rule']['host']['outcomes'][1]['native_cases'][0]['probability'] = {'numerator': 2, 'denominator': 9}
+        invalid.append(('native_probability', source))
+        source = deepcopy(original)
+        source['parameters']['output_rule']['host']['outcomes'][1]['native_cases'].pop()
+        invalid.append(('missing_case', source))
+        source = deepcopy(original)
+        source['parameters']['output_rule']['host']['outcomes'][0]['outputs'] = [{'resource_id': 'dust', 'amount': 1}]
+        invalid.append(('no_dust_emits_item', source))
+        source = deepcopy(original)
+        source['parameters']['output_rule']['host']['outcomes'][1]['outputs'][0]['amount'] = 2
+        invalid.append(('host_quantity', source))
+        source = deepcopy(original)
+        host = source['parameters']['output_rule']['host']['outcomes']
+        dust = host.pop()
+        for native_case in dust['native_cases']:
+            host.append({'native_cases': [native_case], 'probability': native_case['probability'], 'outputs': dust['outputs']})
+        invalid.append(('equal_host_ids_not_grouped', source))
+        source = deepcopy(original)
+        source['parameters']['output_rule']['host']['outcomes'][1]['native_cases'][0]['case'] = []
+        invalid.append(('malformed_case_type', source))
+        for field, value in (('amount', 1), ('chance', None), ('resource_semantics', 'mined_item_baseline')):
+            source = deepcopy(original)
+            source['outputs'][0][field] = value
+            invalid.append(('independent_output_' + field, source))
+        source = deepcopy(original)
+        source['outputs'].pop()
+        invalid.append(('missing_support_candidate', source))
+        source = deepcopy(original)
+        source['outputs'].append(deepcopy(source['outputs'][0]))
+        invalid.append(('duplicate_support_candidate', source))
+        source = deepcopy(original)
+        source['parameters'].pop('output_rule')
+        invalid.append(('marker_without_rule', source))
+        for field in ('generated_source_id', 'generated_resource_id'):
+            source = deepcopy(original)
+            source['parameters'][field] = 'missing'
+            invalid.append(('unresolved_' + field, source))
+        for section in ('primary', 'host'):
+            source = deepcopy(original)
+            if section == 'primary':
+                source['parameters']['output_rule']['primary']['candidates'][0]['resource_id'] = 'missing'
+                source['outputs'][0]['resource_id'] = 'missing'
+            else:
+                source['parameters']['output_rule']['host']['outcomes'][1]['outputs'][0]['resource_id'] = 'missing'
+                source['outputs'][2]['resource_id'] = 'missing'
+            invalid.append(('unresolved_nested_' + section, source))
+        for index, (name, source) in enumerate(invalid):
+            with self.subTest(name=name), self.assertRaises(DatasetError):
+                Dataset.import_snapshot(snapshot(self.root / f'invalid-{index}', sources=[generation, source],
+                    resources=[resource(id) for id in ('generated', 'locked', 'other', 'dust')]), self.root / f'invalid-{index}.sqlite')
+
+    def test_small_ore_empty_primary_keeps_exclusive_host_and_unknown_capture_is_explicit(self):
+        sources = self.small_ore_sources()
+        source = sources[1]
+        source['parameters']['output_rule']['primary'].update(total_weight=0, candidates=[])
+        source['outputs'] = [source['outputs'][2]]
+        unknown = deepcopy(source)
+        unknown.update(id='failed', status='unknown', outputs=[])
+        unknown['parameters'].pop('output_rule')
+        unknown['parameters']['failure'] = 'Native candidate resolution failed'
+        sources.append(unknown)
+        dataset = Dataset.import_snapshot(snapshot(self.root / 'empty', sources=sources,
+            resources=[resource(id) for id in ('generated', 'dust')]), self.root / 'empty.sqlite')
+        self.assertEqual(dataset.find_sources(resource_id='dust')['items'], [source])
+        self.assertEqual(dataset.get_source('failed')['item'], unknown)
+        host = dataset.get_source('mining')['item']['parameters']['output_rule']['host']
+        self.assertEqual(host['outcomes'][1]['probability'], {'numerator': 1, 'denominator': 3})
+        self.assertEqual(host['outcomes'][1]['outputs'], [{'resource_id': 'dust', 'amount': 1}])
+        source = deepcopy(source)
+        outcomes = source['parameters']['output_rule']['host']['outcomes']
+        merged = outcomes.pop()
+        for native_case, id in zip(merged['native_cases'], ('dust', 'other-dust')):
+            outcomes.append({'native_cases': [native_case], 'probability': native_case['probability'], 'outputs': [{'resource_id': id, 'amount': 1}]})
+        source['outputs'].append({'resource_id': 'other-dust', 'resource_semantics': 'mined_item_rule_candidate'})
+        dataset = Dataset.import_snapshot(snapshot(self.root / 'distinct-host', sources=[sources[0], source],
+            resources=[resource(id) for id in ('generated', 'dust', 'other-dust')]), self.root / 'distinct-host.sqlite')
+        self.assertEqual(dataset.find_sources(resource_id='other-dust')['items'], [source])
 
     def test_presence_and_group_only_inputs_remain_discoverable(self):
         nbt = {"type": "compound", "value": {"mode": {"type": "int", "value": 7}}}

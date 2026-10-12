@@ -3,12 +3,13 @@
 Capture a versioned GregTech New Horizons dataset, then explore it with a
 human UI or query it through MCP and CLI while Minecraft is closed.
 
-The 2026-10-12 full-pack capture contains 259,462 processes, 122,972 resources
-and 23,122 acquisition-source records. Its six compressed streams total
-11.07 MiB. Build, launch, capture, shutdown and import took 178.72 seconds
+The 2026-10-12 full-pack capture contains 259,616 processes, 122,972 resources
+and 25,228 acquisition-source records. Its six compressed streams total
+11.27 MiB. Build, launch, capture, shutdown and import took 179.46 seconds
 on the local setup. This adds 1,663 native EnderIO Sag Mill baseline recipes,
-11 ordinary Alloy Smelter recipes and 22,898 conditional normal-ore mining
-branches. Public Sievert and Materials metadata is structured in 279 GT
+11 ordinary Alloy Smelter recipes, 154 Forestry Centrifuge recipes,
+22,898 conditional normal-ore mining branches and 2,106 small-ore drop rules.
+Public Sievert and Materials metadata is structured in 279 GT
 records. Timings describe this captured scope and machine.
 Coverage is reported per source. An export is not a declaration that every
 recipe family or acquisition route in the pack has been reproduced.
@@ -16,8 +17,10 @@ Custom crafting wrappers and non-GT machine integrations remain important
 coverage gaps. The first raw crafting catalog included 46,564 records with
 unresolved inputs. The collector now captures declared inputs for the exact
 GT shaped and shapeless classes. Their dynamic matching and runtime output
-transformations remain explicit gaps. Small-ore drop distributions, grinding-ball
-variants and other non-GT machine families are still incomplete or unsupported.
+transformations remain explicit gaps. Small-ore rules preserve joint native
+draws, while joint inventory feasibility and final tool/event delivery remain
+unresolved. Grinding-ball variants and other non-GT machine families are still
+incomplete or unsupported.
 
 A later full-pack run verified declared inputs in all 34,881 GT shaped and
 2,702 GT shapeless records. That snapshot has 257,788 processes and 122,972
@@ -107,8 +110,8 @@ quantities and alternatives, and NEI's NBT projection loses type information.
 Neither signature agreement nor display agreement proves pack-wide execution
 semantics. See [FORMAT.md](FORMAT.md) for the reference contract.
 
-The latest paired full-pack run on 2026-10-12 captured 366 handlers and 287,513
-views/signatures in a 176.56-second pipeline. Independent item presentation
+The latest paired full-pack run on 2026-10-12 captured 366 handlers and 287,499
+views/signatures in a 179.46-second pipeline. Independent item presentation
 context retains 32,109 original GT alias queries and 223 NEI item pools,
 with exact typed NBT and binding to the closed canonical streams.
 The scoped comparison finds 45,209 matching projections, no differences
@@ -160,6 +163,10 @@ captured acquisition outputs. Normal-ore mining sources retain separate
 Fortune 0 plain and silk branches, native quantities, harvest requirements,
 dimension context and links to their generator definitions. These are base
 drops before tool/event modifiers, not observed deposits or final harvests.
+Small ores retain weighted replacement draws and exclusive host-dust outcomes
+as one native rule. Potential products remain searchable without invented
+fixed quantities. These candidates do not automatically ground inventory
+availability or dependency cycles.
 The UI omits routine 100% chances and default flags. Exceptional chances
 appear as percentages, while unknown chances remain explicit. Exact fractions
 and technical fields remain available in the full recipe record.

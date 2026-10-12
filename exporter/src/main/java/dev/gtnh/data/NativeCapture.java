@@ -57,13 +57,14 @@ final class NativeCapture {
         new CraftingCapture(this).capture();
         smelting();
         new EnderIoCapture(this).capture();
+        new ForestryCapture(this).capture();
         new WorldgenCapture(this, writer).capture();
         coverage("resources", "partial", writer.count("resources"),
             "Resources referenced by captured recipes, ore groups and acquisition definitions. Not an exhaustive NEI item catalog");
         coverage("recipe-semantics", "partial", writer.count("processes"),
             "Dynamic native matching, machine-specific metadata and custom crafting remain unresolved. Uninterpreted metadata: " + unknownMetadata);
         coverage("other-mod-recipes", "unsupported", 0,
-            "Other non-GT machine recipes beyond the bounded EnderIO adapter and NEI-only handlers remain unsupported");
+            "Other non-GT machine recipes beyond bounded EnderIO and Forestry Centrifuge adapters remain unsupported");
         coverage("other-acquisition", "unsupported", 0,
             "Mob drops, trades, other-mod worldgen, mining drop distributions and saved deposits are not captured");
     }
@@ -351,6 +352,17 @@ final class NativeCapture {
     }
 
     private JsonObject chance(int nativeChance) { return object("numerator", nativeChance, "denominator", 10000); }
+
+    /** Counts accepted outcomes on the uniform 24-bit java.util.Random.nextFloat lattice. */
+    static JsonObject floatRollChance(float threshold, boolean inclusive) {
+        if (Float.isNaN(threshold) || Float.isInfinite(threshold)) return null;
+        if (threshold < 0) return object("numerator", 0, "denominator", 1);
+        if (threshold >= 1) return object("numerator", 1, "denominator", 1);
+        int outcomes = 1 << 24;
+        double scaled = (double) threshold * outcomes;
+        long numerator = inclusive ? (long) Math.floor(scaled) + 1L : (long) Math.ceil(scaled);
+        return object("numerator", numerator, "denominator", outcomes);
+    }
 
     void emitProcess(String family, String label, JsonArray inputs, JsonArray outputs, Integer duration,
         Integer energy, Integer amperage, Boolean executable, JsonObject conditions, JsonObject provenance) throws IOException {

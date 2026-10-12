@@ -87,6 +87,12 @@ duration null. Native float chance thresholds remain beside canonical
 fractions. The no-ball native comparison includes equality on the 24-bit
 `Random.nextFloat()` lattice, and all outputs share the same roll. These
 fractions do not imply independent co-product events or grinding-ball yields.
+Forestry Centrifuge captures one-item consumption and separate strict
+`Random.nextFloat() < threshold` output rolls. Native processing time is
+measured in Forestry work ticks, with a five-game-tick work interval. Effective
+duration and energy stay unknown because machine state and scaling affect them.
+Recipe-side wildcard metadata and asymmetric NBT matching remain explicit.
+Native HashSet selection order describes the captured run, not a stable priority.
 
 ### Source
 
@@ -112,6 +118,32 @@ Normal GT `ore_mining` sources retain Fortune 0 plain and silk branches.
 conditioned on qualifying harvest, not deposit occurrence. Conditions retain
 generation, drop mode, material, stone, natural flag and harvest requirements.
 Tool/event modifiers and final delivery are outside this baseline scope.
+
+Small-ore Fortune 0 sources retain a joint rule in `parameters.output_rule`:
+`kind: gt_small_ore_fortune0`, `version: 1` and
+`scope: per_qualifying_native_base_harvest`. The `primary` component has
+`kind: weighted_draws_with_replacement`, positive `draw_count`, `total_weight`,
+`amount_per_draw: 1`, weighted `candidates: [{resource_id, weight}]` and
+`empty_pool_behavior: emit_nothing`. It preserves native repeated draws rather
+than replacing variable quantities with averages.
+
+The `host` component is an `exclusive_choice` with outcomes containing
+`native_cases: [{case, probability}]`, their combined rational `probability`
+and quantity-one `outputs`. Native cases are none with probability 2/3,
+pure dust with 1/9 and impure dust with 2/9. Equal resolved dust identities
+share one 1/3 outcome. They do not become two simultaneous products.
+`evaluation_order` is `[primary, host]`. Host selection still runs when the
+primary pool is empty. Silk and normal drop-system policy do not affect this
+small-ore branch. Generator links, eligibility and harvest context remain.
+
+Top-level outputs expose distinct positive-support resource IDs with
+`resource_semantics: mined_item_rule_candidate`. They omit fixed quantities
+and independent chances. They are searchable potential products whose rule
+does not establish joint inventory or seed a dependency cycle. Trace leaves
+remain unresolved unless another captured ordinary source grounds the item.
+Import validates rule weights, cases, probabilities, support and references.
+Failed native rule collection keeps an unknown source with empty outputs and
+failure evidence, without a malformed recognized rule.
 
 ### Environment
 

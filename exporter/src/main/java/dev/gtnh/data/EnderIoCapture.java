@@ -28,7 +28,6 @@ import net.minecraft.item.ItemStack;
 
 /** Configured native Sag Mill no-ball and ordinary Alloy Smelter recipe catalog. */
 final class EnderIoCapture {
-    private static final int FLOAT_ROLL_OUTCOMES = 1 << 24;
     private final NativeCapture capture;
 
     EnderIoCapture(NativeCapture capture) { this.capture = capture; }
@@ -143,7 +142,7 @@ final class EnderIoCapture {
             return;
         }
         float threshold = output.getChance();
-        JsonObject probability = outputChance(threshold);
+        JsonObject probability = NativeCapture.floatRollChance(threshold, true);
         if (probability == null) conditions.addProperty("dynamic_output", "unresolved");
         JsonObject record = object("resource_id", output.isFluid() ? capture.fluid(output.getFluidOutput())
             : capture.item(output.getOutput()), "amount", output.isFluid() ? output.getFluidOutput().amount
@@ -151,15 +150,6 @@ final class EnderIoCapture {
             Float.isNaN(threshold) || Float.isInfinite(threshold) ? Float.toString(threshold) : threshold,
             "native_experience", output.getExperiance());
         outputs.add(record);
-    }
-
-    /** Native no-ball threshold comparison includes equality on the 24-bit nextFloat lattice. */
-    static JsonObject outputChance(float threshold) {
-        if (Float.isNaN(threshold) || Float.isInfinite(threshold)) return null;
-        if (threshold < 0) return object("numerator", 0, "denominator", 1);
-        if (threshold >= 1) return object("numerator", 1, "denominator", 1);
-        long numerator = (long) Math.floor((double) threshold * FLOAT_ROLL_OUTCOMES) + 1L;
-        return object("numerator", numerator, "denominator", FLOAT_ROLL_OUTCOMES);
     }
 
     private JsonObject registry(String machine, boolean sag) {

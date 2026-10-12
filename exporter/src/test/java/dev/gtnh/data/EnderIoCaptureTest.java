@@ -13,12 +13,12 @@ public class EnderIoCaptureTest {
         assertChance(0.5f, 8388609, 16777216);
         assertChance(1f, 1, 1);
         assertChance(-0.5f, 0, 1);
-        assertNull(EnderIoCapture.outputChance(Float.NaN));
-        assertNull(EnderIoCapture.outputChance(Float.POSITIVE_INFINITY));
+        assertNull(NativeCapture.floatRollChance(Float.NaN, true));
+        assertNull(NativeCapture.floatRollChance(Float.POSITIVE_INFINITY, true));
     }
 
     private void assertChance(float threshold, long numerator, long denominator) {
-        JsonObject actual = EnderIoCapture.outputChance(threshold);
+        JsonObject actual = NativeCapture.floatRollChance(threshold, true);
         assertEquals(numerator, actual.get("numerator").getAsLong());
         assertEquals(denominator, actual.get("denominator").getAsLong());
     }

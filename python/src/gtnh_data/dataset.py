@@ -15,6 +15,7 @@ import unicodedata
 from collections import deque
 from contextlib import contextmanager
 from functools import lru_cache
+from fractions import Fraction
 from pathlib import Path
 
 COLLECTIONS = ("resources", "groups", "processes", "sources", "environments", "coverage")
@@ -298,6 +299,97 @@ class Dataset:
                 if collection == "processes" and "chance" not in output:
                     raise DatasetError("process output chance is required, use null when unknown")
                 cls._chance(output.get("chance"), "output chance")
+        if collection == 'sources':
+            cls._validate_source_rule(record)
+
+    @classmethod
+    def _validate_source_rule(cls, source):
+        rule = source['parameters'].get('output_rule')
+        marked = any(output.get('resource_semantics') == 'mined_item_rule_candidate' for output in source['outputs'])
+        if 'output_rule' not in source['parameters']:
+            if marked:
+                raise DatasetError('Rule candidates require output_rule')
+            return
+        if not isinstance(rule, dict) or rule.get('kind') != 'gt_small_ore_fortune0' or type(rule.get('version')) is not int or rule['version'] != 1:
+            raise DatasetError('Unsupported source output_rule kind/version')
+        if source['kind'] != 'ore_mining' or source['status'] != 'conditional' or not source['conditions']:
+            raise DatasetError('Small ore rule requires a conditional ore_mining source with harvest conditions')
+        if rule.get('scope') != 'per_qualifying_native_base_harvest' or rule.get('evaluation_order') != ['primary', 'host']:
+            raise DatasetError('Invalid small ore rule scope/evaluation order')
+        for field in ('generated_source_id', 'generated_resource_id'):
+            if not isinstance(source['parameters'].get(field), str) or not source['parameters'][field]:
+                raise DatasetError(f'Small ore rule requires {field}')
+        primary = rule.get('primary')
+        if not isinstance(primary, dict) or primary.get('kind') != 'weighted_draws_with_replacement' or primary.get('empty_pool_behavior') != 'emit_nothing':
+            raise DatasetError('Invalid small ore primary draw rule')
+        for field in ('draw_count', 'total_weight'):
+            cls._number(primary.get(field), field, integer=True)
+        if primary['draw_count'] < 1 or type(primary.get('amount_per_draw')) is not int or primary['amount_per_draw'] != 1:
+            raise DatasetError('Small ore draws require positive draw_count and amount_per_draw 1')
+        candidates = primary.get('candidates')
+        if not isinstance(candidates, list):
+            raise DatasetError('Small ore primary candidates must be an array')
+        support, weight = set(), 0
+        for candidate in candidates:
+            if not isinstance(candidate, dict) or not isinstance(candidate.get('resource_id'), str) or not candidate['resource_id']:
+                raise DatasetError('Small ore candidates require resource IDs')
+            cls._number(candidate.get('weight'), 'candidate weight', integer=True)
+            if candidate['weight'] < 1 or candidate['resource_id'] in support:
+                raise DatasetError('Candidate weights must be positive, with distinct resolved resource IDs')
+            support.add(candidate['resource_id'])
+            weight += candidate['weight']
+        if weight != primary['total_weight']:
+            raise DatasetError('Small ore candidate weights must sum to total_weight')
+        host = rule.get('host')
+        if not isinstance(host, dict) or host.get('kind') != 'exclusive_choice' or not isinstance(host.get('outcomes'), list) or not host['outcomes']:
+            raise DatasetError('Invalid small ore exclusive host rule')
+
+        def probability(value):
+            if not isinstance(value, dict):
+                raise DatasetError('Host probability must be a rational chance')
+            cls._chance(value, 'host probability')
+            return Fraction(value['numerator'], value['denominator'])
+
+        expected = {'none': Fraction(2, 3), 'pure': Fraction(1, 9), 'impure': Fraction(2, 9)}
+        seen_cases, host_resources, total_probability = set(), set(), Fraction(0)
+        for outcome in host['outcomes']:
+            if not isinstance(outcome, dict) or not isinstance(outcome.get('native_cases'), list) or not outcome['native_cases']:
+                raise DatasetError('Host outcomes require native_cases')
+            cases, combined = set(), Fraction(0)
+            for native_case in outcome['native_cases']:
+                if not isinstance(native_case, dict) or not isinstance(native_case.get('case'), str) or native_case['case'] not in expected:
+                    raise DatasetError('Unknown small ore host case')
+                name = native_case['case']
+                if name in seen_cases or probability(native_case.get('probability')) != expected[name]:
+                    raise DatasetError('Host cases must appear once with their exact native probabilities')
+                seen_cases.add(name)
+                cases.add(name)
+                combined += expected[name]
+            outer = probability(outcome.get('probability'))
+            if outer != combined:
+                raise DatasetError('Host outcome probability must equal its native case probabilities')
+            total_probability += outer
+            outputs = outcome.get('outputs')
+            if not isinstance(outputs, list):
+                raise DatasetError('Host outcome outputs must be an array')
+            if 'none' in cases:
+                if cases != {'none'} or outputs:
+                    raise DatasetError('The no-dust host case must emit nothing')
+            else:
+                if len(outputs) != 1 or not isinstance(outputs[0], dict) or not isinstance(outputs[0].get('resource_id'), str) or not outputs[0]['resource_id']:
+                    raise DatasetError('Each dust host outcome requires one resource')
+                output = outputs[0]
+                if type(output.get('amount')) is not int or output['amount'] != 1 or output['resource_id'] in host_resources:
+                    raise DatasetError('Host dust amount must be 1 and equal dust identities must be grouped')
+                host_resources.add(output['resource_id'])
+                support.add(output['resource_id'])
+        if seen_cases != set(expected) or total_probability != 1:
+            raise DatasetError('Host outcomes must cover all native cases with total probability 1')
+        declared = [output['resource_id'] for output in source['outputs']]
+        if len(declared) != len(set(declared)) or set(declared) != support:
+            raise DatasetError('Small ore candidate outputs must exactly match the rule resource support')
+        if any(output.get('resource_semantics') != 'mined_item_rule_candidate' or 'amount' in output or 'chance' in output for output in source['outputs']):
+            raise DatasetError('Small ore candidate outputs require the rule marker without independent amount/chance')
 
     @staticmethod
     def _validate_references(connection):
@@ -310,6 +402,15 @@ class Dataset:
             row = connection.execute(f"SELECT {column} FROM {table} WHERE {column} IS NOT NULL AND NOT EXISTS (SELECT 1 FROM records WHERE collection=? AND id={table}.{column}) LIMIT 1", (collection,)).fetchone()
             if row is not None:
                 raise DatasetError(f"Unresolved {collection} reference: {row[0]}")
+        for row in connection.execute("SELECT payload FROM records WHERE collection='sources' AND json_extract(payload,'$.parameters.output_rule.kind')='gt_small_ore_fortune0'"):
+            source = json.loads(row[0])
+            for field, collection in (('generated_source_id', 'sources'), ('generated_resource_id', 'resources')):
+                id = source['parameters'][field]
+                if connection.execute('SELECT 1 FROM records WHERE collection=? AND id=?', (collection, id)).fetchone() is None:
+                    raise DatasetError(f'Unresolved {collection} reference: {id}')
+            for output in source['outputs']:
+                if connection.execute('SELECT kind FROM resources WHERE id=?', (output['resource_id'],)).fetchone()[0] != 'item':
+                    raise DatasetError('Small ore rule candidates must reference item resources')
 
     @staticmethod
     def _create_schema(connection):
@@ -815,6 +916,7 @@ class Dataset:
             source_states = {}
             source_ids = {}
             generation_only = set()
+            rule_only = set()
             unresolved_boundaries = set()
             for resource_id in resources:
                 rows = connection.execute("SELECT DISTINCT payload FROM records JOIN source_outputs ON source_outputs.source_id=records.id WHERE collection='sources' AND resource_id=? ORDER BY records.id", (resource_id,))
@@ -822,10 +924,15 @@ class Dataset:
                 source_ids[resource_id] = [source["id"] for source in sources]
                 inventory_sources = [source for source in sources if any(
                     output['resource_id'] == resource_id
-                    and output.get('resource_semantics') != 'generated_ore_block_not_mining_drop'
+                    and output.get('resource_semantics') not in ('generated_ore_block_not_mining_drop', 'mined_item_rule_candidate')
                     for output in source['outputs'])]
                 if sources and not inventory_sources:
-                    generation_only.add(resource_id)
+                    if any(output['resource_id'] == resource_id and output.get('resource_semantics') == 'generated_ore_block_not_mining_drop'
+                           for source in sources for output in source['outputs']):
+                        generation_only.add(resource_id)
+                    if any(output['resource_id'] == resource_id and output.get('resource_semantics') == 'mined_item_rule_candidate'
+                           for source in sources for output in source['outputs']):
+                        rule_only.add(resource_id)
                 if connection.execute("SELECT 1 FROM records WHERE collection='processes' AND id IN (SELECT process_id FROM outputs WHERE resource_id=?) AND (" + self._unresolved_input_clause()
                                       + " OR json_extract(payload,'$.conditions.dynamic_output')='unresolved') LIMIT 1", (resource_id,)).fetchone():
                     unresolved_boundaries.add(resource_id)
@@ -836,7 +943,7 @@ class Dataset:
                 elif any(source["status"] in ("active", "conditional") for source in inventory_sources):
                     source_states[resource_id] = "conditional"
                 elif (any(source["status"] == "unknown" for source in inventory_sources) or incomplete_sources
-                      or resource_id in generation_only or resource_id in unresolved_outputs or resource_id in unresolved_boundaries):
+                      or resource_id in generation_only or resource_id in rule_only or resource_id in unresolved_outputs or resource_id in unresolved_boundaries):
                     source_states[resource_id] = "unresolved"
                 else:
                     source_states[resource_id] = "no_known_source"
@@ -861,7 +968,9 @@ class Dataset:
                 if resource_id != start_id and resource_id in path_resources and resource_id in produced and (resource_id not in cyclic_resources or resource_id in grounded):
                     continue
                 leaf = {"resource_id": resource_id, "status": source_states[resource_id], "sources": source_ids[resource_id]}
-                if resource_id in cyclic_resources and resource_id not in grounded:
+                if resource_id in rule_only and leaf['status'] == 'unresolved':
+                    leaf['reason'] = 'A stochastic per-harvest rule describes potential products, not a jointly available inventory or a cycle seed'
+                elif resource_id in cyclic_resources and resource_id not in grounded:
                     leaf["reason"] = "A cycle needs an external acquisition source or an explicit supplied seed"
                 elif resource_id in generation_only and leaf['status'] == 'unresolved':
                     leaf['reason'] = 'Configured generation describes a world block, not a captured inventory acquisition or mining drop'

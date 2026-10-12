@@ -103,6 +103,16 @@ static analysis, not runtime NEI coverage or equivalence.
   RF. Duration and EU/t stay unknown. Machine modes and native first-match
   selection remain explicit conditions. Grinding-ball variants and the alloy
   vanilla helper path are unsupported
+- Forestry Centrifuge retains one-item consumption, native product quantities,
+  recipe-side wildcard metadata and asymmetric NBT predicates. Output rolls
+  use strict float thresholds separately, with guaranteed outputs bypassing
+  RNG. Native work ticks and the five-game-tick work interval remain explicit.
+  Effective machine duration and energy are unknown. Native HashSet order is
+  within-run selection evidence, not a stable cross-run priority
+- GT small ores retain exact Fortune 0 weighted replacement rules and mutually
+  exclusive host dust, including combined identical dust outcomes. Potential
+  item outputs are indexed without fixed amounts or independent chances and
+  cannot establish inventory or cycle seeds. No RNG evaluation is used
 - Exact EnderIO `RecipeInput` metadata matching is determined by its public
   matcher using a copied stack at a verified distinct metadata value. NBT is
   ignored by the native predicate. Ore Dictionary inputs retain all current
@@ -140,7 +150,7 @@ static analysis, not runtime NEI coverage or equivalence.
   the snapshot
 
 This is partial pack coverage. Other machine/NEI-only recipe handlers, other-mod
-acquisition, mining-drop distributions and saved deposits are unsupported.
+acquisition, mining tool/event modifications and saved deposits are unsupported.
 Native machine metadata not structurally understood carries its class/text
 and an uninterpreted status. Exact native `Sievert` values retain their type,
 integer `sievert` and boolean `isExact`. Exact native `Materials` values retain
@@ -154,6 +164,28 @@ rules and captured config digests. Referenced resources are not a full NEI
 catalog. Counts are not a claim of complete semantics.
 
 ## Verification
+
+The Forestry/small-ore extension passed 15 Java tests and 46 Python tests.
+The build resolves the actual Forestry `4.11.39` API. A fresh paired capture
+and validated import completed in 179.46 seconds. All 2,106 small-ore rules
+passed native sequence, weight, host probability, typed identity, link and
+context checks. Existing 22,898 normal mining records remain semantically
+unchanged. Potential rule products remain searchable and unresolved in trace.
+
+All 154 native Forestry records were compared with scoped NEI item views.
+153 match fully. One comb recipe has 49 native products, of which NEI displays
+only nine. All nine displayed products match the native chance ordering and
+quantities. Capture retains all 49 rather than treating the display cap as a
+recipe limit. Native probabilities are source-backed, not verified through
+generic NEI's default chance getter. All 1,674 EnderIO records remain unchanged
+after moving their lattice calculation to the shared NativeCapture owner.
+
+IntelliJ completed with 51 advisories. The combined runner still skips PMD
+because its Git-root check misses the module wrapper. Direct PMD with the same
+rules, actual classpath and Java 1.8 parser completed with 131 advisories across
+production/tests and no processing or configuration errors. A consolidated
+source review found no actionable correctness issues. Complexity and coupling
+findings remain advisory.
 
 The independent presentation extension passed all ten Java tests and a
 fresh paired game capture in 176.56 seconds. Typed NBT reconstruction covers
