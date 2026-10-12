@@ -39,6 +39,27 @@ def facts(material, quantity=Fraction(1), basis="gt_material_units"):
 
 
 class BalanceTests(unittest.TestCase):
+    def test_undeclared_start_stock_is_a_net_change_and_differs_from_declared_empty_inventory(self):
+        processes = {"r": recipe("r", [slot("water", 9000), slot("sulfur", 9)],
+                                [("sulfur", 9, Fraction(1)), ("hydrogen", 9000, Fraction(1))])}
+        steps = [{"process_id": "r", "runs": 1}]
+        unknown = witness_ledger(processes, steps)
+        empty = witness_ledger(processes, steps, start_stock={})
+        supplied = witness_ledger(processes, steps, start_stock={"water": 9000, "sulfur": 9})
+        self.assertIs(unknown.get("start_stock_declared"), False)
+        self.assertEqual(unknown["final_stock_semantics"], "batch_net_change_without_declared_stock")
+        self.assertIsNone(unknown["feasible"])
+        self.assertTrue(empty["start_stock_declared"])
+        self.assertEqual(empty["final_stock_semantics"], "declared_stock_plus_batch_net")
+        self.assertFalse(empty["feasible"])
+        self.assertEqual(unknown["final_stock"], empty["final_stock"])
+        self.assertEqual(unknown["final_stock"], {"water": -9000, "sulfur": 0, "hydrogen": 9000})
+        self.assertEqual(unknown["net"], {"water": -9000, "hydrogen": 9000})
+        self.assertEqual(unknown["required_start_stock"], {"water": 9000, "sulfur": 9})
+        self.assertTrue(supplied["start_stock_declared"])
+        self.assertTrue(supplied["feasible"])
+        self.assertEqual(supplied["final_stock"], {"water": 0, "sulfur": 9, "hydrogen": 9000})
+
     def test_closed_conservation_keeps_nonconsumed_tool_out_of_net(self):
         processes = {
             "split": recipe("split", [slot("a", 2), slot("tool", 1, "presence")],

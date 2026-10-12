@@ -210,7 +210,9 @@ footer { text-align: center; color: #8593a5; font-size: 10px; padding: 12px 24px
 .recipe-tile .slot-heading { padding: 4px 5px; font-size: 13px; gap: 4px; flex-wrap: wrap; }
 .recipe-tile .slot-heading small { font-size: 11px; }
 .recipe-tile .choice { padding: 5px; }
-.recipe-tile .choice:has(> .resource-ref) { display: grid; grid-template-columns: minmax(0, 1fr) fit-content(140px); gap: 3px 6px; align-items: start; }
+.recipe-tile .choice:has(> .resource-ref) { display: flex; flex-wrap: wrap; gap: 3px 6px; align-items: start; }
+.recipe-tile .choice > .resource-ref { flex: 1 1 8ch; min-width: min(8ch, 100%); }
+.recipe-tile .choice > .choice-or { flex-basis: 100%; }
 .recipe-tile .choice > .choice-or, .recipe-tile .choice > .group { grid-column: 1 / -1; }
 .recipe-tile .choice-meta { flex-wrap: wrap; margin-top: 0; gap: 4px; }
 .recipe-tile .choice-meta button { padding: 2px 4px; }
@@ -267,3 +269,29 @@ footer { text-align: center; color: #8593a5; font-size: 10px; padding: 12px 24px
 .element-vector dd { margin:4px 0; }
 @media (max-width:900px) { .tier-controls,.recycle-panel .trace-controls,.balance-grid { grid-template-columns:1fr 1fr; } }
 @media (max-width:600px) { .tier-controls,.recycle-panel .trace-controls,.balance-grid { grid-template-columns:1fr; } }
+
+.analysis-workspace { padding:22px; }
+.analysis-controls { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:14px; align-items:start; margin:16px 0; }
+.analysis-workspace label,.boundary-profile-editor label { font-size:12px; }
+.analysis-workspace > form,.boundary-profile-editor { border:1px solid var(--border); border-radius:9px; padding:18px; margin:18px 0; background:#f8fbfd; }
+.analysis-workspace > form > details,.boundary-profile-editor details { margin:16px 0; }
+.analysis-workspace .button-stack { flex-direction:row; margin:12px 0; }
+.resource-set-editor,.boundary-profile-editor fieldset { min-width:0; margin:14px 0; padding:12px; border:1px solid var(--border); border-radius:8px; }
+.resource-set-editor > button { margin:8px 0; }
+.scope-options { list-style:none; padding:0; margin:8px 0; max-height:260px; overflow:auto; }
+.scope-options label { display:flex; flex-wrap:wrap; gap:8px; align-items:center; padding:5px 0; }
+.scope-options input { width:auto; margin:0; }
+.scope-options span,.scope-options code { font-weight:400; color:var(--muted); }
+.acquisition-badges { display:flex; flex-wrap:wrap; gap:4px; margin:4px 0; }
+.acquisition-badges .badge { font-size:10px; }
+.network-result { margin-top:22px; }
+.network-result .benchmark-result { margin:18px 0; padding:14px; border:1px solid var(--border); border-radius:8px; }
+.network-result .balance-grid { margin:18px 0; }
+.danger-button { color:#a73535; margin-left:10px; }
+.resource-browser > .help,.resource-browser > details { margin:10px 20px; }
+
+.table-scroll { overflow-x:auto; margin:16px 0; }
+.analysis-workspace table { border-collapse:collapse; width:100%; font-size:12px; }
+.analysis-workspace th,.analysis-workspace td { text-align:left; padding:8px; border-bottom:1px solid var(--border); vertical-align:top; }
+.analysis-workspace td small { display:block; color:var(--muted); }
+.analysis-workspace td button { font-size:12px; margin:3px; }

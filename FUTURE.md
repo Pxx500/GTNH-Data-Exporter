@@ -8,8 +8,8 @@ candidates for later work, not requirements of the current milestone.
 
 - Joint quantitative plans with several secondary material roles at once,
   protecting requested target output and accounting shared side inputs
-- Multiple starting resources and multiple target products
-- Energy accounting and shared resource balances across several plans
+- Joint objectives for multiple target products
+- Shared objectives and resource budgets across independently requested plans
 - Minimal startup stocks under interleaved native batch scheduling
 - Native correlated stochastic behavior beyond labelled expected quantities
 - Throughput and overclocking models where native machine behavior is known
@@ -21,7 +21,7 @@ candidates for later work, not requirements of the current milestone.
 - Native composition integration for unresolved GT++, BartWorks and other
   materials, without treating display formulas as authoritative chemistry
 - Constraints on side-input consumption, distinct from path intermediates
-- Supplied-resource boundaries and permitted external imports
+- Weighted resource budgets and priorities beyond explicit basic-resource boundaries
 - Full machine, amperage, temperature, cleanroom and environment constraints
   beyond nominal recipe voltage tiers, with unknown requirements explicit
 - More diverse alternatives, grouping similar paths without losing costs
@@ -29,9 +29,15 @@ candidates for later work, not requirements of the current milestone.
   returns and the complete underlying operations
 - Material/form filters spanning variants only where captured relations
   justify that grouping
-- Dedicated free-flow loop maps and direct library entry points for audits
+- More direct library entry points for existing network and loop audits
 - More selective bounded trace discovery for broad full-pack queries that
   currently reach the server's process-search bound
+- A portable filtered-snapshot export that preserves all referenced records
+  and explains omissions, beyond non-destructive offline query scopes
+- Broader acquisition adapters and machine execution checks to strengthen
+  structural dead-end warnings
+- Additional statistically justified anomaly cohorts, without treating
+  unrelated products as comparable energy costs
 
 ## Design boundaries
 

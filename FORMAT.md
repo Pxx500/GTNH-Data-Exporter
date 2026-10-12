@@ -498,6 +498,75 @@ impossibility with incomplete source coverage. Cycles alone do not establish
 a material source. Truncation is explicit for discovery and enumeration.
 Discovery is not a whole-factory optimization or a proof of progression.
 
+## Production networks and offline query views
+
+`plan_network` discovers bounded concrete recipe variants and solves an exact
+steady-state balance. `audit_energy` adds a selected nominal-energy benchmark.
+`plan_to_bases` resolves the permitted external feeds from a boundary profile.
+The target net quantity is exact. Every other non-feed resource must have
+nonnegative net quantity. Energy audits additionally require strictly negative
+net primary-feed consumption in each accepted witness. Zero-feed optima are
+rejected, with bounded support exclusions rather than an invented epsilon.
+
+A discovery variant has a distinct `variant_id`, native `process_id`, selected
+input indexes and a detached accounting `process` view. Dataset validates the
+native predicate before concretizing that view. `discovery.processes` retains
+the original canonical records. The two must not be confused in inspection.
+
+Each solution carries executions, exact per-execution ledgers, the whole net
+ledger, imports, coproducts, nominal energy, integer batch scale and startup
+stock. Rational values serialize as `{numerator, denominator}`. Guaranteed
+and expected yields remain separate. The startup witness orders funded
+producer batches before consumers where possible and declares conservative
+seeds for deadlocks. It never claims the minimum startup inventory.
+`start_stock_declared` distinguishes omitted inventory from an explicit empty
+inventory. `final_stock_semantics` identifies declared stock plus the batch net,
+or a batch net change when no starting inventory was supplied. A net change
+must not be presented as a known final inventory.
+
+Nominal EU is positive captured EU/t times positive ticks. GT EU/t already
+includes recipe-map amperage. Unknown, nonpositive and non-EU energy are
+unsupported for the energy objective. Target-to-basics may minimize recipe
+runs while leaving unknown energy explicit. It does not minimize raw imports.
+Machine conditions are retained and not universally evaluated.
+
+`optimization.scope` is `bounded_candidate_variants`, with
+`global_optimum_proven=false`. Discovery limits and solver limits are separate.
+An accepted exact witness may coexist with incomplete candidate coverage.
+Alternative support exclusions do not enumerate all networks or all cycles.
+
+Boundary profiles contain exact snapshot IDs, basic resource IDs, revision
+numbers and a query scope. Their atomic JSON sidecar is separate from the
+canonical snapshot and rebuildable index. Basic resources are declared
+external-feed assumptions. A target already marked basic returns a boundary
+quantity without inventing a delivery recipe.
+
+Scope fields are `excluded_resource_ids`, `excluded_group_ids`,
+`excluded_namespaces` and `excluded_family_ids`. Namespaces use the exact item
+registry prefix. Unqualified fluid names imply no mod ownership. Families use
+the exact captured `process.family`. Canonical getters remain available.
+The current shared scope covers resource search, network planning,
+acquisition inspection and statistics. Historical trace, selected-path
+recycling and loop enumeration keep their existing arguments.
+
+Resource search may attach `acquisition_analysis`. Canonical record getters
+remain unchanged. Captured native unification anchors can identify canonical,
+noncanonical and ambiguous variants. Alias membership does not establish
+universal output replacement. Incomplete acquisition coverage prevents an
+absolute unobtainability claim. Grounding is structural possibility, requires
+all selected inputs including presence, and cannot seed a closed cycle from
+its own products. Generated world blocks and unresolved mining candidates
+are not treated as inventory seeds.
+
+`analyze_statistics` streams scoped canonical records. Recipe scope uses
+family and output-resource filtering, while input declarations stay unchanged.
+Comparable cost cohorts preserve all captured predicates and conditions,
+including presence and chance. Only consumed and produced quantities are
+normalized by an exact common batch factor. Findings describe cost spreads
+within identical captured declarations, not proven execution equivalence or
+confirmed balance bugs. Family/tier cost distributions are exploratory.
+Limits on records, signature buckets, findings and wall time remain explicit.
+
 ## Stack decision
 
 Java/GTNHGradle captures the running Forge 1.7.10 pack. Python 3.11+ owns

@@ -17,6 +17,11 @@ from gtnh_data.http import create_app
 from gtnh_data.cli import main
 from .artifacts import choice, process, resource, slot, snapshot
 
+def network_semantics(result):
+    copied = json.loads(json.dumps(result))
+    copied.get('search', {}).pop('elapsed_seconds', None)
+    return copied
+
 
 class TransportTests(unittest.TestCase):
     def setUp(self):
@@ -69,6 +74,101 @@ class TransportTests(unittest.TestCase):
             result = main(["sources", "missing", "--database", str(self.database)])
         self.assertEqual(result, 2)
         self.assertEqual(json.loads(error_output.getvalue()), {"error": "Unknown sources ID: missing"})
+
+    def test_boundary_profiles_http_and_cli_share_snapshot_bound_owner(self):
+        with TestClient(create_app(self.dataset)) as client:
+            listed = client.get('/api/boundary-profiles')
+            self.assertEqual(listed.status_code, 200)
+            self.assertEqual(listed.json(), self.dataset.list_boundary_profiles())
+            saved = client.post('/api/boundary-profiles/developer', json={'name': 'Developer basics', 'base_resource_ids': ['a'], 'scope': {'excluded_resource_ids': ['excluded']}})
+            self.assertEqual(saved.status_code, 200)
+            expected = self.dataset.get_boundary_profile('developer')
+            self.assertEqual(saved.json(), expected)
+            self.assertEqual(client.get('/api/boundary-profiles/developer').json(), expected)
+        output = StringIO()
+        with redirect_stdout(output):
+            result = main(['boundary-profiles', 'developer', '--database', str(self.database)])
+        self.assertEqual(result, 0)
+        self.assertEqual(json.loads(output.getvalue()), expected)
+
+    def test_network_http_and_cli_forward_profiles_benchmark_feeds_and_exact_accounting(self):
+        self.dataset.save_boundary_profile('basics', name='Basics', base_resource_ids=['a'])
+        common = dict(target_id='b', target_amount=2, max_depth=3, max_processes=20, max_variants=20, max_resources=32,
+                      max_solutions=1, max_solves=2, timeout_seconds=5)
+        operations = [('plan-to-bases', 'plan_to_bases', dict(common, profile_id='basics')),
+                      ('audit-energy', 'audit_energy', dict(common, primary_feed_id='a', benchmark_process_id='convert', profile_id='basics', allowed_feed_ids=['a']))]
+        for command, operation, arguments in operations:
+            expected = getattr(self.dataset, operation)(**arguments)
+            self.assertEqual(expected['status'], 'complete')
+            self.assertTrue(expected['solutions'][0]['witness_verified'])
+            with TestClient(create_app(self.dataset)) as client:
+                answer = client.post('/api/' + ('energy-audit' if command == 'audit-energy' else command), json=arguments)
+                self.assertEqual(answer.status_code, 200)
+                self.assertEqual(network_semantics(answer.json()), network_semantics(expected))
+            request = self.root / (command + '.json')
+            request.write_text(json.dumps(arguments), encoding='utf-8')
+            output = StringIO()
+            with redirect_stdout(output):
+                code = main([command, '--database', str(self.database), '--request-file', str(request)])
+            self.assertEqual(code, 0)
+            self.assertEqual(network_semantics(json.loads(output.getvalue())), network_semantics(expected))
+
+    def test_official_mcp_networks_and_profile_mutations_keep_typed_results_and_honest_annotations(self):
+        self.dataset.save_boundary_profile('basics', name='Basics', base_resource_ids=['a'])
+        common = dict(target_id='b', max_depth=3, max_processes=20, max_variants=20, max_resources=32,
+                      max_solutions=1, max_solves=2, timeout_seconds=5)
+        operations = [('plan_to_bases', dict(common, profile_id='basics')),
+                      ('audit_energy', dict(common, primary_feed_id='a', benchmark_process_id='convert', allowed_feed_ids=['a']))]
+        expected = {operation: getattr(self.dataset, operation)(**arguments) for operation, arguments in operations}
+        async def exercise():
+            parameters = StdioServerParameters(command=sys.executable, args=['-m', 'gtnh_data', 'mcp', '--database', str(self.database)], env=dict(os.environ))
+            async with stdio_client(parameters) as (read_stream, write_stream):
+                async with ClientSession(read_stream, write_stream, read_timeout_seconds=15) as session:
+                    await session.initialize()
+                    tools = {tool.name: tool for tool in (await session.list_tools()).tools}
+                    self.assertFalse(tools['save_boundary_profile'].annotations.read_only_hint)
+                    self.assertTrue(tools['delete_boundary_profile'].annotations.destructive_hint)
+                    for name, maximum in [('max_depth',20), ('max_processes',1000), ('max_variants',512), ('max_resources',2000), ('timeout_seconds',30)]:
+                        self.assertEqual(tools['audit_energy'].input_schema['properties'][name]['maximum'], maximum)
+                    for operation, arguments in operations:
+                        answer = await session.call_tool(operation, arguments)
+                        self.assertFalse(answer.is_error, answer.content)
+                        self.assertEqual(network_semantics(answer.structured_content), network_semantics(expected[operation]))
+                        self.assertEqual(len(answer.content), 1)
+                        self.assertLess(len(answer.content[0].text), 256)
+                        self.assertNotIn('executions', answer.content[0].text)
+                    statistics_arguments = dict(max_records=30, max_findings=5, max_signature_buckets=20, timeout_seconds=5)
+                    statistics = await session.call_tool('analyze_statistics', statistics_arguments)
+                    self.assertFalse(statistics.is_error, statistics.content)
+                    self.assertEqual(network_semantics(statistics.structured_content), network_semantics(self.dataset.analyze_statistics(**statistics_arguments)))
+                    acquisition = await session.call_tool('inspect_acquisition', {'resource_id':'a', 'max_depth':2, 'max_processes':10, 'max_variants':10, 'max_resources':20})
+                    self.assertFalse(acquisition.is_error, acquisition.content)
+                    self.assertEqual(acquisition.structured_content, self.dataset.inspect_acquisition('a', max_depth=2, max_processes=10, max_variants=10, max_resources=20))
+                    for name, maximum in [('max_records',2000000), ('max_findings',500), ('max_signature_buckets',200000), ('timeout_seconds',60)]:
+                        self.assertEqual(tools['analyze_statistics'].input_schema['properties'][name]['maximum'], maximum)
+                    answer = await session.call_tool('save_boundary_profile', {'profile_id':'mcp-profile', 'name':'Explicit user basics', 'base_resource_ids':['a'], 'expected_revision':0})
+                    self.assertFalse(answer.is_error)
+                    self.assertEqual(answer.structured_content, self.dataset.get_boundary_profile('mcp-profile'))
+                    revision = answer.structured_content['item']['revision']
+                    deleted = await session.call_tool('delete_boundary_profile', {'profile_id':'mcp-profile', 'expected_revision':revision})
+                    self.assertFalse(deleted.is_error)
+                    self.assertEqual(deleted.structured_content, {'snapshot_id':self.dataset.snapshot_id, 'item':None})
+        asyncio.run(exercise())
+
+    def test_statistics_preserves_rational_distributions_through_http_and_cli(self):
+        arguments = dict(max_records=30, max_findings=5, max_signature_buckets=20, timeout_seconds=5)
+        expected = self.dataset.analyze_statistics(**arguments)
+        with TestClient(create_app(self.dataset)) as client:
+            answer = client.post('/api/statistics', json=arguments)
+            self.assertEqual(answer.status_code, 200)
+            self.assertEqual(network_semantics(answer.json()), network_semantics(expected))
+        request = self.root / 'statistics.json'
+        request.write_text(json.dumps(arguments), encoding='utf-8')
+        output = StringIO()
+        with redirect_stdout(output):
+            code = main(['statistics', '--database', str(self.database), '--request-file', str(request)])
+        self.assertEqual(code, 0)
+        self.assertEqual(network_semantics(json.loads(output.getvalue())), network_semantics(expected))
 
     def test_http_is_same_owner_with_pagination_spa_and_errors(self):
         ui = self.root / "ui"

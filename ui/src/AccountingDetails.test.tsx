@@ -11,11 +11,23 @@ const resources=new Map([['a',resource]])
 const r=(numerator:number,denominator=1)=>({numerator,denominator})
 const ledger={status:'complete',yield_mode:'expected' as const,consumed:{a:r(1)},produced:{a:r(3,2)},net:{a:r(1,2)},presence:{},unsupported:[],assumptions:['Expected yields are not inventory']}
 
+test('undeclared stock shows batch net change while declared stock retains the final-stock label',()=>{
+  const capturedLedger={...ledger,yield_mode:'guaranteed' as const,consumed:{a:r(9000)},produced:{},net:{a:r(-9000)},assumptions:[]}
+  const startup={required_start_stock:{a:r(9000)},final_stock:{a:r(-9000)},feasible:null,start_stock_declared:false,final_stock_semantics:'batch_net_change_without_declared_stock' as const}
+  const view=render(<LedgerDetails ledger={capturedLedger} startup={startup} resources={resources}/>)
+  expect(screen.getByText('Batch net change (initial stock not declared)')).toBeInTheDocument()
+  expect(screen.queryByText('Final stock')).not.toBeInTheDocument()
+  expect(screen.getByText(/Stock feasibility:/)).toHaveTextContent('initial stock not declared')
+  view.rerender(<LedgerDetails ledger={capturedLedger} startup={{...startup,final_stock:{a:r(0)},feasible:true,start_stock_declared:true,final_stock_semantics:'declared_stock_plus_batch_net'}} resources={resources}/>)
+  expect(screen.getByText('Final stock')).toBeInTheDocument()
+  expect(screen.queryByText('Batch net change (initial stock not declared)')).not.toBeInTheDocument()
+})
+
 test('expected fractional accounting keeps feasibility unknown and labels conservative batch starting stock',()=>{
   render(<LedgerDetails ledger={ledger} startup={{required_start_stock:{a:r(1)},final_stock:{a:r(1,2)},feasible:null,integer_batch_scale:2,requires_integer_batch_scaling:true}} resources={resources}/>)
   expect(screen.getByText('expected yields')).toBeInTheDocument()
   expect(screen.getByText('3/2')).toBeInTheDocument()
-  expect(screen.getByText(/unknown for fractional, expected or unsupported execution/)).toBeInTheDocument()
+  expect(screen.getByText(/unknown with initial stock not declared, or for fractional, expected or unsupported execution/)).toBeInTheDocument()
   expect(screen.getByText(/not a minimum interleaved-machine stock requirement/)).toBeInTheDocument()
   expect(screen.getByText(/requires integer batch scaling by 2/)).toBeInTheDocument()
 })

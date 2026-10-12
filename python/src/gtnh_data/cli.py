@@ -12,15 +12,27 @@ from .dataset import Dataset, DatasetError, _json
 def parser():
     root = argparse.ArgumentParser(prog="gtnh-data", description="Query one canonical GTNH snapshot offline")
     commands = root.add_subparsers(dest="command", required=True)
-    for name in ("import", "status", "resources", "processes", "groups", "sources", "environments", "trace", "recycle", "chemistry", "loops", "serve", "mcp"):
+    for name in ("import", "status", "resources", "processes", "groups", "sources", "environments", "trace", "recycle", "chemistry", "loops", "boundary-profiles", "save-boundary-profile", "delete-boundary-profile", "resource-groups", "scope-catalog", "plan-to-bases", "audit-energy", "statistics", "acquisition", "serve", "mcp"):
         command = commands.add_parser(name)
         command.add_argument("--database", required=True, type=Path)
         if name == "import":
             command.add_argument("snapshot", type=Path)
-        if name == "recycle":
-            command.add_argument("--request-file", type=Path, required=True, help="Structured Dataset.plan_recycling JSON request")
-        if name == "chemistry":
+        if name in ("recycle", "plan-to-bases", "audit-energy", "statistics", "save-boundary-profile"):
+            command.add_argument("--request-file", type=Path, required=True, help="Structured Dataset operation JSON request")
+        if name == "boundary-profiles":
+            command.add_argument("profile_id", nargs="?")
+        if name in ("save-boundary-profile", "delete-boundary-profile"):
+            command.add_argument("profile_id")
+        if name == "delete-boundary-profile":
+            command.add_argument("--expected-revision", type=int)
+        if name in ("chemistry", "acquisition"):
             command.add_argument("resource_id")
+            if name == "acquisition":
+                command.add_argument("--profile-id")
+                command.add_argument("--max-depth", type=int, default=8)
+                command.add_argument("--max-processes", type=int, default=200)
+                command.add_argument("--max-variants", type=int, default=128)
+                command.add_argument("--max-resources", type=int, default=512)
         if name == "loops":
             command.add_argument("--selections-file", type=Path)
             command.add_argument("--start-id", required=True)
@@ -38,13 +50,15 @@ def parser():
             command.add_argument("id", nargs="?")
         if name == "groups":
             command.add_argument("id")
-        if name in ("resources", "processes", "sources", "environments"):
+        if name in ("resources", "processes", "sources", "environments", "resource-groups"):
             command.add_argument("--offset", type=int, default=0)
             command.add_argument("--limit", type=int, default=50)
-        if name in ("resources", "environments"):
+        if name in ("resources", "environments", "resource-groups"):
             command.add_argument("--q", default="")
         if name == "resources":
             command.add_argument("--kind", choices=("item", "fluid"))
+            command.add_argument("--profile-id")
+            command.add_argument("--scope-file", type=Path)
         if name == "processes":
             command.add_argument("--input-id")
             command.add_argument("--output-id")
@@ -89,12 +103,26 @@ def main(argv=None):
                 from .mcp import run_stdio
                 asyncio.run(run_stdio(dataset))
                 return 0
-            if command == "recycle":
+            if command in ("recycle", "plan-to-bases", "audit-energy", "statistics", "save-boundary-profile"):
+                profile_id = arguments.get("profile_id")
                 arguments = json.loads(arguments["request_file"].read_text(encoding="utf-8"))
                 if not isinstance(arguments, dict):
-                    raise DatasetError("Recycling request must be a JSON object")
-                result = dataset.plan_recycling(**arguments)
+                    raise DatasetError("Operation request must be a JSON object")
+                operation = {"recycle": "plan_recycling", "plan-to-bases": "plan_to_bases", "audit-energy": "audit_energy", "statistics": "analyze_statistics", "save-boundary-profile": "save_boundary_profile"}[command]
+                result = getattr(dataset, operation)(profile_id, **arguments) if command == "save-boundary-profile" else getattr(dataset, operation)(**arguments)
                 print(_json(result))
+                return 0
+            if command == "resources":
+                scope_file = arguments.pop("scope_file")
+                if scope_file is not None:
+                    arguments["scope"] = json.loads(scope_file.read_text(encoding='utf-8'))
+            if command == "boundary-profiles":
+                profile_id = arguments.pop("profile_id")
+                result = dataset.list_boundary_profiles() if profile_id is None else dataset.get_boundary_profile(profile_id)
+                print(_json(result))
+                return 0
+            if command == "delete-boundary-profile":
+                print(_json(dataset.delete_boundary_profile(**arguments)))
                 return 0
             if command == "loops":
                 selections_file = arguments.pop("selections_file")
@@ -108,7 +136,7 @@ def main(argv=None):
                     arguments.pop("id", None)
                 operation = {"status": "status", "resources": "find_resources", "processes": "find_processes", "groups": "get_group",
                              "sources": "find_sources", "environments": "find_environments", "trace": "trace_processes",
-                             "chemistry": "inspect_chemistry", "loops": "find_loops"}[command]
+                             "chemistry": "inspect_chemistry", "acquisition": "inspect_acquisition", "loops": "find_loops", "resource-groups": "find_resource_groups", "scope-catalog": "get_scope_catalog"}[command]
             result = getattr(dataset, operation)(**arguments)
         print(_json(result))
         return 0

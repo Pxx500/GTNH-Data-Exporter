@@ -1,6 +1,7 @@
 """Local read-only HTTP adapter. All domain work belongs to Dataset."""
 
 from pathlib import Path
+import json
 
 from fastapi import Body, FastAPI, Query, Request
 from fastapi.responses import FileResponse, JSONResponse
@@ -10,6 +11,12 @@ from .dataset import Dataset, DatasetError
 
 def create_app(dataset: Dataset, ui_dist: str | Path | None = None) -> FastAPI:
     app = FastAPI(title="GTNH Data", version="0.1.0")
+
+    def structured(operation, arguments):
+        try:
+            return getattr(dataset, operation)(**arguments)
+        except TypeError as error:
+            raise DatasetError(str(error)) from error
 
     @app.exception_handler(DatasetError)
     async def domain_error(request: Request, error: DatasetError):
@@ -22,8 +29,48 @@ def create_app(dataset: Dataset, ui_dist: str | Path | None = None) -> FastAPI:
         return dataset.status()
 
     @app.get("/api/resources")
-    def resources(q: str = "", kind: str | None = None, offset: int = 0, limit: int = 50):
-        return dataset.find_resources(q=q, kind=kind, offset=offset, limit=limit)
+    def resources(q: str = "", kind: str | None = None, offset: int = 0, limit: int = 50, profile_id: str | None = None, scope: str | None = None):
+        try:
+            decoded_scope = None if scope is None else json.loads(scope)
+        except json.JSONDecodeError as error:
+            raise DatasetError('scope must be a JSON object') from error
+        return dataset.find_resources(q=q, kind=kind, offset=offset, limit=limit, profile_id=profile_id, scope=decoded_scope)
+
+    @app.get('/api/resource-groups')
+    def resource_groups(q: str = '', offset: int = 0, limit: int = 20):
+        return dataset.find_resource_groups(q=q, offset=offset, limit=limit)
+
+    @app.get('/api/scope-catalog')
+    def scope_catalog():
+        return dataset.get_scope_catalog()
+
+    @app.get('/api/boundary-profiles')
+    def boundary_profiles():
+        return dataset.list_boundary_profiles()
+
+    @app.get('/api/boundary-profiles/{profile_id}')
+    def boundary_profile(profile_id: str):
+        return dataset.get_boundary_profile(profile_id)
+
+    @app.post('/api/boundary-profiles/{profile_id}')
+    def save_boundary_profile(profile_id: str, arguments: dict = Body(...)):
+        return structured('save_boundary_profile', dict(arguments, profile_id=profile_id))
+
+    @app.delete('/api/boundary-profiles/{profile_id}')
+    def delete_boundary_profile(profile_id: str, arguments: dict = Body(default={})):
+        return structured('delete_boundary_profile', dict(arguments, profile_id=profile_id))
+
+    @app.post('/api/plan-to-bases')
+    def plan_to_bases(arguments: dict = Body(...)):
+        return structured('plan_to_bases', arguments)
+
+    @app.post('/api/energy-audit')
+    def energy_audit(arguments: dict = Body(...)):
+        return structured('audit_energy', arguments)
+
+    @app.post('/api/statistics')
+    def statistics(arguments: dict = Body(default={})):
+        return structured('analyze_statistics', arguments)
 
     @app.get("/api/resources/{id:path}")
     def resource(id: str):
@@ -64,14 +111,15 @@ def create_app(dataset: Dataset, ui_dist: str | Path | None = None) -> FastAPI:
 
     @app.post('/api/recycling-plan')
     def recycling_plan(arguments: dict = Body(...)):
-        try:
-            return dataset.plan_recycling(**arguments)
-        except TypeError as error:
-            raise DatasetError(str(error)) from error
+        return structured('plan_recycling', arguments)
 
     @app.get('/api/chemistry/{resource_id:path}')
     def chemistry(resource_id: str):
         return dataset.inspect_chemistry(resource_id=resource_id)
+
+    @app.get('/api/acquisition/{resource_id:path}')
+    def acquisition(resource_id: str, profile_id: str | None = None, max_depth: int = 8, max_processes: int = 200, max_variants: int = 128, max_resources: int = 512):
+        return dataset.inspect_acquisition(resource_id=resource_id, profile_id=profile_id, max_depth=max_depth, max_processes=max_processes, max_variants=max_variants, max_resources=max_resources)
 
     @app.get('/api/loops')
     def loops(start_id: str, kind: str = 'any', chemical_kind: str = 'any', yield_mode: str = 'guaranteed', max_depth: int = Query(default=6, ge=1, le=20),
@@ -83,10 +131,7 @@ def create_app(dataset: Dataset, ui_dist: str | Path | None = None) -> FastAPI:
 
     @app.post('/api/loops')
     def selected_loops(arguments: dict = Body(...)):
-        try:
-            return dataset.find_loops(**arguments)
-        except TypeError as error:
-            raise DatasetError(str(error)) from error
+        return structured('find_loops', arguments)
 
     if ui_dist is not None:
         directory = Path(ui_dist).resolve()

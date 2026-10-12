@@ -38,6 +38,7 @@ notice, but cannot establish material paths until runtime outputs are resolved.
 | Portable authoritative snapshot | Versioned JSONL, gzip and checksummed manifest |
 | Matching, lookup and process graphs | Python 3.11+ Dataset module |
 | Rebuildable offline index | Standard-library SQLite and FTS5 |
+| Exact bounded production-network optimization | SymPy rational linear programming |
 | Human interface | React, TypeScript and Vite |
 | Local GUI server | FastAPI and Uvicorn on localhost |
 | Agent interface | Official Python MCP SDK over stdio, plus JSON CLI |
@@ -261,6 +262,59 @@ and unresolved alternatives remain visible. The latest changes passed 26 Java,
 checks. The full Crushed Iron Ore to Double Iron Plate query with an HV bound
 hit the 10,000-process trace search limit. Its result is incomplete rather
 than evidence that no qualifying route exists.
+
+## Network planning, acquisition and offline analysis
+
+The Analysis workspace has two modes. Energy benchmark compares a selected
+recipe with bounded networks that consume the selected primary feed and
+regenerate other consumed materials. Target from basics expands a target
+using a saved profile of permitted external resources. These modes retain
+every AND input, selected OR choice, coproduct and presence requirement.
+
+Energy uses captured nominal EU/t times ticks. GT recipe EU/t already includes
+amperage. Unknown, nonpositive or non-EU energy cannot certify a cheap
+conversion. The comparison exposes benchmark cofeeds and coproducts, without
+inventing container credits. Overclocking and machine efficiency remain
+outside this nominal comparison.
+
+The shared solver uses exact rational quantities, independently rechecks
+every witness and reports integer batch scaling and sufficient startup stock.
+It can combine several regenerating branches. Candidate discovery, solver
+dimensions, alternative support exclusions and wall time are bounded.
+Finding a cheap witness does not prove that all loops have been searched.
+Target-from-basics ranks by normalized recipe runs, not minimum raw-material
+consumption. Alternative plans show their actual net imports.
+
+Profiles are snapshot-bound JSON sidecars next to the SQLite index. Basics
+are explicit external-feed assumptions. They do not establish worldgen or
+inventory availability. Profiles also exclude exact item namespaces, captured
+groups, resource IDs and recipe families. Resource search and network analysis
+use this scope. Existing Trace, recycling and loop queries retain their
+existing filters. The complete canonical snapshot is never deleted or edited
+by a profile. These view filters reduce search noise, not snapshot disk size.
+
+Autocomplete favors captured canonical unification anchors. Noncanonical
+variants and missing acquisition evidence have separate badges. Acquisition
+inspection follows captured sources and interpreted producers, then checks
+bounded structural grounding from declared sources and selected basics.
+Unseeded recipe cycles cannot ground themselves. An absent known route is
+never a proof of absolute unobtainability with incomplete capture.
+
+Statistics analyzes the existing offline index by resource namespace, native
+group, recipe family and tier. Cost-spread findings compare identical captured
+predicates and conditions after exact batch normalization. Distribution
+quartiles are exploratory. Neither result labels a recipe as a confirmed bug.
+Each finding retains process IDs for inspecting the original records.
+
+The same operations are available through HTTP, MCP and JSON CLI:
+
+```powershell
+python/.venv/Scripts/python.exe -m gtnh_data boundary-profiles --database PATH_TO_INDEX.sqlite
+python/.venv/Scripts/python.exe -m gtnh_data audit-energy --database PATH_TO_INDEX.sqlite --request-file audit.json
+python/.venv/Scripts/python.exe -m gtnh_data plan-to-bases --database PATH_TO_INDEX.sqlite --request-file plan.json
+python/.venv/Scripts/python.exe -m gtnh_data acquisition RESOURCE_ID --database PATH_TO_INDEX.sqlite
+python/.venv/Scripts/python.exe -m gtnh_data statistics --database PATH_TO_INDEX.sqlite --request-file statistics.json
+```
 
 ## Agent interface
 

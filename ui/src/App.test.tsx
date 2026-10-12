@@ -10,6 +10,23 @@ const status = {snapshot_id:'test-snapshot',manifest:{created_at:'2026-10-11',ca
 function response(value: unknown, code=200) { return new Response(JSON.stringify(value), {status:code,headers:{'Content-Type':'application/json'}}) }
 function page(items: unknown[]) {return {snapshot_id:'test-snapshot',items,total:items.length,limit:30,offset:0}}
 
+test('analysis exposes distinct energy benchmark and target-from-basics modes with explicit profile semantics',async()=>{
+  vi.stubGlobal('fetch',vi.fn(async(input:string)=>{
+    const url=new URL(input,'http://localhost')
+    if(url.pathname==='/api/status')return response(status)
+    if(url.pathname==='/api/resources' || url.pathname==='/api/environments')return response(page([]))
+    if(url.pathname==='/api/boundary-profiles')return response({snapshot_id:'test-snapshot',items:[]})
+    throw new Error(`Unexpected ${url.pathname}`)
+  }))
+  render(<App/>)
+  await screen.findByText('Pack: Synthetic contract fixture')
+  fireEvent.click(screen.getByRole('button',{name:'Analysis'}))
+  expect(screen.getByRole('heading',{name:'Production energy benchmark'})).toBeInTheDocument()
+  expect(screen.getByText(/Profile basics are not implicit energy feeds/)).toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button',{name:'Target from basics'}))
+  expect(screen.getByRole('heading',{name:'Target from basic resources'})).toBeInTheDocument()
+})
+
 test('shows captured mod inventory and native lifecycle when the manifest has no pack name or capture kind', async () => {
   const nativeStatus = {...status, manifest:{created_at:'2026-10-12',
     pack:{mods:[{id:'gregtech',version:'5.09.54.221'},{id:'Forestry',version:'4.11.39'}],config_script_digests:[],context:'configured native registries, no observed deposit scan'},

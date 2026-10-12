@@ -401,6 +401,9 @@ def witness_ledger(processes, steps, *, start_stock=None, groups=None, yield_mod
             produced[resource] += amount
             balance[resource] += amount
     result.update(required_start_stock={}, final_stock={}, feasible=None,
+                  start_stock_declared=start_stock is not None,
+                  final_stock_semantics="declared_stock_plus_batch_net" if start_stock is not None
+                                        else "batch_net_change_without_declared_stock",
                   integer_batch_scale=None, requires_integer_batch_scaling=None,
                   startup_scope="conservative_batch_prefix_not_minimum_scheduling_stock",
                   feasibility_scope="ordered_stoichiometric_stock_only")

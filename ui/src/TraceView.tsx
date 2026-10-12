@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState } from 'react'
 import type { Trace, TierOptions } from './api'
 import { Badge, CoverageList, JsonData, ProcessDetail, ResourceRef } from './Details'
-import { pathConnections, RecipeGraph } from './RecipeGraph'
+import { pathConnections, recipeGraphForTrace, RecipeGraph } from './RecipeGraph'
 import type { AttachedConnection } from './RecipeGraph'
 import { RecyclePanel } from './RecyclePanel'
 import type { RecyclingPlan } from './RecyclePanel'
@@ -47,6 +47,7 @@ export function TraceView({trace,onSelect,tierOptions}: {trace: Trace;onSelect:(
     }
     return links
   },[trace,overlay])
+  const graph=useMemo(()=>recipeGraphForTrace(graphTrace,attachments),[graphTrace,attachments])
   const {route}=trace
   const resourceById=useMemo(()=>new Map(graphTrace.resources.map(resource=>[resource.id,resource])),[graphTrace.resources])
   const processById=useMemo(()=>new Map(graphTrace.processes.map(process=>[process.id,process])),[graphTrace.processes])
@@ -87,7 +88,7 @@ export function TraceView({trace,onSelect,tierOptions}: {trace: Trace;onSelect:(
 
     <div className="graph-toolbar"><p className="help">Drag a tile by its header. Pan the canvas, scroll to zoom, or use the graph controls.</p><label>Highlight path<select value={highlight===null ? 'all' : highlight} onChange={event=>setHighlight(event.target.value==='all' ? null : Number(event.target.value))}><option value="all">All paths</option>{trace.paths.map((path,index)=><option value={index} key={index}>Path {index+1} · {path.process_ids.length} steps</option>)}</select></label></div>
     <div className={`trace-layout ${selectedProcess || selectedResource ? 'has-inspector' : ''}`}>
-      <div className="free-recipe-graph" role="region" aria-label="Recipe path graph">{hasRecipes ? <RecipeGraph key={JSON.stringify([graphTrace.snapshot_id,graphTrace.paths])} trace={graphTrace} highlight={highlight} inspect={inspect} inspectResource={selectResource} recycle={beginRecycle} recycleProcesses={overlay?.plan.main_path.process_ids} attachments={attachments}/> : <div className="empty-state"><h3>No production recipe tiles</h3><p>{route.status==='same_resource' ? 'The endpoints identify the same resource.' : 'No complete recipe path was emitted within this search.'}</p></div>}</div>
+      <div className="free-recipe-graph" role="region" aria-label="Recipe path graph">{hasRecipes ? <RecipeGraph key={JSON.stringify([graphTrace.snapshot_id,graphTrace.paths])} graph={graph} highlight={highlight} inspect={inspect} inspectResource={selectResource} recycle={beginRecycle} recycleProcesses={overlay?.plan.main_path.process_ids}/> : <div className="empty-state"><h3>No production recipe tiles</h3><p>{route.status==='same_resource' ? 'The endpoints identify the same resource.' : 'No complete recipe path was emitted within this search.'}</p></div>}</div>
       {(selectedProcess || selectedResource) && <aside className="graph-inspector"><h3>Selected record</h3><button className="close-inspector" onClick={()=>setSelection(null)} aria-label="Close record inspector">Close</button>{selectedProcess ? <ProcessDetail process={selectedProcess} resources={resourceById} onSelect={selectResource} onRecycle={trace.paths.some(path=>path.process_ids.includes(selectedProcess.id)) ? id=>beginRecycle(selectedProcess.id,id) : undefined}/> : selectedResource && <><h3>{selectedResource.display_name || selectedResource.registry_name}</h3><code>{selectedResource.registry_name}</code><p><button onClick={()=>onSelect(selectedResource.id)}>Inspect in library</button></p><ChemicalFacts resourceId={selectedResource.id}/><JsonData label="Full resource record" value={selectedResource}/></>}</aside>}
     </div>
       {overlay && <div className="notice"><strong>Main path and secondary return path</strong><p>The graph now shows the chosen main plan and one return path. Output and return links are presentation connections, not simultaneous execution proof.</p><ul>{attachments.map((link,index)=><li key={index}>{link.label}: {recipeName(link.source)} → {recipeName(link.target)} · {resourceName(link.resourceId)}</li>)}</ul><button onClick={()=>setOverlay(null)}>Show all main paths</button></div>}

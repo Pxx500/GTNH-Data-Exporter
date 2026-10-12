@@ -17,6 +17,7 @@ from contextlib import contextmanager
 from functools import lru_cache
 from fractions import Fraction
 from heapq import heappop, heappush
+from itertools import product
 from pathlib import Path
 
 COLLECTIONS = ("resources", "groups", "processes", "sources", "environments", "coverage")
@@ -62,6 +63,7 @@ class Dataset:
     def __init__(self, database: str | Path):
         self.path = Path(database).resolve()
         self._search_vocabulary = None
+        self._unification_preferences = None
         self._search_lock = threading.Lock()
         if not self.path.is_file():
             raise DatasetError(f"No imported dataset at {self.path}")
@@ -508,14 +510,19 @@ class Dataset:
             coverage = [json.loads(row[0]) for row in connection.execute("SELECT payload FROM records WHERE collection='coverage' ORDER BY id")]
             return {"snapshot_id": self.snapshot_id, "manifest": json.loads(self._manifest_json), "counts": counts, "coverage": coverage}
 
-    def find_resources(self, *, q="", kind=None, offset=0, limit=50):
+    def find_resources(self, *, q="", kind=None, offset=0, limit=50, scope=None, profile_id=None):
         if kind not in (None, "item", "fluid"):
             raise DatasetError("kind must be item or fluid")
         self._pagination(offset, limit)
         tokens = _search_words(q)
+        scope = self._profile_scope(scope, profile_id)
         with self._connect() as connection:
+            scoped_clause, scoped_values = self._scope_clause(connection, scope)
             if not tokens:
-                return self._page(connection, "resources", "json_extract(payload,'$.kind')=?" if kind else "1", (kind,) if kind else (), offset=offset, limit=limit)
+                clause = "json_extract(payload,'$.kind')=?" if kind else "1"
+                page = self._page(connection, "resources", clause + ' AND ' + scoped_clause,
+                    ((kind,) if kind else ()) + scoped_values, offset=offset, limit=limit)
+                return self._acquisition_page(connection, page)
             alternatives = self._resource_search_terms(connection, tokens)
             expression = " AND ".join("(" + " OR ".join(f'"{word}"*' for word in sorted(words)) + ")" for words in alternatives)
             clause = "search MATCH ? AND search.collection='resources'"
@@ -524,12 +531,549 @@ class Dataset:
                 clause += " AND resources.kind=?"
                 parameters += (kind,)
             tables = "search JOIN resources ON resources.id=search.id JOIN records ON records.collection='resources' AND records.id=search.id"
+            clause += ' AND ' + re.sub(r'\bid\b', 'records.id', scoped_clause).replace('payload', 'records.payload')
+            parameters += scoped_values
             total = connection.execute(f"SELECT COUNT(*) FROM {tables} WHERE {clause}", parameters).fetchone()[0]
             connection.create_function("resource_search_rank", 4, self._resource_search_rank(q, tokens, alternatives), deterministic=True)
+            from .acquisition import acquisition_rank, unification_preferences
+            with self._search_lock:
+                if self._unification_preferences is None:
+                    self._unification_preferences = unification_preferences(connection)
+            connection.create_function('resource_acquisition_rank', 1,
+                lambda id: acquisition_rank(self._unification_preferences.get(id, {})), deterministic=True)
             rows = connection.execute(f"""SELECT records.payload FROM {tables} WHERE {clause}
-                ORDER BY resource_search_rank(resources.id,resources.registry_name,json_extract(records.payload,'$.display_name'),search.text),resources.id
+                ORDER BY resource_search_rank(resources.id,resources.registry_name,json_extract(records.payload,'$.display_name'),search.text),resource_acquisition_rank(resources.id),resources.id
                 LIMIT ? OFFSET ?""", (*parameters, limit, offset))
-            return {"snapshot_id": self.snapshot_id, "items": [json.loads(row[0]) for row in rows], "total": total, "offset": offset, "limit": limit}
+            return self._acquisition_page(connection, {"snapshot_id": self.snapshot_id, "items": [json.loads(row[0]) for row in rows], "total": total, "offset": offset, "limit": limit})
+
+    def _acquisition_page(self, connection, page):
+        from .acquisition import summarize_acquisition
+        analysis = summarize_acquisition(connection, [r['id'] for r in page['items']], snapshot_id=self.snapshot_id)
+        for item in page['items']:
+            item['acquisition_analysis'] = analysis['resources'][item['id']]
+        return page
+
+    def _profile_scope(self, scope, profile_id):
+        if profile_id is not None:
+            if scope is not None:
+                raise DatasetError('Specify scope or profile_id, not both')
+            scope = self.get_boundary_profile(profile_id)['item']['scope']
+        return scope
+
+    def _scope_clause(self, connection, scope):
+        keys = ('excluded_resource_ids', 'excluded_group_ids', 'excluded_namespaces', 'excluded_family_ids')
+        if scope is None:
+            scope = {}
+        if not isinstance(scope, dict) or set(scope) - set(keys):
+            raise DatasetError('Invalid analysis scope')
+        clauses, values = ['1'], ()
+        for key in keys:
+            entries = scope.get(key, [])
+            if not isinstance(entries, list) or any(not isinstance(v, str) or not v for v in entries):
+                raise DatasetError(f'{key} must be an array of nonempty strings')
+            if len(entries) > 1000:
+                raise DatasetError(f'{key} exceeds 1000 entries')
+            for entry in sorted(set(entries)):
+                if key == 'excluded_resource_ids':
+                    self._record(connection, 'resources', entry)
+                    clauses.append('id != ?')
+                    values += (entry,)
+                elif key == 'excluded_group_ids':
+                    self._record(connection, 'groups', entry)
+                    clauses.append('id NOT IN (SELECT resource_id FROM members WHERE group_id=?)')
+                    values += (entry,)
+                elif key == 'excluded_namespaces':
+                    clauses.append("substr(json_extract(payload,'$.registry_name'),1,instr(json_extract(payload,'$.registry_name'),':')-1) != ?")
+                    values += (entry,)
+        return ' AND '.join(clauses), values
+
+    def find_resource_groups(self, *, q='', limit=20, offset=0):
+        if not isinstance(q, str):
+            raise DatasetError('q must be a string')
+        escaped = q.strip().replace('\\', '\\\\').replace('%', '\\%').replace('_', '\\_')
+        where = "(id LIKE ? ESCAPE '\\' OR json_extract(payload,'$.name') LIKE ? ESCAPE '\\')" if escaped else '1'
+        values = ('%' + escaped + '%',) * 2 if escaped else ()
+        with self._connect() as connection:
+            result = self._page(connection, 'groups', where, values, offset=offset, limit=limit)
+            for item in result['items']:
+                item['member_count'] = connection.execute('SELECT COUNT(*) FROM members WHERE group_id=?', (item['id'],)).fetchone()[0]
+            return result
+
+    def get_scope_catalog(self):
+        with self._connect() as connection:
+            namespaces = [{'id': row[0], 'resources': row[1]} for row in connection.execute("SELECT substr(registry_name,1,instr(registry_name,':')-1) AS ns,COUNT(*) FROM resources WHERE instr(registry_name,':')>0 GROUP BY ns ORDER BY ns")]
+            families = [{'id': row[0], 'processes': row[1]} for row in connection.execute("SELECT json_extract(payload,'$.family') AS family,COUNT(*) FROM records WHERE collection='processes' GROUP BY family ORDER BY family")]
+            fluid_unknown = connection.execute("SELECT COUNT(*) FROM resources WHERE instr(registry_name,':')=0").fetchone()[0]
+            return {'snapshot_id': self.snapshot_id, 'namespaces': namespaces, 'families': families,
+                    'unknown_namespace_count': fluid_unknown}
+
+    def _profiles(self):
+        path = self.path.with_name(self.path.name + '.boundary-profiles.json')
+        with self._connect():
+            pass
+        if not path.exists():
+            return {'schema_version': 1, 'snapshot_id': self.snapshot_id, 'profiles': []}
+        try:
+            value = json.loads(path.read_text(encoding='utf-8'))
+        except (OSError, ValueError) as exc:
+            raise DatasetError(f'Cannot read boundary profiles: {exc}') from exc
+        if value.get('schema_version') != 1 or value.get('snapshot_id') != self.snapshot_id or not isinstance(value.get('profiles'), list):
+            raise DatasetError('Boundary profiles belong to another snapshot or have an unsupported format')
+        return value
+
+    def list_boundary_profiles(self):
+        return {'snapshot_id': self.snapshot_id, 'items': self._profiles()['profiles']}
+
+    def get_boundary_profile(self, profile_id):
+        for profile in self._profiles()['profiles']:
+            if profile['id'] == profile_id:
+                return {'snapshot_id': self.snapshot_id, 'item': profile}
+        raise DatasetError(f'Unknown boundary profile: {profile_id}')
+
+    def _write_profile(self, profile_id, profile, expected_revision):
+        path = self.path.with_name(self.path.name + '.boundary-profiles.json')
+        lock = path.with_suffix(path.suffix + '.lock')
+        try:
+            fd = os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+        except FileExistsError as exc:
+            raise DatasetError('Boundary profiles are being edited by another request') from exc
+        os.close(fd)
+        temporary = None
+        try:
+            value = self._profiles()
+            old = next((p for p in value['profiles'] if p['id'] == profile_id), None)
+            revision = old['revision'] if old else 0
+            if expected_revision is not None and (type(expected_revision) is not int or expected_revision != revision):
+                raise DatasetError('Boundary profile revision changed')
+            value['profiles'] = [p for p in value['profiles'] if p['id'] != profile_id]
+            if profile is not None:
+                profile['revision'] = revision + 1
+                value['profiles'].append(profile)
+                value['profiles'].sort(key=lambda p: p['id'])
+            with tempfile.NamedTemporaryFile(mode='w', encoding='utf-8', dir=path.parent, delete=False) as stream:
+                temporary = stream.name
+                stream.write(_json(value))
+                stream.flush()
+                os.fsync(stream.fileno())
+            os.replace(temporary, path)
+            temporary = None
+            return {'snapshot_id': self.snapshot_id, 'item': profile}
+        finally:
+            if temporary is not None:
+                Path(temporary).unlink(missing_ok=True)
+            lock.unlink(missing_ok=True)
+
+    def save_boundary_profile(self, profile_id, *, name, base_resource_ids, scope=None, expected_revision=None):
+        if not isinstance(profile_id, str) or not profile_id or len(profile_id) > 100 or not isinstance(name, str) or not name.strip():
+            raise DatasetError('Profile ID and name must be nonempty strings')
+        with self._connect() as connection:
+            feeds = self._resource_ids(connection, base_resource_ids, 'base_resource_ids')
+            clause, values = self._scope_clause(connection, scope)
+            scoped = {row[0] for row in connection.execute("SELECT id FROM records WHERE collection='resources' AND " + clause, values)}
+            if not feeds <= scoped:
+                raise DatasetError('Base resources must be inside the profile scope')
+        return self._write_profile(profile_id, {'id': profile_id, 'name': name.strip(),
+            'base_resource_ids': sorted(feeds), 'scope': scope or {},
+            'semantics': 'assumed_external_feed_not_inventory_or_generation'}, expected_revision)
+
+    def delete_boundary_profile(self, profile_id, *, expected_revision=None):
+        self.get_boundary_profile(profile_id)
+        return self._write_profile(profile_id, None, expected_revision)
+
+    def _resource_ids(self, connection, ids, name):
+        if not isinstance(ids, (list, set, tuple)) or len(ids) > 1000 or any(not isinstance(id, str) for id in ids):
+            raise DatasetError(f'{name} must contain at most 1000 resource IDs')
+        for id in ids:
+            self._record(connection, 'resources', id)
+        return set(ids)
+
+    def discover_network(self, target_id, *, allowed_feed_ids, selections=None, scope=None, max_depth=8,
+                         max_processes=200, max_variants=128, max_resources=512,
+                         min_tier=None, max_tier=None, unknown_tier_policy='exclude', preferred_process_ids=None):
+        for key, value, maximum in (('max_depth', max_depth, 20), ('max_processes', max_processes, 1000),
+                                    ('max_variants', max_variants, 512), ('max_resources', max_resources, 2000)):
+            if type(value) is not int or not 1 <= value <= maximum:
+                raise DatasetError(f'{key} must be between 1 and {maximum}')
+        if selections is not None and (not isinstance(selections, dict) or any(not isinstance(v, dict) for v in selections.values())):
+            raise DatasetError('selections must map process IDs to slot selections')
+        selections = selections or {}
+        tiers = self._tier_filter(min_tier, max_tier, unknown_tier_policy)
+        variants, records, resources, groups = [], {}, {}, {}
+        counts, examples, reasons = {}, [], set()
+        work, work_limit, examined = 0, 50000, 0
+        def exclude(reason, id):
+            counts[reason] = counts.get(reason, 0) + 1
+            if len(examples) < 50:
+                examples.append({'reason': reason, 'id': id})
+        with self._connect() as connection:
+            self._record(connection, 'resources', target_id)
+            feeds = self._resource_ids(connection, allowed_feed_ids, 'allowed_feed_ids')
+            if len(feeds | {target_id}) > max_resources:
+                raise DatasetError('max_resources must accommodate the target and all allowed feeds')
+            clause, values = self._scope_clause(connection, scope)
+            allowed = {r[0] for r in connection.execute("SELECT id FROM records WHERE collection='resources' AND " + clause, values)}
+            if target_id not in allowed or not feeds <= allowed:
+                raise DatasetError('Target and allowed feeds must be inside the analysis scope')
+            for pid in selections:
+                self._record(connection, 'processes', pid)
+            preferred = list(preferred_process_ids or [])
+            for pid in preferred:
+                self._record(connection, 'processes', pid)
+            queue, seen, choice_cache = deque([(target_id, 0, None)]), {target_id}, {}
+            included = {target_id} | feeds
+            deferred = deque()
+            coproducts = set()
+            checked = set()
+            while queue and not reasons & {'candidate_process_limit', 'candidate_variant_limit', 'candidate_work_limit', 'candidate_resource_limit'}:
+                rid, depth, rows = queue.popleft()
+                resources[rid] = self._record(connection, 'resources', rid)
+                if rid in feeds:
+                    continue
+                if depth >= max_depth:
+                    reasons.add('candidate_depth')
+                    continue
+                if rows is None:
+                    priority = 'CASE id ' + ''.join('WHEN ? THEN 0 ' for _ in preferred) + 'ELSE 1 END,' if preferred else ''
+                    feed_priority = "CASE WHEN id IN (SELECT process_id FROM inputs WHERE resource_id IN (" + ','.join('?' for _ in feeds) + ")) THEN 0 ELSE 1 END," if feeds else ''
+                    closure = "CASE WHEN id IN (SELECT process_id FROM inputs WHERE resource_id IN (" + ','.join('?' for _ in coproducts) + ")) THEN 0 ELSE 1 END," if coproducts else ''
+                    ranks = feed_priority + closure if rid == target_id else closure + feed_priority
+                    ranked_ids = (*sorted(feeds), *sorted(coproducts)) if rid == target_id else (*sorted(coproducts), *sorted(feeds))
+                    rows = iter(connection.execute("SELECT id,payload FROM records WHERE collection='processes' AND id IN (SELECT process_id FROM outputs WHERE resource_id=?) ORDER BY " + priority + ranks + "json_array_length(payload,'$.inputs'),id", (rid, *preferred, *ranked_ids)))
+                row = next(rows, None)
+                if row is None:
+                    continue
+                queue.append((rid, depth, rows))
+                for row in (row,):
+                    pid = row['id']
+                    if pid in checked:
+                        continue
+                    checked.add(pid)
+                    examined += 1
+                    work += 1
+                    if work > work_limit:
+                        reasons.add('candidate_work_limit')
+                        break
+                    p = json.loads(row['payload'])
+                    if not any(o['resource_id'] == rid and self._positive_output(o) for o in p['outputs']):
+                        continue
+                    if any(o['resource_id'] not in allowed for o in p['outputs']):
+                        exclude('output_resource_scope', pid)
+                        continue
+                    if p['executable'] is not True or p['conditions'].get('dynamic_inputs') == 'unresolved' or p['conditions'].get('dynamic_output') == 'unresolved' or p['conditions'].get('enabled') is False or p['conditions'].get('fake') is True:
+                        exclude('unsupported_process', pid)
+                        continue
+                    if p['family'] in (scope or {}).get('excluded_family_ids', []):
+                        exclude('family_scope', pid)
+                        continue
+                    if not self._tier_allowed(p, tiers):
+                        exclude('tier', pid)
+                        continue
+                    options, invalid = [], False
+                    if set(selections.get(pid, {})) - {str(si) for si in range(len(p['inputs']))}:
+                        raise DatasetError('Unknown network input slot')
+                    for si, slot in enumerate(p['inputs']):
+                        available = []
+                        requested = selections.get(pid, {}).get(str(si))
+                        if requested is not None and (not isinstance(requested, dict) or set(requested) != {'choice_index', 'resource_id'} or type(requested['choice_index']) is not int or not isinstance(requested['resource_id'], str)):
+                            raise DatasetError('Invalid network input selection')
+                        for ci, c in enumerate(slot['choices']):
+                            if requested is not None and ci != requested['choice_index']:
+                                continue
+                            key = _json({'id': c.get('resource_id'), 'match': c['match']})
+                            if key not in choice_cache:
+                                m = c['match']
+                                choice_cache[key] = self._choice_resources(connection, c) if m['mode'] != 'native_unknown' and (m['mode'] not in ('unified', 'ore_dict') or m.get('group_id')) else []
+                                work += len(choice_cache[key])
+                            for concrete in choice_cache[key]:
+                                if requested is not None and concrete != requested['resource_id']:
+                                    continue
+                                if concrete not in allowed:
+                                    exclude('resource_scope', concrete)
+                                    continue
+                                available.append({'choice_index': ci, 'resource_id': concrete})
+                        if requested is not None and not available:
+                            raise DatasetError('Selected network input does not match its declared predicate or scope')
+                        if not available:
+                            invalid = True
+                            exclude('unresolved_input', pid)
+                            break
+                        options.append(available)
+                    if work > work_limit:
+                        reasons.add('candidate_work_limit')
+                        break
+                    if invalid:
+                        continue
+                    if len(records) >= max_processes:
+                        reasons.add('candidate_process_limit')
+                        break
+                    # First admit one complete producer variant. Defer its remaining OR
+                    # variants so one ore group cannot consume the whole closure budget.
+                    for si, option in enumerate(options):
+                        option.sort(key=lambda c: (c['resource_id'] != p['inputs'][si]['choices'][c['choice_index']].get('resource_id'), c['choice_index'], c['resource_id']))
+                    combinations = iter(product(*options))
+                    first = next(combinations)
+                    deferred.append((p, combinations, depth))
+                    for selected in (first,):
+                        if len(variants) >= max_variants:
+                            reasons.add('candidate_variant_limit')
+                            break
+                        candidate_resources = {c['resource_id'] for c in selected} | {o['resource_id'] for o in p['outputs']}
+                        if len(included | candidate_resources) > max_resources:
+                            reasons.add('candidate_resource_limit')
+                            break
+                        included.update(candidate_resources)
+                        accounting = json.loads(_json(p))
+                        for si, c in enumerate(selected):
+                            accounting['inputs'][si]['choices'][c['choice_index']].update(resource_id=c['resource_id'], match={'mode': 'exact', 'nbt_sensitive': True})
+                        variant = {'variant_id': f'{pid}:v0', 'process_id': pid,
+                            'process': accounting, 'selections': {str(si): c for si, c in enumerate(selected)}}
+                        variants.append(variant)
+                        records[pid] = p
+                        coproducts.update(o['resource_id'] for o in p['outputs'] if self._positive_output(o))
+                        for si, c in enumerate(selected):
+                            child = c['resource_id']
+                            if child not in seen:
+                                seen.add(child)
+                                queue.append((child, depth + 1, None))
+                        if 'candidate_resource_limit' in reasons:
+                            break
+                    if reasons & {'candidate_variant_limit', 'candidate_resource_limit'}:
+                        break
+                    break
+            while deferred and len(variants) < max_variants and not reasons & {'candidate_process_limit', 'candidate_work_limit', 'candidate_resource_limit'}:
+                p, combinations, depth = deferred.popleft()
+                selected = next(combinations, None)
+                if selected is None:
+                    continue
+                candidate_resources = {c['resource_id'] for c in selected}
+                if len(included | candidate_resources) > max_resources:
+                    reasons.add('candidate_resource_limit')
+                    break
+                included.update(candidate_resources)
+                accounting = json.loads(_json(p))
+                for si, c in enumerate(selected):
+                    accounting['inputs'][si]['choices'][c['choice_index']].update(resource_id=c['resource_id'], match={'mode': 'exact', 'nbt_sensitive': True})
+                    # Undiscovered alternatives are real bounded-closure omissions.
+                    if c['resource_id'] not in seen and c['resource_id'] not in feeds:
+                        reasons.add('candidate_alternative_closure')
+                pid = p['id']
+                variants.append({'variant_id': f'{pid}:v{sum(v["process_id"] == pid for v in variants)}',
+                                 'process_id': pid, 'process': accounting,
+                                 'selections': {str(si): c for si, c in enumerate(selected)}})
+                deferred.append((p, combinations, depth))
+            if deferred and len(variants) >= max_variants:
+                # Only a remaining concrete combination proves this bound truncated.
+                if any(next(combinations, None) is not None for _, combinations, _ in deferred):
+                    reasons.add('candidate_variant_limit')
+            used = included
+            resources = {id: self._record(connection, 'resources', id) for id in sorted(used)}
+            gids = {c['match']['group_id'] for p in records.values() for s in p['inputs'] for c in s['choices'] if c['match'].get('group_id')}
+            groups = {id: self._record(connection, 'groups', id) for id in sorted(gids)}
+        return {'snapshot_id': self.snapshot_id, 'target_id': target_id, 'allowed_feed_ids': sorted(feeds),
+                'variants': variants, 'resources': list(resources.values()), 'groups': list(groups.values()),
+                'processes': records,
+                'scope': scope or {}, 'tier_filter': tiers, 'exclusions': {'counts': counts, 'examples': examples,
+                    'count_semantics': 'Producer exclusions count records. Resource exclusions count candidate input-reference events'},
+                'search': {'examined_processes': examined, 'processes': len(records), 'variants': len(variants),
+                    'resources': len(resources), 'expansion_work': work, 'work_limit': work_limit,
+                    'max_depth': max_depth, 'max_processes': max_processes, 'max_variants': max_variants, 'max_resources': max_resources},
+                'limit_reasons': sorted(reasons), 'coverage_complete': not reasons and not counts,
+                'scope_semantics': 'bounded_required_input_neighborhood_not_global_reachability'}
+
+    def plan_network(self, target_id, *, target_amount=1, allowed_feed_ids, primary_feed_id=None,
+                     selections=None, scope=None, objective='nominal_eu', yield_mode='guaranteed',
+                     max_depth=8, max_processes=200, max_variants=128, max_resources=512,
+                     min_tier=None, max_tier=None, unknown_tier_policy='exclude',
+                     max_solutions=8, max_solves=24, max_columns=128, max_rows=512,
+                     timeout_seconds=10, start_stock=None, preferred_process_ids=None):
+        from .balance import ledger_json, quantity
+        from .network import solve_network
+        with self._connect() as connection:
+            if primary_feed_id is not None:
+                self._record(connection, 'resources', primary_feed_id)
+            if start_stock is not None:
+                if not isinstance(start_stock, dict):
+                    raise DatasetError('start_stock must map resource IDs to quantities')
+                self._resource_ids(connection, list(start_stock), 'start_stock')
+        discovery = self.discover_network(target_id, allowed_feed_ids=allowed_feed_ids, selections=selections,
+            scope=scope, max_depth=max_depth, max_processes=max_processes, max_variants=max_variants,
+            max_resources=max_resources, min_tier=min_tier, max_tier=max_tier,
+            unknown_tier_policy=unknown_tier_policy, preferred_process_ids=preferred_process_ids)
+        try:
+            result = solve_network(discovery['variants'], target_id=target_id, target_amount=target_amount,
+                allowed_feed_ids=set(discovery['allowed_feed_ids']), primary_feed_id=primary_feed_id,
+                objective=objective, yield_mode=yield_mode, max_solutions=max_solutions, max_solves=max_solves,
+                max_columns=max_columns, max_rows=max_rows, timeout_seconds=timeout_seconds, start_stock=start_stock)
+            amount = quantity(target_amount)
+        except (ValueError, TypeError) as exc:
+            raise DatasetError(str(exc)) from exc
+        result.update(snapshot_id=self.snapshot_id, target_id=target_id, target_amount=amount,
+                      allowed_feed_ids=discovery['allowed_feed_ids'], primary_feed_id=primary_feed_id,
+                      discovery=discovery, coverage_complete=discovery['coverage_complete'] and result.get('search', {}).get('complete', False),
+                      execution_scope='stoichiometric_witness_not_machine_or_condition_certification')
+        if not discovery['coverage_complete'] and result['status'] == 'infeasible':
+            result['status'] = 'incomplete'
+        return ledger_json(result)
+
+    def plan_to_bases(self, target_id, *, profile_id, target_amount=1, selections=None,
+                      objective='recipe_runs', yield_mode='guaranteed', max_depth=8,
+                      max_processes=200, max_variants=128, max_resources=512,
+                      min_tier=None, max_tier=None, unknown_tier_policy='exclude',
+                      max_solutions=8, max_solves=24, max_columns=128, max_rows=512,
+                      timeout_seconds=10, start_stock=None):
+        profile = self.get_boundary_profile(profile_id)['item']
+        from .balance import quantity, ledger_json
+        if target_id in profile['base_resource_ids']:
+            try:
+                amount = quantity(target_amount)
+                if amount <= 0:
+                    raise ValueError('target_amount must be positive')
+            except ValueError as exc:
+                raise DatasetError(str(exc)) from exc
+            with self._connect() as connection:
+                self._record(connection, 'resources', target_id)
+            return ledger_json({'snapshot_id': self.snapshot_id, 'target_id': target_id, 'target_amount': amount,
+                'status': 'complete', 'boundary': {'resource_id': target_id, 'amount': amount},
+                'base_requirements': {target_id: amount}, 'solutions': [], 'profile': profile,
+                'execution_scope': 'assumed_external_feed_boundary', 'coverage_complete': True})
+        result = self.plan_network(target_id, target_amount=target_amount,
+            allowed_feed_ids=profile['base_resource_ids'], scope=profile['scope'], selections=selections,
+            objective=objective, yield_mode=yield_mode, max_depth=max_depth, max_processes=max_processes,
+            max_variants=max_variants, max_resources=max_resources, min_tier=min_tier, max_tier=max_tier,
+            unknown_tier_policy=unknown_tier_policy, max_solutions=max_solutions, max_solves=max_solves,
+            max_columns=max_columns, max_rows=max_rows, timeout_seconds=timeout_seconds, start_stock=start_stock)
+        result['profile'] = profile
+        bases = set(profile['base_resource_ids'])
+        for solution in result['solutions']:
+            stock = solution['startup']['required_start_stock']
+            unresolved = {id: amount for id, amount in stock.items() if id not in bases
+                          and quantity((start_stock or {}).get(id, 0)) < quantity(amount)}
+            solution['base_boundary'] = {'status': 'requires_startup' if unresolved else 'net_expanded',
+                'unresolved_startup': unresolved,
+                'semantics': 'Declared base feeds are assumptions. Ordered startup and presence remain separate'}
+        return result
+
+    def audit_energy(self, primary_feed_id, target_id, *, benchmark_process_id, target_amount=1,
+                     profile_id=None, allowed_feed_ids=None, benchmark_selections=None,
+                     selections=None, scope=None, yield_mode='guaranteed', max_depth=8,
+                     max_processes=200, max_variants=128, max_resources=512,
+                     min_tier=None, max_tier=None, unknown_tier_policy='exclude',
+                     max_solutions=8, max_solves=24, max_columns=128, max_rows=512,
+                     timeout_seconds=10, start_stock=None):
+        from .balance import ledger_json, net_ledger, quantity
+        from .network import nominal_energy
+        scope = self._profile_scope(scope, profile_id)
+        benchmark_selections = benchmark_selections or {}
+        if not isinstance(benchmark_selections, dict):
+            raise DatasetError('benchmark_selections must map input slots to selections')
+        benchmark_discovery = self.discover_network(target_id, allowed_feed_ids=[primary_feed_id] if allowed_feed_ids is None else allowed_feed_ids,
+            scope=scope, selections={benchmark_process_id: benchmark_selections},
+            max_depth=1, max_processes=1, max_variants=1, preferred_process_ids=[benchmark_process_id])
+        variant = next((v for v in benchmark_discovery['variants'] if v['process_id'] == benchmark_process_id), None)
+        if variant is None:
+            raise DatasetError('Benchmark is not an executable target producer inside this scope')
+        try:
+            base = net_ledger({benchmark_process_id: variant['process']}, {benchmark_process_id: 1},
+                selections={benchmark_process_id: variant['selections']}, yield_mode=yield_mode)
+            energy, energy_reason = nominal_energy(variant['process'])
+            produced = base['net'].get(target_id, Fraction())
+            if base['status'] != 'complete' or produced <= 0 or energy is None or base['net'].get(primary_feed_id, Fraction()) >= 0:
+                raise DatasetError('Benchmark has no known positive net target, primary-feed consumption or nominal EU')
+            amount = quantity(target_amount)
+            runs = amount / produced
+            scaled = net_ledger({benchmark_process_id: variant['process']}, {benchmark_process_id: runs},
+                selections={benchmark_process_id: variant['selections']}, yield_mode=yield_mode)
+        except (ValueError, TypeError) as exc:
+            raise DatasetError(str(exc)) from exc
+        result = self.plan_network(target_id, target_amount=target_amount,
+            allowed_feed_ids=[primary_feed_id] if allowed_feed_ids is None else allowed_feed_ids,
+            primary_feed_id=primary_feed_id, scope=scope, selections=selections, objective='nominal_eu',
+            yield_mode=yield_mode, max_depth=max_depth, max_processes=max_processes, max_variants=max_variants,
+            max_resources=max_resources, min_tier=min_tier, max_tier=max_tier, unknown_tier_policy=unknown_tier_policy,
+            max_solutions=max_solutions, max_solves=max_solves, max_columns=max_columns, max_rows=max_rows,
+            timeout_seconds=timeout_seconds, start_stock=start_stock, preferred_process_ids=[benchmark_process_id])
+        baseline = energy * runs
+        result['benchmark'] = ledger_json({'process': benchmark_discovery['processes'][benchmark_process_id],
+            'selections': variant['selections'], 'runs': runs, 'ledger': scaled,
+            'energy': {'total_eu': baseline, 'eu_per_target': baseline / amount},
+            'cofeeds': {id: -v for id, v in scaled['net'].items() if v < 0 and id != primary_feed_id},
+            'coproducts': {id: v for id, v in scaled['net'].items() if v > 0 and id != target_id},
+            'comparison_scope': 'nominal_recipe_energy_without_container_or_coproduct_credit'})
+        for solution in result['solutions']:
+            total = solution['nominal_energy']['total_eu']
+            if total is None:
+                solution['savings'] = {'status': 'unknown'}
+            else:
+                delta = baseline - quantity(total)
+                solution['savings'] = ledger_json({'status': 'known', 'eu': delta,
+                    'fraction': delta / baseline, 'percent': 100 * delta / baseline})
+        return result
+
+    @staticmethod
+    def _inventory_source_output(output):
+        return output.get('resource_semantics') not in ('generated_ore_block_not_mining_drop', 'mined_item_rule_candidate')
+
+    def inspect_acquisition(self, resource_id, *, profile_id=None, scope=None, max_depth=8,
+                            max_processes=200, max_variants=128, max_resources=512):
+        from .acquisition import summarize_acquisition, analyze_grounding
+        profile = self.get_boundary_profile(profile_id)['item'] if profile_id is not None else None
+        scope = self._profile_scope(scope, profile_id)
+        bases = profile['base_resource_ids'] if profile else []
+        discovery = self.discover_network(resource_id, allowed_feed_ids=bases, scope=scope, max_depth=max_depth,
+            max_processes=max_processes, max_variants=max_variants, max_resources=max_resources)
+        ids = [r['id'] for r in discovery['resources']]
+        known = set()
+        with self._connect() as connection:
+            summary = summarize_acquisition(connection, [resource_id], snapshot_id=self.snapshot_id)
+            for offset in range(0, len(ids), 500):
+                batch = ids[offset:offset + 500]
+                rows = connection.execute("SELECT DISTINCT payload FROM records WHERE collection='sources' AND id IN (SELECT source_id FROM source_outputs WHERE resource_id IN (" + ','.join('?' for _ in batch) + '))', batch)
+                for row in rows:
+                    source = json.loads(row[0])
+                    if source['status'] in ('active', 'conditional'):
+                        known.update(o['resource_id'] for o in source['outputs'] if self._inventory_source_output(o) and o['resource_id'] in ids)
+        grounding = analyze_grounding(discovery['variants'], known, bases, discovery['coverage_complete'],
+            resource_ids=ids, limit_reasons=discovery['limit_reasons'])
+        return {'snapshot_id': self.snapshot_id, 'resource_id': resource_id,
+            'item': summary['resources'][resource_id], 'grounding': grounding,
+            'discovery': {k: discovery[k] for k in ('search', 'exclusions', 'scope', 'limit_reasons', 'coverage_complete')},
+            'seed_semantics': 'conditional_declared_item_sources_and_assumed_base_feeds_not_inventory_stock'}
+
+    def analyze_statistics(self, *, scope=None, profile_id=None, max_records=600000,
+                           max_findings=50, max_signature_buckets=50000, timeout_seconds=15):
+        from .statistics import analyze_statistics
+        from .balance import ledger_json
+        scope = self._profile_scope(scope, profile_id)
+        with self._connect() as connection:
+            clause, values = self._scope_clause(connection, scope)
+            resource_rows = connection.execute("SELECT id,payload FROM records WHERE collection='resources' AND " + clause + ' ORDER BY id', values)
+            allowed = {row[0] for row in connection.execute("SELECT id FROM records WHERE collection='resources' AND " + clause, values)}
+            excluded_groups = set((scope or {}).get('excluded_group_ids', []))
+            families = (scope or {}).get('excluded_family_ids', [])
+            family_clause = " AND json_extract(payload,'$.family') NOT IN (" + ','.join('?' for _ in families) + ')' if families else ''
+            process_rows = connection.execute("SELECT payload FROM records WHERE collection='processes'" + family_clause
+                + " AND id NOT IN (SELECT process_id FROM outputs WHERE resource_id NOT IN (SELECT id FROM records WHERE collection='resources' AND "
+                + clause + ')) ORDER BY id', (*families, *values))
+            def groups():
+                for row in connection.execute("SELECT id,payload FROM records WHERE collection='groups' ORDER BY id"):
+                    if row['id'] in excluded_groups:
+                        continue
+                    group = json.loads(row['payload'])
+                    group['members'] = [id for id in group['members'] if id in allowed]
+                    group['membership_scope'] = 'analysis_resource_scope'
+                    yield group
+            try:
+                result = analyze_statistics((json.loads(row['payload']) for row in resource_rows), groups(),
+                    ({'process': p, 'recipe_tier': self._recipe_tier(p)} for p in (json.loads(row[0]) for row in process_rows)),
+                    max_records=max_records, max_findings=max_findings,
+                    max_signature_buckets=max_signature_buckets, timeout_seconds=timeout_seconds)
+            except (ValueError, TypeError) as exc:
+                raise DatasetError(str(exc)) from exc
+            ids = {id for finding in result['findings'] for id in finding['process_ids']}
+            result['processes'] = {id: self._record(connection, 'processes', id) for id in sorted(ids)}
+        result.update(snapshot_id=self.snapshot_id, scope=scope or {})
+        result['search']['scope_semantics'] = 'Resource catalog and group membership are scoped. Recipe families and all captured outputs are scoped. Raw input predicates remain unchanged'
+        return ledger_json(result)
 
     def _resource_search_terms(self, connection, tokens):
         # The existing FTS index is authoritative. This temporary view leaves the imported database unchanged.
@@ -1301,7 +1845,7 @@ class Dataset:
                 source_ids[resource_id] = [source["id"] for source in sources]
                 inventory_sources = [source for source in sources if any(
                     output['resource_id'] == resource_id
-                    and output.get('resource_semantics') not in ('generated_ore_block_not_mining_drop', 'mined_item_rule_candidate')
+                    and self._inventory_source_output(output)
                     for output in source['outputs'])]
                 if sources and not inventory_sources:
                     if any(output['resource_id'] == resource_id and output.get('resource_semantics') == 'generated_ore_block_not_mining_drop'

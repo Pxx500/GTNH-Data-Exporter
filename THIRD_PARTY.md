@@ -29,6 +29,7 @@ affected files.
 | FastAPI | 0.143.0 | MIT |
 | Uvicorn | 0.54.0 | BSD-3-Clause |
 | Official MCP Python SDK | 2.3.0 | MIT |
+| SymPy, exact network optimization | 1.14.0 | BSD-3-Clause |
 | HTTPX, test dependency | 0.28.1 | BSD-3-Clause |
 | Vitest and Testing Library | Versions in ui/package-lock.json | MIT |
 | jsdom and React type declarations | Versions in ui/package-lock.json | MIT |

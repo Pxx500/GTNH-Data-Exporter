@@ -1,12 +1,15 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import type { Page, Resource, Single } from './api'
 import { query, useRequest } from './api'
+import {AcquisitionBadges} from './AcquisitionDetails'
 
-export function ResourcePicker({label, selectedId, onSelect, onResolve}: {
+export function ResourcePicker({label, selectedId, onSelect, onResolve,profileId,basicResourceIds=[]}: {
   label: string
   selectedId: string
   onSelect: (id: string) => void
   onResolve: (id: string) => void
+  profileId?:string
+  basicResourceIds?:string[]
 }) {
   const id = useId()
   const input = useRef<HTMLInputElement>(null)
@@ -15,7 +18,7 @@ export function ResourcePicker({label, selectedId, onSelect, onResolve}: {
   const [open, setOpen] = useState(false)
   const [activeIndex, setActiveIndex] = useState(-1)
   const hydration = useRequest<Single<Resource>>(selectedId ? query(`resources/${encodeURIComponent(selectedId)}`) : null)
-  const results = useRequest<Page<Resource>>(search && !selectedId ? query('resources', {q: search, limit: 8}) : null)
+  const results = useRequest<Page<Resource>>(search && !selectedId ? query('resources', {q: search, limit: 8,profile_id:profileId}) : null)
   const resource = hydration.data?.item.id === selectedId ? hydration.data.item : undefined
   const showMenu = open && !selectedId
   const currentSearch = search !== null && search === text.trim()
@@ -65,7 +68,7 @@ export function ResourcePicker({label, selectedId, onSelect, onResolve}: {
       {(text || selectedId) && <button type="button" className="picker-clear" aria-label={`Clear ${label}`} onClick={() => {setText(''); onSelect(''); setActiveIndex(-1); setOpen(true); input.current?.focus()}}>×</button>}
     </div>
     <div className="picker-identity" id={`${id}-identity`}>
-      {resource ? <><span>{resource.kind} · {resource.registry_name}{resource.metadata == null ? '' : ` · metadata ${resource.metadata}`} · {resource.nbt == null ? 'No NBT' : 'NBT identity present'}</span><code>Resource ID: {resource.id}</code></> : selectedId ? <span>{hydration.loading ? 'Loading selected resource…' : `Resource ID: ${selectedId}`}</span> : <span>Select a result to use its exact resource identity.</span>}
+      {resource ? <><span>{resource.kind} · {resource.registry_name}{resource.metadata == null ? '' : ` · metadata ${resource.metadata}`} · {resource.nbt == null ? 'No NBT' : 'NBT identity present'}</span><code>Resource ID: {resource.id}</code><AcquisitionBadges resource={resource} basic={basicResourceIds.includes(resource.id)}/></> : selectedId ? <span>{hydration.loading ? 'Loading selected resource…' : `Resource ID: ${selectedId}`}</span> : <span>Select a result to use its exact resource identity.</span>}
       {hydration.error && selectedId && <span role="alert">Selected resource lookup failed: {hydration.error} <button type="button" onClick={hydration.reload}>Retry</button></span>}
     </div>
     {showMenu && <div className="picker-menu">
@@ -73,6 +76,7 @@ export function ResourcePicker({label, selectedId, onSelect, onResolve}: {
         {candidates.map((candidate, index) => <li role="option" id={`${id}-option-${index}`} aria-selected={activeIndex === index} key={candidate.id}
           onMouseDown={event => event.preventDefault()} onMouseMove={() => setActiveIndex(index)} onClick={() => choose(candidate)}>
           <strong>{candidate.display_name || candidate.registry_name}</strong>
+          <AcquisitionBadges resource={candidate} basic={basicResourceIds.includes(candidate.id)}/>
           <span>{candidate.kind} · {candidate.registry_name}{candidate.metadata == null ? '' : ` · metadata ${candidate.metadata}`} · {candidate.nbt == null ? 'No NBT' : 'NBT identity present'}</span>
           <code>{candidate.id}</code>
         </li>)}
