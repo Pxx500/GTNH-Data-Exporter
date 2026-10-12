@@ -186,6 +186,14 @@ projection labels, counts, failures and compressed stream checksums. Reference
 files publish before the canonical manifest. Partial handler or record errors
 remain explicit through `complete: false` and failure counters.
 
+Reference summary schema 2 declares `handler_item_facts` version 1. Every
+non-null item alternative retains detached `{registry_name, metadata, nbt,
+amount}` facts before native serialization, plus `item_facts_failure`, the
+selected `serializer_class` and `count_semantics`. Fact capture reads no
+display-name getters. Native conversion runs on a detached stack and cannot
+mutate the observed alternative. `failed_item_facts` counts failed fact
+observations separately from native stack and signature failures.
+
 `native_recipe_id_api` signatures invoke NEI's native RecipeId API. They are
 not an invocation of `/recipeid fast-dump`, and its blacklist is not applied.
 Raw views preserve `ingredients`, `result` and `other_stacks`
@@ -232,7 +240,13 @@ Only an exact default-item serializer winner with its source-proven identity
 and count envelope permits applying a declared
 recipe quantity. Unknown serializers and item-to-fluid conversions retain
 their payloads but do not establish ordinary item quantities. Distinct typed
-identities with the same native projection remain ambiguous. Historical schema
+identities with the same native projection remain ambiguous in historical
+reference summary schema 1. Reference summary schema 2 with context schema 3
+compares both exact typed identity and exact native payload, with quantity,
+chance and GT real stack size checked separately. Its selected default writer
+must preserve the actual observed quantity. It does not normalize null and
+empty compounds. Custom writers, quantity-changing projections and failed
+facts remain unsupported. Historical schema
 1 and 2 contexts remain readable within their captured scope and original
 projection rules. Schema 1 lacks native projections. Schema 2 infers ordinary
 counts only under its pinned built-in serializer registry. Missing or unknown
@@ -243,8 +257,9 @@ cohort before applying its version-pinned adapter allowlist. It reports
 matching, differing, missing and unsupported projections separately, with
 bounded examples and scope limits. Default thresholds require no differences,
 missing matches or capture failures. An unmapped predicate is not an exact
-negative. NEI NBTJson is not injective, so ambiguous projections remain
-unsupported rather than being equated by display name or lossy NBT decoding.
+negative. NEI NBTJson is not injective. Without captured lossless facts,
+ambiguous projections remain unsupported rather than being equated by display
+name or lossy NBT decoding.
 
 ## Dataset operations
 

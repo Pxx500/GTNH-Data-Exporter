@@ -90,7 +90,7 @@ final class NeiPresentationContext {
                     if (alternatives == null) throw new IllegalStateException("Native GT display aliases are null");
                     JsonArray encoded = new JsonArray();
                     for (ItemStack alternative : alternatives) {
-                        JsonObject stack = serialize(alternative);
+                        JsonObject stack = itemFacts(alternative);
                         encoded.add(stack);
                         context.addPoolOwner(stack);
                         context.addProjection(stack);
@@ -112,7 +112,7 @@ final class NeiPresentationContext {
                     if (item == null) throw new IllegalArgumentException("Unknown item pool registry owner: " + owner);
                     JsonArray encoded = new JsonArray();
                     for (ItemStack stack : pools.get(item)) {
-                        JsonObject typed = serialize(stack);
+                        JsonObject typed = itemFacts(stack);
                         encoded.add(typed);
                         context.addProjection(typed);
                     }
@@ -254,7 +254,7 @@ final class NeiPresentationContext {
     }
 
     private static JsonObject itemProjection(ItemStack original) {
-        JsonObject typed = serialize(original);
+        JsonObject typed = itemFacts(original);
         ItemStack template = original.copy();
         template.stackSize = 1;
         Map.Entry<IStackStringifyHandler, NBTTagCompound> selected = dispatchItem(template, true, StackInfo.stackStringifyHandlers);
@@ -272,7 +272,8 @@ final class NeiPresentationContext {
         boolean ordinary = DEFAULT_SERIALIZER.equals(selectedSerializer) && serialized.hasKey("strId", 8)
             && serialized.hasKey("Damage", 3) && serialized.hasKey("Count", 3)
             && serialized.getString("strId").equals(typed.get("registry_name").getAsString())
-            && serialized.getInteger("Damage") == typed.get("metadata").getAsInt() && serialized.getInteger("Count") == 1
+            && serialized.getInteger("Damage") == typed.get("metadata").getAsInt()
+            && serialized.getInteger("Count") == typed.get("amount").getAsInt()
             && (!serialized.hasKey("tag") || serialized.hasKey("tag", 10));
         @SuppressWarnings("unchecked") Set<String> keys = serialized.func_150296_c();
         ordinary &= Arrays.asList("strId", "Damage", "Count", "tag").containsAll(keys);
@@ -316,7 +317,7 @@ final class NeiPresentationContext {
         return stack;
     }
 
-    private static JsonObject serialize(ItemStack original) {
+    static JsonObject itemFacts(ItemStack original) {
         if (original == null || original.getItem() == null)
             throw new IllegalArgumentException("Native presentation stack has no item");
         ItemStack stack = original.copy();

@@ -49,6 +49,7 @@ final class NeiReferenceCapture implements Closeable {
     private long failedSignatures;
     private long failedViews;
     private long failedStacks;
+    private long failedItemFacts;
     private JsonObject presentationContext;
     private boolean closed;
 
@@ -184,11 +185,35 @@ final class NeiReferenceCapture implements Closeable {
         if (stack.items == null) throw new IllegalStateException("Native positioned-stack alternatives are null");
         JsonArray alternatives = new JsonArray();
         for (ItemStack item : stack.items) {
-            JsonObject alternative = object("native_stack", null, "failure", null);
+            JsonObject alternative = object("native_stack", null, "failure", null, "item_facts", null,
+                "item_facts_failure", null, "serializer_class", null, "count_semantics", "unknown");
             if (item != null) {
+                ItemStack detached;
                 try {
-                    NBTTagCompound nativeNbt = StackInfo.itemStackToNBT(item);
-                    if (nativeNbt == null) throw new IllegalStateException("NEI StackInfo serializer returned null");
+                    detached = item.copy();
+                } catch (RuntimeException | LinkageError error) {
+                    failedItemFacts++;
+                    failedStacks++;
+                    alternative.add("item_facts_failure", failure("item_facts_copy", error));
+                    alternative.add("failure", failure("native_stack_copy", error));
+                    alternatives.add(alternative);
+                    continue;
+                }
+                try {
+                    alternative.add("item_facts", NeiPresentationContext.itemFacts(detached));
+                } catch (RuntimeException | LinkageError error) {
+                    failedItemFacts++;
+                    alternative.add("item_facts_failure", failure("item_facts", error));
+                }
+                try {
+                    Map.Entry<codechicken.nei.api.IStackStringifyHandler, NBTTagCompound> selected =
+                        NeiPresentationContext.dispatchItem(detached, true, StackInfo.stackStringifyHandlers);
+                    if (selected == null) throw new IllegalStateException("NEI StackInfo serializer returned null");
+                    NBTTagCompound nativeNbt = selected.getValue();
+                    String serializer = selected.getKey().getClass().getName();
+                    alternative.addProperty("serializer_class", serializer);
+                    if (!alternative.get("item_facts").isJsonNull()) alternative.addProperty("count_semantics",
+                        NeiPresentationContext.itemCountSemantics(alternative.getAsJsonObject("item_facts"), nativeNbt, serializer));
                     alternative.add("native_stack", NBTJson.toJsonObject(nativeNbt));
                 } catch (RuntimeException | LinkageError error) {
                     failedStacks++;
@@ -221,11 +246,11 @@ final class NeiReferenceCapture implements Closeable {
             files.add(filename, object("records", counts.get(name), "sha256", SnapshotWriter.sha256(directory.resolve(filename))));
         }
         files.add("presentation-context.json", presentationContext);
-        JsonObject summary = object("schema_version", 1, "canonical_snapshot_id", manifest.get("snapshot_id"),
+        JsonObject summary = object("schema_version", 2, "canonical_snapshot_id", manifest.get("snapshot_id"),
             "canonical_pack", manifest.get("pack"), "created_at", Instant.now().toString(),
             "counts", object("handlers", counts.get("handlers"), "signatures", counts.get("signatures"),
                 "handler_views", counts.get("handler-views")),
-            "complete", failedHandlers + failedSignatures + failedViews + failedStacks == 0,
+            "complete", failedHandlers + failedSignatures + failedViews + failedStacks + failedItemFacts == 0,
             "scope", "registered crafting and serial crafting all-recipes queries, not all pack recipes",
             "signature_projection", "native_recipe_id_api", "view_projection", "raw_handler_view",
             "recipeid_blacklist_applied", false, "skipped_handlers", 0, "empty_handlers", emptyHandlers,
@@ -234,8 +259,13 @@ final class NeiReferenceCapture implements Closeable {
             "settings", object("config_digest_source", "canonical_pack.config_script_digests",
                 "native_handler_filters", "uninterpreted", "recipeid_blacklist_applied", false),
             "failed_handlers", failedHandlers, "failed_signatures", failedSignatures, "failed_views", failedViews,
-            "failed_stacks", failedStacks, "chance_semantics", "native_presentation_default_may_be_full",
+            "failed_stacks", failedStacks, "failed_item_facts", failedItemFacts, "chance_semantics", "native_presentation_default_may_be_full",
             "nbt_semantics", "verbatim NEI NBTJson projection, not typed canonical NBT", "files", files);
+        summary.add("handler_item_facts", object("version", 1, "stage", "before_native_serialization",
+            "identity", "registry_metadata_typed_nbt", "quantity", "positioned_item_stack_size",
+            "native_input", "detached_positioned_copy",
+            "native_api", "StackInfo.stackStringifyHandlers.reverse.convertItemStackToNBT(stack,true)->NBTJson.toJsonObject",
+            "count_classification", "selected_default_at_observed_quantity"));
         JsonElement nei = JsonNull.INSTANCE;
         for (JsonElement mod : manifest.getAsJsonObject("pack").getAsJsonArray("mods")) {
             if ("NotEnoughItems".equalsIgnoreCase(mod.getAsJsonObject().get("id").getAsString())) nei = mod;

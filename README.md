@@ -3,9 +3,9 @@
 Capture a versioned GregTech New Horizons dataset, then explore it with a
 human UI or query it through MCP and CLI while Minecraft is closed.
 
-The 2026-10-12 full-pack capture contains 259,781 processes, 123,005 resources
+The 2026-10-12 full-pack capture contains 259,781 processes, 118,717 resources
 and 25,228 acquisition-source records. Its six compressed streams total
-11.28 MiB. Build, launch, capture, shutdown and import took 179.03 seconds
+11.23 MiB. Build, launch, capture, shutdown and import took 186.22 seconds
 on the local setup. This adds 1,663 native EnderIO Sag Mill baseline recipes,
 11 ordinary Alloy Smelter recipes, 154 Forestry Centrifuge recipes,
 152 interpreted Botania Mana Infusion recipes and 13 unresolved subclass records,
@@ -105,27 +105,32 @@ auxiliary stacks separately. It does not render images. Both captures share
 the canonical snapshot ID and pack manifest. The comparator verifies their
 compressed checksums and counts before comparing source-proven projections.
 
-The current adapters cover four exact GT recipe maps and the exact NEI
+The current adapters cover five exact GT recipe maps and the exact NEI
 furnace handler. Other handlers remain unverified. RecipeId signatures omit
 quantities and alternatives, and NEI's NBT projection loses type information.
 Neither signature agreement nor display agreement proves pack-wide execution
 semantics. See [FORMAT.md](FORMAT.md) for the reference contract.
 
-The latest paired full-pack run on 2026-10-12 captured 366 handlers and 284,357
-views/signatures in a 179.03-second pipeline. Independent item presentation
+The latest paired full-pack run on 2026-10-12 captured 366 handlers and 287,513
+views/signatures in a 186.22-second pipeline. Independent item presentation
 context retains 55,875 original GT alias queries, 231 NEI item pools and
-66,415 native item projections, bound to the closed canonical streams.
-The scoped five-map GT/furnace comparison finds 53,909 matching projections,
-no differences and no missing matches. Of these, 8,699 belong to Fluid
-Solidifier. The original four-map/furnace scope has 45,210 matches, including
+62,131 native item projections, bound to the closed canonical streams.
+The scoped five-map GT/furnace comparison finds 78,389 matching projections,
+no differences and no missing matches. Of these, 28,895 belong to Fluid
+Solidifier. The original four-map/furnace scope has 49,494 matches, including
 the previously unsupported Lapotron Crystal double-NBT case. Native Java
 serialization now supplies its exact display without approximated formatting.
-An additional 20,196 TiC Bolt Molding views remain unverified because NEI
-collapses null and empty-compound NBT for TGregworks input identities.
-The authoritative native dataset retains that distinction.
+Handler views now retain exact typed item facts before native serialization.
+The comparator checks those facts together with the native payload. This
+verifies 20,196 additional TiC Bolt Molding and 4,284 recycling views without
+equating null and empty-compound NBT. A display-name getter in TGregworks
+mutates its argument. Reading names on detached copies removes the resulting
+false canonical variants. All 133 inspected ToolRod input anchors now agree
+with their unified group members, while genuine tagged variants stay distinct.
 Five native recycling recipes still contain unregistered door objects after
 MalisisDoors replaces the vanilla registry entries. NEI cannot serialize
-those objects. Their errors remain explicit, and two scoped canonical anchors
+those objects. The same five failures are counted separately in signatures,
+native serialization and typed facts. Two scoped canonical anchors
 also make presentation context incomplete. Validation therefore still fails
 its completeness thresholds. This does not establish whole-pack equivalence.
 The comparator exits 1 for failed thresholds and 2 for invalid evidence.

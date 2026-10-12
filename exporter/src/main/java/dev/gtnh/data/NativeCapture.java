@@ -133,7 +133,7 @@ final class NativeCapture {
     }
 
     private String displayName(ItemStack stack, String registry) {
-        try { return stack.getDisplayName(); }
+        try { return stack.copy().getDisplayName(); }
         catch (RuntimeException error) { return registry; }
     }
 

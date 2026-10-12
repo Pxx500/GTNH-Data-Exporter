@@ -29,7 +29,7 @@ public final class NeiPresentationContextTest {
     @Test
     public void classifiesOnlySourceProvenOrdinaryItemCounts() {
         String defaultClass = "codechicken.nei.recipe.stackinfo.DefaultStackStringifyHandler";
-        JsonObject typed = Jsons.object("registry_name", "test:input", "metadata", 3, "nbt", null);
+        JsonObject typed = Jsons.object("registry_name", "test:input", "metadata", 3, "nbt", null, "amount", 1);
         NBTTagCompound nativeStack = new NBTTagCompound();
         nativeStack.setString("strId", "test:input");
         nativeStack.setInteger("Damage", 3);
@@ -39,6 +39,8 @@ public final class NeiPresentationContextTest {
         assertEquals("unknown", NeiPresentationContext.itemCountSemantics(typed, nativeStack, "codechicken.enderstorage.internal.StorageStackStringifyHandler"));
         nativeStack.setInteger("Count", 77);
         assertEquals("unknown", NeiPresentationContext.itemCountSemantics(typed, nativeStack, defaultClass));
+        typed.addProperty("amount", 77);
+        assertEquals("item_stack_size", NeiPresentationContext.itemCountSemantics(typed, nativeStack, defaultClass));
         nativeStack = new NBTTagCompound();
         nativeStack.setString("neiFluidName", "water");
         nativeStack.setLong("Count", 1000);

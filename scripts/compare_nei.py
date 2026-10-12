@@ -25,6 +25,9 @@ BUILTIN_SERIALIZERS = frozenset((DEFAULT_SERIALIZER, 'codechicken.nei.recipe.sta
                                 'codechicken.nei.recipe.stackinfo.GTFluidStackStringifyHandler'))
 ITEM_PROJECTION_API = 'StackInfo.itemStackToNBT(stack,true)->NBTJson.toJsonObject'
 ITEM_DISPATCH_API = 'StackInfo.stackStringifyHandlers.reverse.convertItemStackToNBT(stack,true)->NBTJson.toJsonObject'
+HANDLER_ITEM_FACTS = {'version': 1, 'stage': 'before_native_serialization', 'identity': 'registry_metadata_typed_nbt',
+                      'quantity': 'positioned_item_stack_size', 'native_input': 'detached_positioned_copy',
+                      'native_api': ITEM_DISPATCH_API, 'count_classification': 'selected_default_at_observed_quantity'}
 GT_FAMILIES = frozenset('gregtech:gt.recipe.' + name for name in ('alloysmelter', 'metalbender', 'macerator', 'orewasher', 'fluidsolidifier'))
 HISTORICAL_GT_FAMILIES = frozenset(('gregtech:gt.recipe.alloysmelter', 'gregtech:gt.recipe.metalbender',
                                    'gregtech:gt.recipe.macerator', 'gregtech:gt.recipe.orewasher'))
@@ -270,8 +273,10 @@ def _resource_identity(resource, context=None):
         native = json.loads(identity)
         if count != 1 or native[:3] != ['item', resource['registry_name'], resource['metadata']]:
             raise Unsupported('Native item projection does not preserve the declared ordinary item identity/template count')
-        if (resource['registry_name'], resource['metadata']) in context.get('uncertain_buckets', set()):
+        if not context.get('handler_item_facts') and (resource['registry_name'], resource['metadata']) in context.get('uncertain_buckets', set()):
             raise Unsupported('A typed variant in this item identity bucket has an unresolved native projection')
+        if context.get('handler_item_facts'):
+            return _lossless_item_identity(resource, record['native_stack'])
         return identity
     nbt = _typed_nbt(resource.get('nbt'))
     if resource['kind'] == 'fluid' and nbt not in (None, {}):
@@ -315,6 +320,11 @@ def _native_identity(stack):
     return identity, count
 
 
+def _lossless_item_identity(facts, native_stack):
+    return _json(['item', facts['registry_name'], facts['metadata'], facts['nbt'],
+                  {key: value for key, value in native_stack.items() if key != 'Count'}])
+
+
 def _profile(handler, view, context=None):
     if handler['native_class'] == FURNACE_HANDLER:
         return ('minecraft:smelting', 'furnace', True, False)
@@ -351,8 +361,26 @@ def _view_projection(view, profile, ambiguous, context=None):
                 raise Unsupported('Stack serialization failed during reference capture')
             identity, count = _native_identity(alternative.get('native_stack'))
             native = json.loads(identity)
+            lossless = context is not None and context.get('handler_item_facts')
+            if lossless:
+                if alternative.get('item_facts_failure'):
+                    raise Unsupported('Original handler item facts failed during reference capture')
+                facts = alternative.get('item_facts')
+                if (not isinstance(facts, dict) or not isinstance(facts.get('registry_name'), str) or not facts['registry_name']
+                        or type(facts.get('metadata')) is not int or type(facts.get('amount')) is not int or 'nbt' not in facts
+                        or (facts['nbt'] is not None and (not isinstance(facts['nbt'], dict) or facts['nbt'].get('type') != 'compound'
+                            or not isinstance(facts['nbt'].get('value'), dict)))):
+                    raise Unsupported('Original handler item facts are missing or invalid')
+                if native[0] == 'item':
+                    if (alternative.get('serializer_class') != DEFAULT_SERIALIZER or alternative.get('count_semantics') != 'item_stack_size'
+                            or native[1:3] != [facts['registry_name'], facts['metadata']] or count != facts['amount']):
+                        raise Unsupported('Observed item writer does not establish ordinary identity/count semantics')
+                    identity = _lossless_item_identity(facts, alternative['native_stack'])
+                elif (alternative.get('serializer_class') not in BUILTIN_SERIALIZERS - {DEFAULT_SERIALIZER}
+                      or alternative.get('count_semantics') != 'native_conversion'):
+                    raise Unsupported('Observed fluid wrapper writer/volume semantics are not source-proven')
             if context is not None and context['version'] >= 2:
-                if (identity in context.get('uncertain_native_identities', set())
+                if not (lossless and native[0] == 'item') and (identity in context.get('uncertain_native_identities', set())
                         or (native[0] == 'item' and ((context['version'] == 2 and not context['registry_supported'])
                             or (native[1], native[2]) in context.get('uncertain_buckets', set())))):
                     raise Unsupported('Independent native item projection coverage/count semantics are unresolved for this identity')
@@ -429,7 +457,13 @@ def _canonical_projection(process, profile, resources, ambiguous, context):
 
 
 def _output_key(projection):
-    return _json(sorted(sorted(json.loads(entry)[0] for entry in slot['alternatives']) for slot in projection['outputs']))
+    def anchor(entry):
+        identity = json.loads(entry)[0]
+        value = json.loads(identity)
+        if value[0] == 'item' and len(value) == 5:
+            identity = _native_identity(dict(value[4], Count=1))[0]
+        return identity
+    return _json(sorted(sorted(anchor(entry) for entry in slot['alternatives']) for slot in projection['outputs']))
 
 
 def _differences(left, right):
@@ -464,8 +498,13 @@ def compare(snapshot, reference, *, example_limit=20):
     snapshot, reference = Path(snapshot), Path(reference)
     manifest = json.loads((snapshot / 'manifest.json').read_text(encoding='utf-8'))
     summary = json.loads((reference / 'summary.json').read_text(encoding='utf-8'))
-    if manifest.get('schema_version') != 1 or summary.get('schema_version') != 1:
-        raise ComparisonError('Only canonical and reference schema version 1 are mapped')
+    if manifest.get('schema_version') != 1 or type(summary.get('schema_version')) is not int or summary['schema_version'] not in (1, 2):
+        raise ComparisonError('Only canonical schema 1 and reference schemas 1/2 are mapped')
+    lossless = summary['schema_version'] == 2
+    if lossless and summary.get('handler_item_facts') != HANDLER_ITEM_FACTS:
+        raise ComparisonError('Reference handler item-facts capability is missing or unmapped')
+    if lossless and (type(summary.get('failed_item_facts')) is not int or summary['failed_item_facts'] < 0):
+        raise ComparisonError('Reference failed_item_facts event count is missing or invalid')
     if summary.get('canonical_snapshot_id') != manifest['snapshot_id'] or summary.get('canonical_pack') != manifest['pack']:
         raise ComparisonError('Reference snapshot identity or pack/config cohort does not match')
     mods = {mod['id']: mod for mod in manifest['pack']['mods']}
@@ -502,6 +541,10 @@ def compare(snapshot, reference, *, example_limit=20):
     for _ in _records(snapshot, 'groups.jsonl.gz', manifest['files']):
         pass
     context, context_report = _presentation_context(reference, summary, manifest, resources)
+    if lossless:
+        if context is None or context['version'] != 3:
+            raise ComparisonError('Lossless handler item facts require independent context schema 3')
+        context['handler_item_facts'] = True
     typed_identities = defaultdict(set)
     uncertain_buckets = set()
     for resource in resources.values():
@@ -541,6 +584,7 @@ def compare(snapshot, reference, *, example_limit=20):
             examples['unsupported'].append({'reason': reason, **detail})
 
     profiles, normalized_views = set(), []
+    unresolved_reference_outputs = set()
     handlers_with_views, view_indexes = set(), set()
     for view in _records(reference, 'handler-views.jsonl.gz', summary['files']):
         validate_reference(view, view_indexes)
@@ -548,8 +592,10 @@ def compare(snapshot, reference, *, example_limit=20):
         handlers_with_views.add(view['handler_key'])
         observed_failures += bool(view.get('failure') or view.get('failures'))
         positions = (view.get('ingredients') or []) + (view.get('other_stacks') or []) + ([view['result']] if view.get('result') else [])
-        observed_failures += sum(bool(alternative.get('failure')) for positioned in positions for alternative in positioned.get('alternatives', []))
+        observed_failures += sum(bool(alternative.get('failure')) + (bool(alternative.get('item_facts_failure')) if lossless else 0)
+                                 for positioned in positions for alternative in positioned.get('alternatives', []))
         handler = handlers[view['handler_key']]
+        profile = None
         try:
             profile = _profile(handler, view, context)
             profiles.add(profile)
@@ -557,6 +603,15 @@ def compare(snapshot, reference, *, example_limit=20):
                                      _view_projection(view, profile, ambiguous, context)))
         except Unsupported as error:
             unsupported(str(error), {'side': 'nei', 'handler_key': view['handler_key'], 'recipe_index': view['recipe_index']})
+            if lossless and profile is not None:
+                # Observed output anchors mark uncertainty, never expected alternatives or a successful match.
+                try:
+                    outputs = view['other_stacks'] if profile[1] == 'gt' else [view['result']] if view.get('result') else []
+                    anchors = [[_native_identity(alternative.get('native_stack'))[0] for alternative in value['alternatives']] for value in outputs]
+                    if anchors and all(anchors):
+                        unresolved_reference_outputs.add((profile, _json(sorted(sorted(slot) for slot in anchors))))
+                except (Unsupported, KeyError, TypeError):
+                    pass
     del view_indexes
     for handler in handlers.values():
         if handler['handler_key'] not in handlers_with_views:
@@ -638,6 +693,10 @@ def compare(snapshot, reference, *, example_limit=20):
     for profile, records in catalog.items():
         for key, candidate in records.items():
             if (profile, key) not in accounted:
+                if (profile, _output_key(candidate['projection'])) in unresolved_reference_outputs:
+                    unsupported('A captured reference view with these outputs has unresolved item facts or writer semantics',
+                                {'side': 'canonical', 'family': profile[0], 'process_ids': candidate['process_ids'][:example_limit]})
+                    continue
                 counts['missing_nei'] += 1
                 if len(examples['missing_nei']) < example_limit:
                     examples['missing_nei'].append({'family': profile[0], 'process_ids': candidate['process_ids'][:example_limit], 'canonical': candidate['projection'],
@@ -647,20 +706,23 @@ def compare(snapshot, reference, *, example_limit=20):
     for filename in ('sources.jsonl.gz', 'environments.jsonl.gz', 'coverage.jsonl.gz'):
         for _ in _records(snapshot, filename, manifest['files']):
             pass
-    capture_failures = max(observed_failures, sum(summary.get(name, 0) for name in ('failed_handlers', 'failed_signatures', 'failed_views', 'failed_stacks')))
+    failure_fields = ('failed_handlers', 'failed_signatures', 'failed_views', 'failed_stacks') + (('failed_item_facts',) if lossless else ())
+    capture_failures = max(observed_failures, sum(summary.get(name, 0) for name in failure_fields))
     finish_phase('remaining_stream_validation')
     timings['total'] = round(time.perf_counter() - started, 3)
     return {'schema_version': 1, 'canonical_snapshot_id': manifest['snapshot_id'], 'scope': SOURCE_SCOPE, 'counts': dict(counts),
             'unsupported_reasons': dict(reasons), 'examples': examples, 'example_limit': example_limit,
             'reference_complete': summary.get('complete') is True, 'capture_failures': capture_failures,
             'presentation_context': context_report,
+            'handler_item_facts': summary.get('handler_item_facts') if lossless else None,
             'capture_failure_unit': 'events, not distinct affected recipes',
             'mapped_profiles': [list(profile) for profile in sorted(profiles)], 'ambiguous_resource_projections': len(ambiguous),
             'ambiguous_canonical_candidates': len(uncertain - seen),
             'timings_seconds': timings,
             'native_signatures': {'records': signature_count, 'comparison_to_canonical': False, 'scope': 'Capture integrity and native API projection label only'},
             'limitations': ['No pack-wide equivalence claim', 'Display agreement does not prove execution, yields or native machine predicates',
-                            'NBTJson is not injective. Typed NBT agreement is not proven', 'Generic handler chances are not production probability',
+                            'Exact typed ordinary item facts and native projections compared' if lossless else 'NBTJson is not injective. Typed NBT agreement is not proven',
+                            'Fluid NBT and custom writer semantics remain unverified', 'Generic handler chances are not production probability',
                             'Unmapped handlers, recipe maps, frontends and crafting layouts remain unverified',
                             'Hidden GT recipes excluded. Disabled/fake recipes are retained for display comparison',
                             'Furnace auxiliary fuel is not an output. Fuel, time, EU and XP are unverified',

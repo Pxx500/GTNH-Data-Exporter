@@ -98,6 +98,135 @@ class ComparisonTests(unittest.TestCase):
         self.context(directory, reference, aliases=aliases, projections=projections)
         return directory, reference, aliases, projections
 
+    def lossless_views(self, directory, reference, facts):
+        views = self.read_records(reference, 'handler-views.jsonl.gz')
+        for view in views:
+            positioned = view['ingredients'] + view['other_stacks'] + ([view['result']] if view['result'] else [])
+            for stack, item in zip((alternative for value in positioned for alternative in value['alternatives']), facts):
+                stack.update(item_facts=item, item_facts_failure=None, serializer_class='codechicken.nei.recipe.stackinfo.DefaultStackStringifyHandler',
+                             count_semantics='item_stack_size')
+        self.replace_records(reference, 'handler-views.jsonl.gz', views, 'summary.json')
+        path = reference / 'summary.json'
+        summary = json.loads(path.read_text())
+        summary.update(schema_version=2, failed_item_facts=0, handler_item_facts={
+            'version': 1, 'stage': 'before_native_serialization', 'identity': 'registry_metadata_typed_nbt',
+            'quantity': 'positioned_item_stack_size', 'native_input': 'detached_positioned_copy',
+            'native_api': 'StackInfo.stackStringifyHandlers.reverse.convertItemStackToNBT(stack,true)->NBTJson.toJsonObject',
+            'count_classification': 'selected_default_at_observed_quantity'})
+        path.write_text(json.dumps(summary))
+
+    def test_lossless_view_facts_distinguish_null_and_empty_tags_and_compare_native_payload(self):
+        directory, reference = self.capture()
+        empty = {'type': 'compound', 'value': {}}
+        resources = self.read_records(directory, 'resources.jsonl.gz')
+        resources.append(resource('empty', registry_name='test:input', nbt=empty))
+        self.replace_records(directory, 'resources.jsonl.gz', resources, 'manifest.json')
+        aliases = self.read_records(reference, 'gt-display-aliases.jsonl.gz')
+        aliases.append({'resource_id': 'empty', 'status': 'ok', 'alternatives': [self.typed('test:input', nbt=empty)], 'failure': None})
+        self.context(directory, reference, aliases=aliases, projection_version=3, projections=[
+            self.item_projection('test:input'), self.item_projection('test:input', nbt=empty), self.item_projection('test:output')])
+        self.lossless_views(directory, reference, [self.typed('test:input', amount=2), self.typed('test:output')])
+        report = comparison.compare(directory, reference)
+        self.assertEqual(report['counts']['matched'], 1)
+        view = self.read_records(reference, 'handler-views.jsonl.gz')[0]
+        view['ingredients'][0]['alternatives'][0]['item_facts']['nbt'] = empty
+        self.replace_records(reference, 'handler-views.jsonl.gz', [view], 'summary.json')
+        report = comparison.compare(directory, reference)
+        self.assertEqual(report['counts']['matched'], 0)
+        self.assertEqual(report['counts']['differences'], 1)
+        canonical = self.read_records(directory, 'processes.jsonl.gz')[0]
+        canonical['inputs'][0]['choices'][0]['resource_id'] = 'empty'
+        self.replace_records(directory, 'processes.jsonl.gz', [canonical], 'manifest.json')
+        self.assertEqual(comparison.compare(directory, reference)['counts']['matched'], 1)
+        view['ingredients'][0]['alternatives'][0]['native_stack']['tag'] = {'unexpected': 1}
+        self.replace_records(reference, 'handler-views.jsonl.gz', [view], 'summary.json')
+        self.assertEqual(comparison.compare(directory, reference)['counts']['differences'], 1)
+
+    def test_lossless_double_and_display_quantity_keep_native_amounts_and_real_size(self):
+        directory, reference, aliases, projections = self.native_item_capture()
+        self.context(directory, reference, aliases=aliases, projections=projections, projection_version=3)
+        charge = projections[0]['nbt']
+        self.lossless_views(directory, reference, [self.typed('test:input', nbt=charge, amount=2), self.typed('test:output', amount=30)])
+        self.assertEqual(comparison.compare(directory, reference)['counts']['matched'], 1)
+        canonical = self.read_records(directory, 'processes.jsonl.gz')[0]
+        canonical['inputs'][0]['choices'][0].update(amount=7, native_amount=7)
+        self.replace_records(directory, 'processes.jsonl.gz', [canonical], 'manifest.json')
+        view = self.read_records(reference, 'handler-views.jsonl.gz')[0]
+        view['displayed_fields']['render_real_stack_sizes'] = False
+        view['ingredients'][0]['real_stack_size'] = 7
+        for positioned in view['ingredients'] + view['other_stacks']:
+            positioned['alternatives'][0]['native_stack']['Count'] = 1
+            positioned['alternatives'][0]['item_facts']['amount'] = 1
+        self.replace_records(reference, 'handler-views.jsonl.gz', [view], 'summary.json')
+        self.assertEqual(comparison.compare(directory, reference)['counts']['matched'], 1)
+        view['ingredients'][0]['real_stack_size'] = 1
+        self.replace_records(reference, 'handler-views.jsonl.gz', [view], 'summary.json')
+        self.assertEqual(comparison.compare(directory, reference)['counts']['differences'], 1)
+
+    def test_lossless_fact_failures_and_custom_quantity_changes_are_not_promoted(self):
+        directory, reference, aliases, projections = self.native_item_capture()
+        self.context(directory, reference, aliases=aliases, projections=projections, projection_version=3)
+        self.lossless_views(directory, reference, [self.typed('test:input', nbt=projections[0]['nbt'], amount=2), self.typed('test:output', amount=30)])
+        original = self.read_records(reference, 'handler-views.jsonl.gz')[0]
+        for case in ('failed_facts', 'custom', 'quantity_change'):
+            with self.subTest(case=case):
+                view = json.loads(json.dumps(original))
+                alternative = view['ingredients'][0]['alternatives'][0]
+                if case == 'failed_facts':
+                    alternative.update(item_facts=None, item_facts_failure={'message': 'facts failed'})
+                elif case == 'custom':
+                    alternative.update(serializer_class='custom.Writer', count_semantics='unknown')
+                else:
+                    alternative['native_stack']['Count'] = 99
+                self.replace_records(reference, 'handler-views.jsonl.gz', [view], 'summary.json')
+                report = comparison.compare(directory, reference)
+                self.assertEqual(report['counts']['matched'], 0)
+                self.assertGreater(report['counts']['unsupported'], 0)
+                self.assertEqual(report['counts']['missing_canonical'], 0)
+                self.assertEqual(report['counts']['missing_nei'], 0)
+                if case == 'failed_facts':
+                    self.assertEqual(report['capture_failures'], 1)
+
+    def test_lossless_reference_capability_is_required_and_old_references_remain_ambiguous(self):
+        directory, reference = self.capture()
+        empty = {'type': 'compound', 'value': {}}
+        projections = [self.item_projection('test:input'), self.item_projection('test:input', nbt=empty), self.item_projection('test:output')]
+        aliases = self.read_records(reference, 'gt-display-aliases.jsonl.gz')
+        self.context(directory, reference, aliases=aliases, projections=projections, projection_version=3)
+        self.assertEqual(comparison.compare(directory, reference)['counts']['matched'], 0)
+        self.lossless_views(directory, reference, [self.typed('test:input', amount=2), self.typed('test:output')])
+        self.assertEqual(comparison.compare(directory, reference)['counts']['matched'], 1)
+        path = reference / 'summary.json'
+        summary = json.loads(path.read_text())
+        summary['handler_item_facts'].pop('native_input')
+        path.write_text(json.dumps(summary))
+        with self.assertRaisesRegex(comparison.ComparisonError, 'capability'):
+            comparison.compare(directory, reference)
+
+    def test_lossless_fluid_wrapper_uses_native_volume_and_rejects_custom_writer(self):
+        directory, reference = self.capture()
+        resources = self.read_records(directory, 'resources.jsonl.gz')
+        resources[0].update(kind='fluid', registry_name='water', metadata=None)
+        self.replace_records(directory, 'resources.jsonl.gz', resources, 'manifest.json')
+        canonical = self.read_records(directory, 'processes.jsonl.gz')[0]
+        canonical['inputs'][0]['choices'] = [dict(choice('in', amount=1000), native_amount=1000)]
+        self.replace_records(directory, 'processes.jsonl.gz', [canonical], 'manifest.json')
+        self.context(directory, reference, projections=[self.item_projection('test:output')], projection_version=3)
+        view = self.read_records(reference, 'handler-views.jsonl.gz')[0]
+        view['ingredients'][0]['alternatives'][0]['native_stack'] = {'neiFluidName': 'water', 'Count': '1000L'}
+        self.replace_records(reference, 'handler-views.jsonl.gz', [view], 'summary.json')
+        self.lossless_views(directory, reference, [self.typed('nei:fluid_display', amount=1), self.typed('test:output')])
+        view = self.read_records(reference, 'handler-views.jsonl.gz')[0]
+        alternative = view['ingredients'][0]['alternatives'][0]
+        alternative.update(serializer_class='codechicken.nei.recipe.stackinfo.FluidDisplayStackStringifyHandler', count_semantics='native_conversion')
+        self.replace_records(reference, 'handler-views.jsonl.gz', [view], 'summary.json')
+        self.assertEqual(comparison.compare(directory, reference)['counts']['matched'], 1)
+        alternative['serializer_class'] = 'custom.FluidWriter'
+        self.replace_records(reference, 'handler-views.jsonl.gz', [view], 'summary.json')
+        report = comparison.compare(directory, reference)
+        self.assertEqual(report['counts']['matched'], 0)
+        self.assertGreater(report['counts']['unsupported'], 0)
+
     def test_native_item_projection_compares_lapotron_double_and_preserves_thirty_outputs(self):
         directory, reference, _, _ = self.native_item_capture()
         report = comparison.compare(directory, reference)

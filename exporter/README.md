@@ -68,9 +68,11 @@ are queried through their native all-recipes contract. The command's
 recipe-ID blacklist is not applied, and the summary says so.
 
 Handler views preserve ingredient, result and other-stack presentation
-categories separately. Every raw `PositionedStack.items` alternative uses
-NEI's own `StackInfo.itemStackToNBT` and `NBTJson` conversion. This JSON retains
-NEI's projection ambiguities and is independent from canonical typed NBT.
+categories separately. Every raw `PositionedStack.items` alternative retains
+detached typed item facts before one reverse dispatch through NEI's public
+serializers and `NBTJson` conversion. The native JSON retains NEI's projection
+ambiguities. Separate typed facts allow exact identity comparison without
+reconstructing NBT types from that JSON. Neither path reads display-name getters.
 Other stacks can be fuels or auxiliary presentation, not necessarily outputs.
 Native `getChance()` values are presentation data whose default can be 10000,
 not verified runtime probabilities. Exact `GTNEIDefaultHandler` records map
@@ -166,25 +168,28 @@ catalog. Counts are not a claim of complete semantics.
 ## Verification
 
 The combined Botania and independent-projection extension passed 22 Java,
-55 Python and 19 GUI tests. Actual Botania `1.13.38-GTNH` resolves in the
-consuming module. The final paired capture/import completed in 179.03 seconds.
+60 Python and 19 GUI tests. Actual Botania `1.13.38-GTNH` resolves in the
+consuming module. The final paired capture/import completed in 186.22 seconds.
 All 152 base Mana Infusion ingredient/result records agree with same-run NEI.
 Eight wildcard cases use independent pools. Eleven Mini Flower and two Magic
 Bees subclass templates remain inspectable with unresolved execution.
 GUI recipe details show exact total mana and required catalysts below the pool.
 
 Schema 3 records the selected serializer through one equivalent public reverse
-dispatch, with one call per reached handler. All 66,415 scoped projections
+dispatch, with one call per reached handler. All 62,131 scoped projections
 selected the default item serializer. The five-map GT/furnace comparison has
-53,909 matches, zero differences and zero missing recipes. This includes 8,699
-Fluid Solidifier matches and the Lapotron double-NBT case. Another 20,196 TiC
-views are unverified because null and empty-compound TGregworks NBT collapse
-in NEI's presentation. Native typed data remains distinct. Known Door failures
+78,389 matches, zero differences and zero missing recipes. This includes 28,895
+Fluid Solidifier matches and the Lapotron double-NBT case. Reference summary 2
+adds pre-conversion typed handler facts alongside the native payload. Exact
+dual-identity comparison verifies the previously ambiguous TiC and recycling
+views. Display-name reads on copies remove a proven TGregworks mutation, with
+all 133 inspected ToolRod anchors agreeing with their unified members. Null
+and empty-compound NBT stay distinct. Known Door failures
 still prevent strict completeness. Historical contexts retain their captured
 scope and original projection rules, with no retrospective inferred facts.
 
-IntelliJ completed with 59 advisory findings. Direct PMD completed against the
-actual classpath with 156 advisories and no processing/configuration errors.
+IntelliJ completed with 56 advisory findings. Direct PMD completed against the
+actual classpath with 158 advisories and no processing/configuration errors.
 The combined launcher still skips PMD because the wrapper is in this nested
 module, so its skipped result is not the direct analysis. Complexity metrics,
 Java 11 API suggestions for the Java 8 target and a nullable test-result warning
