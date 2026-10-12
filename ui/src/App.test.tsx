@@ -10,6 +10,23 @@ const status = {snapshot_id:'test-snapshot',manifest:{created_at:'2026-10-11',ca
 function response(value: unknown, code=200) { return new Response(JSON.stringify(value), {status:code,headers:{'Content-Type':'application/json'}}) }
 function page(items: unknown[]) {return {snapshot_id:'test-snapshot',items,total:items.length,limit:30,offset:0}}
 
+test('shows captured mod inventory and native lifecycle when the manifest has no pack name or capture kind', async () => {
+  const nativeStatus = {...status, manifest:{created_at:'2026-10-12',
+    pack:{mods:[{id:'gregtech',version:'5.09.54.221'},{id:'Forestry',version:'4.11.39'}],config_script_digests:[],context:'configured native registries, no observed deposit scan'},
+    capture:{lifecycle:'integrated-world-server-tick-end',client_world_attached:true,server_started:true}}}
+  vi.stubGlobal('fetch',vi.fn(async(input:string)=>{
+    const url=new URL(input,'http://localhost')
+    if(url.pathname==='/api/status')return response(nativeStatus)
+    if(url.pathname==='/api/resources' || url.pathname==='/api/environments')return response(page([]))
+    throw new Error(`Unexpected route ${url.pathname}`)
+  }))
+  render(<App/>)
+  expect(await screen.findByText('Pack identity: 2 captured mods')).toBeInTheDocument()
+  expect(screen.getByText('Capture lifecycle: integrated-world-server-tick-end')).toBeInTheDocument()
+  expect(screen.queryByText(/Name not captured|Kind not captured/)).not.toBeInTheDocument()
+  expect(screen.queryByText('Synthetic verification data')).not.toBeInTheDocument()
+})
+
 test('labels synthetic data and forwards trace controls to Dataset while retaining complete-path bounds', async () => {
   const targetResource={...resource,id:'result-id',display_name:'Test output'}
   const recipe={...process,inputs:[{role:'consume',choices:[{resource_id:resource.id,amount:1,match:{mode:'exact'}}]},...process.inputs],outputs:[{resource_id:targetResource.id,amount:1,chance:{numerator:1,denominator:1}}]}
@@ -28,6 +45,8 @@ test('labels synthetic data and forwards trace controls to Dataset while retaini
   }))
   render(<App/>)
   expect(await screen.findByText('Synthetic verification data')).toBeInTheDocument()
+  expect(screen.getByText('Pack: Synthetic contract fixture')).toBeInTheDocument()
+  expect(screen.getByText('Capture: synthetic')).toBeInTheDocument()
   fireEvent.click(screen.getByRole('button',{name:/^Trace$/}))
   const start=screen.getByLabelText('Supplied start resource')
   fireEvent.focus(start);fireEvent.change(start,{target:{value:'Test mold'}})
