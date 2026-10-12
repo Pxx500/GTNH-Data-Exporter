@@ -183,7 +183,7 @@ Fluid Solidifier matches and the Lapotron double-NBT case. Reference summary 2
 adds pre-conversion typed handler facts alongside the native payload. Exact
 dual-identity comparison verifies the previously ambiguous TiC and recycling
 views. Display-name reads on copies remove a proven TGregworks mutation, with
-all 133 inspected ToolRod anchors agreeing with their unified members. Null
+all 28,715 affected input choices agreeing with their unified members. Null
 and empty-compound NBT stay distinct. Known Door failures
 still prevent strict completeness. Historical contexts retain their captured
 scope and original projection rules, with no retrospective inferred facts.

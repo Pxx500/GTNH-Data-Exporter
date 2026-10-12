@@ -125,8 +125,9 @@ The comparator checks those facts together with the native payload. This
 verifies 20,196 additional TiC Bolt Molding and 4,284 recycling views without
 equating null and empty-compound NBT. A display-name getter in TGregworks
 mutates its argument. Reading names on detached copies removes the resulting
-false canonical variants. All 133 inspected ToolRod input anchors now agree
-with their unified group members, while genuine tagged variants stay distinct.
+false canonical variants. All 28,715 affected input choices now agree with
+their unified group members. The 4,288 removed empty-compound variants have
+retained null-NBT counterparts, while genuine tagged variants stay distinct.
 Five native recycling recipes still contain unregistered door objects after
 MalisisDoors replaces the vanilla registry entries. NEI cannot serialize
 those objects. The same five failures are counted separately in signatures,
