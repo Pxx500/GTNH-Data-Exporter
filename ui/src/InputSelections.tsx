@@ -7,7 +7,7 @@ import { ResourcePicker } from './ResourcePicker'
 export interface InputSelection {choice_index:number;resource_id:string}
 export type InputSelectionMap = Record<string,Record<string,InputSelection>>
 export function InputSelections({processes,selections,resources,onChange}: {processes:Process[];selections:InputSelectionMap;resources:ReadonlyMap<string,Resource>;onChange:(processId:string,slot:string,value:InputSelection)=>void}) {
-  return <section className="input-selections"><h4>Captured input choices</h4><p className="help">Slot indices start at 0. Select concrete members where the plan cannot resolve an off-path OR group. The Dataset validates quantity, NBT, group membership and matching.</p>
+  return <section className="input-selections"><h4>Captured input choices</h4><p className="help">Use automatic choices first. If a result reports an unresolved input, open its slot and choose an alternative and a concrete resource from search or captured group members. Slot indices start at 0. The Dataset validates quantity, NBT, group membership and matching.</p>
     {processes.map(process=><section key={process.id}><h5>{process.display_name || process.id} <code>{process.id}</code></h5>{process.inputs.map((slot,index)=><SlotSelection key={index} process={process} slotIndex={index} selected={selections[process.id]?.[String(index)]} resources={resources} onChange={value=>onChange(process.id,String(index),value)}/>)}</section>)}
   </section>
 }

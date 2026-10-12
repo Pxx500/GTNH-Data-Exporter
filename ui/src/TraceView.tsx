@@ -70,14 +70,14 @@ export function TraceView({trace,onSelect,tierOptions}: {trace: Trace;onSelect:(
         <Badge tone={route.status === 'found' ? 'good' : route.status === 'same_resource' ? '' : 'warning'}>{route.status.replaceAll('_', ' ')}</Badge>
       </div>
         {route.status === 'found' && <p className="help">{trace.path_selection === 'diverse' ? 'Results spread across target ingredient branches, including longer alternatives within the requested bounds.' : 'Results prefer the fewest qualifying process steps within the requested extra-step allowance.'} The first path has the fewest known steps. This does not optimize yield. Every tile retains its additional ingredients, machine requirements and conditions.</p>}
-      {route.status === 'not_found' && <p className="help">No connecting dependency path was found in the captured data. Coverage and unresolved mechanics still limit that conclusion.</p>}
+      {route.status === 'not_found' && <p className="help">No connecting dependency path was found in the captured data. Coverage and unresolved mechanics still limit that conclusion. Check the selected resource variants, relax intermediate filters, or raise the Advanced search bounds.</p>}
       {route.status === 'incomplete' && <p className="help">The bounded result does not establish a complete route to the target. Inspect the limits and coverage before using these records.</p>}
       {route.status === 'same_resource' && <p className="help">Zero production steps are required to identify the same resource. This does not establish its availability or quantity.</p>}
       <div className="route-endpoints"><span>Supplied start</span><ResourceRef id={trace.start_id} resources={resourceById} onSelect={selectResource}/><span>Target</span><ResourceRef id={trace.target_id} resources={resourceById} onSelect={selectResource}/></div>
       <p className="route-search-summary">Search examined {trace.search.examined_processes.toLocaleString()} processes · Server search limit {trace.search.limit.toLocaleString()} · {trace.search.truncated ? 'Search truncated' : 'Search finished within its bound'}</p>
     </section>
     {(trace.truncated || trace.limit_reasons.length > 0 || trace.search.truncated) && <div className="notice warning" role="status">
-      <strong>Bounded trace has omitted work</strong>
+      <strong>Bounded trace has omitted work</strong><p>Returned paths are candidates within this search. Raise the relevant Advanced bound or narrow your endpoints and filters to explore more. Additional recipe requirements still need supplies.</p>
       <ul className="trace-limit-reasons">{trace.limit_reasons.map(reason => <li key={reason}><code>{reason}</code><span>{limitDescriptions[reason]}</span></li>)}</ul>
       {trace.search.truncated && <p>Route search stopped at its server bound. More search work remains unexamined.</p>}
     </div>}

@@ -10,8 +10,11 @@ export function JsonData({label, value}: {label: string; value: unknown}) {
 }
 export function RequestState({loading, error, retry}: {loading: boolean; error?: string; retry?: () => void}) {
   if (loading) return <p className="loading" role="status">Loading dataset records…</p>
-  if (error) return <div className="notice error" role="alert"><strong>Could not load data</strong><p>{error}</p>{retry && <button onClick={retry}>Try again</button>}</div>
+  if (error) return <div className="notice error" role="alert"><strong>Could not load data</strong><p>{error}</p><p className="help">The request did not return a usable result. Check the message and relevant selections, then try again.</p>{retry && <button type="button" onClick={retry}>Try again</button>}</div>
   return null
+}
+export function ActionHint({reason,ready,id}: {reason?:string;ready:string;id?:string}) {
+  return <p id={id} className={`action-hint ${reason?'needs-input':'ready'}`} role="status">{reason??ready}</p>
 }
 export function ResourceRef({id, onSelect, resources}: {id: string; onSelect?: (id: string) => void; resources?: ReadonlyMap<string, Resource>}) {
   const known = resources?.get(id)

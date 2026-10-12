@@ -318,6 +318,13 @@ python/.venv/Scripts/python.exe -m gtnh_data statistics --database PATH_TO_INDEX
 
 ## Agent interface
 
+Read the [MCP query guide](MCP_GUIDE.md) for tool choices, small request examples
+and the limits of traces, balanced networks, acquisition hints and statistics.
+Connected clients can read the same packaged guide through the MCP resource
+`gtnh-data://guide/query-workflows`. The live tool schemas define arguments and
+bounds. Use selected IDs from the connected snapshot rather than copying IDs
+from another capture.
+
 Configure an MCP client to launch the virtual-environment Python with these
 arguments. Use absolute paths in the client's configuration:
 

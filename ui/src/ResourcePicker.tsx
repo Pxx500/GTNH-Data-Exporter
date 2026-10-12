@@ -68,7 +68,7 @@ export function ResourcePicker({label, selectedId, onSelect, onResolve,profileId
       {(text || selectedId) && <button type="button" className="picker-clear" aria-label={`Clear ${label}`} onClick={() => {setText(''); onSelect(''); setActiveIndex(-1); setOpen(true); input.current?.focus()}}>×</button>}
     </div>
     <div className="picker-identity" id={`${id}-identity`}>
-      {resource ? <><span>{resource.kind} · {resource.registry_name}{resource.metadata == null ? '' : ` · metadata ${resource.metadata}`} · {resource.nbt == null ? 'No NBT' : 'NBT identity present'}</span><code>Resource ID: {resource.id}</code><AcquisitionBadges resource={resource} basic={basicResourceIds.includes(resource.id)}/></> : selectedId ? <span>{hydration.loading ? 'Loading selected resource…' : `Resource ID: ${selectedId}`}</span> : <span>Select a result to use its exact resource identity.</span>}
+      {resource ? <><span>{resource.kind} · {resource.registry_name}{resource.metadata == null ? '' : ` · metadata ${resource.metadata}`} · {resource.nbt == null ? 'No NBT' : 'NBT identity present'}</span><code>Resource ID: {resource.id}</code><AcquisitionBadges resource={resource} basic={basicResourceIds.includes(resource.id)}/></> : selectedId ? <span>{hydration.loading ? 'Loading selected resource…' : `Resource ID: ${selectedId}`}</span> : <span>Type to search, then click a result or use Arrow Down and Enter. Typed text alone is not a selection.</span>}
       {hydration.error && selectedId && <span role="alert">Selected resource lookup failed: {hydration.error} <button type="button" onClick={hydration.reload}>Retry</button></span>}
     </div>
     {showMenu && <div className="picker-menu">
