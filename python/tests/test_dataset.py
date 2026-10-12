@@ -99,6 +99,34 @@ class DatasetTests(unittest.TestCase):
         self.assertTrue(trace["cycles"])
         self.assertFalse(trace["truncated"])
 
+    def test_generated_blocks_remain_inspectable_but_do_not_seed_inventory_grounding(self):
+        marker = 'generated_ore_block_not_mining_drop'
+        sources = [
+            {'id': 'generation', 'kind': 'ore_vein', 'display_name': 'configured vein',
+             'outputs': [{'resource_id': 'generated', 'resource_semantics': marker}],
+             'environment_ids': [], 'status': 'conditional', 'conditions': {'dimension': 7}, 'parameters': {}, 'provenance': {}},
+            {'id': 'drop', 'kind': 'drop', 'display_name': 'real item drop',
+             'outputs': [{'resource_id': 'real_drop', 'amount': 1}, {'resource_id': 'generated', 'resource_semantics': marker}],
+             'environment_ids': [], 'status': 'active', 'conditions': {}, 'parameters': {}, 'provenance': {}},
+        ]
+        records = [process('first', [slot(choice('start')), slot(choice('generated')), slot(choice('real_drop'))], ['middle']),
+                   process('finish', [slot(choice('middle'))], ['product', 'middle'])]
+        coverage = [{'id': 'sources', 'domain': 'acquisition', 'status': 'complete', 'records': 2,
+                     'reason': 'Synthetic source declarations are complete', 'provenance': {}}]
+        artifact = snapshot(self.root / 'capture', resources=[resource(id) for id in ('start', 'generated', 'real_drop', 'middle', 'product')],
+                            processes=records, sources=sources, coverage=coverage)
+        dataset = Dataset.import_snapshot(artifact, self.root / 'db.sqlite')
+        self.assertEqual(dataset.find_sources(resource_id='generated')['items'], [sources[1], sources[0]])
+        result = dataset.trace_processes(start_id='start', target_id='product')
+        leaves = {leaf['resource_id']: leaf for leaf in result['leaves']}
+        self.assertEqual(leaves['generated']['status'], 'unresolved')
+        self.assertEqual(leaves['generated']['sources'], ['drop', 'generation'])
+        self.assertIn('generation', leaves['generated']['reason'])
+        self.assertEqual(leaves['real_drop']['status'], 'available')
+        self.assertIn('middle', leaves)
+        self.assertIn('cycle needs', leaves['middle']['reason'])
+        self.assertEqual({row['id'] for row in result['processes']}, {'first', 'finish'})
+
     def test_opaque_dynamic_producer_keeps_an_unresolved_boundary(self):
         for with_cycle in (False, True):
             with self.subTest(with_cycle=with_cycle):

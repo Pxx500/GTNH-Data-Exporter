@@ -96,6 +96,10 @@ mining drops must remain distinguishable. `status` is `active`, `conditional`,
 Preserve native generator keys, material roles, height ranges, weights,
 dimension gates, stone/region conditions and depletion parameters.
 Relative generator weight is not a per-chunk occurrence probability.
+An output tagged `resource_semantics: generated_ore_block_not_mining_drop`
+describes a world block. It remains searchable but cannot establish inventory
+availability or seed a dependency cycle. This applies per output, so ordinary
+inventory outputs in the same source retain their own availability semantics.
 
 ### Environment
 

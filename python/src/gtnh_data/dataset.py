@@ -811,21 +811,29 @@ class Dataset:
             incomplete_sources = not source_coverage or any(record["status"] != "complete" for record in source_coverage)
             source_states = {}
             source_ids = {}
+            generation_only = set()
             unresolved_boundaries = set()
             for resource_id in resources:
                 rows = connection.execute("SELECT DISTINCT payload FROM records JOIN source_outputs ON source_outputs.source_id=records.id WHERE collection='sources' AND resource_id=? ORDER BY records.id", (resource_id,))
                 sources = [json.loads(row[0]) for row in rows]
                 source_ids[resource_id] = [source["id"] for source in sources]
+                inventory_sources = [source for source in sources if any(
+                    output['resource_id'] == resource_id
+                    and output.get('resource_semantics') != 'generated_ore_block_not_mining_drop'
+                    for output in source['outputs'])]
+                if sources and not inventory_sources:
+                    generation_only.add(resource_id)
                 if connection.execute("SELECT 1 FROM records WHERE collection='processes' AND id IN (SELECT process_id FROM outputs WHERE resource_id=?) AND (" + self._unresolved_input_clause()
                                       + " OR json_extract(payload,'$.conditions.dynamic_output')='unresolved') LIMIT 1", (resource_id,)).fetchone():
                     unresolved_boundaries.add(resource_id)
                 if resource_id == start_id:
                     source_states[resource_id] = "assumed"
-                elif any(source["status"] == "active" and not source["conditions"] for source in sources):
+                elif any(source["status"] == "active" and not source["conditions"] for source in inventory_sources):
                     source_states[resource_id] = "available"
-                elif any(source["status"] in ("active", "conditional") for source in sources):
+                elif any(source["status"] in ("active", "conditional") for source in inventory_sources):
                     source_states[resource_id] = "conditional"
-                elif any(source["status"] == "unknown" for source in sources) or incomplete_sources or resource_id in unresolved_outputs or resource_id in unresolved_boundaries:
+                elif (any(source["status"] == "unknown" for source in inventory_sources) or incomplete_sources
+                      or resource_id in generation_only or resource_id in unresolved_outputs or resource_id in unresolved_boundaries):
                     source_states[resource_id] = "unresolved"
                 else:
                     source_states[resource_id] = "no_known_source"
@@ -852,6 +860,8 @@ class Dataset:
                 leaf = {"resource_id": resource_id, "status": source_states[resource_id], "sources": source_ids[resource_id]}
                 if resource_id in cyclic_resources and resource_id not in grounded:
                     leaf["reason"] = "A cycle needs an external acquisition source or an explicit supplied seed"
+                elif resource_id in generation_only and leaf['status'] == 'unresolved':
+                    leaf['reason'] = 'Configured generation describes a world block, not a captured inventory acquisition or mining drop'
                 elif resource_id in unresolved_outputs | unresolved_boundaries and leaf["status"] == "unresolved":
                     leaf["reason"] = "Producer inputs, matching or outputs are unresolved"
                 leaves.append(leaf)
