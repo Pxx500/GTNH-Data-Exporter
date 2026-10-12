@@ -152,6 +152,25 @@ separately. Auxiliary stacks can be furnace fuel, so they do not universally
 represent products. GT-specific views retain real quantities and native
 presentation fields. Generic presentation chances are not production chances.
 
+`presentation-context.json` schema 1 binds the same snapshot and pack, plus
+the closed canonical resource/process count and hash declarations. Its pointer
+in `summary.files` contains its SHA-256. The context declares two checksummed
+gzip JSONL streams, `gt-display-aliases.jsonl.gz` and `item-pools.jsonl.gz`.
+Direct GT aliases are keyed by canonical resource ID and queried from the
+original reconstructed stack at quantity one. Item pools are keyed by registry
+name. Both retain ordered `{registry_name, metadata, nbt, amount}` entries
+with lossless typed NBT. Status distinguishes successful, empty and failed
+queries. Unregistered canonical anchors remain explicit top-level failures.
+
+Context capture runs before handler enumeration and reads no observed recipe
+views to establish expected alternatives. Scope is the four mapped GT families
+and furnace. GT aliases precede wildcard expansion, whose pool metadata and
+NBT replace the declaration's while the declared quantity is retained.
+Empty native pools follow the pinned metadata-zero presentation rule.
+The comparator uses successful records from partial context but reports its
+failures. Incomplete advertised context cannot pass validation thresholds.
+Without context, dependent alias/wildcard projections remain unsupported.
+
 The comparator validates all canonical and reference streams and the paired
 cohort before applying its version-pinned adapter allowlist. It reports
 matching, differing, missing and unsupported projections separately, with

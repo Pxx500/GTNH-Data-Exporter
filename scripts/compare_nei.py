@@ -70,6 +70,113 @@ def _records(directory, filename, files):
         raise ComparisonError(f'{filename}: record count mismatch')
 
 
+def _presentation_context(reference, summary, manifest, resources):
+    pointer = summary['files'].get('presentation-context.json')
+    if pointer is None:
+        return None, {'available': False, 'complete': False, 'failure_count': 0,
+                      'reason': 'Independent item presentation context was not captured'}
+    if not isinstance(pointer, dict) or not isinstance(pointer.get('sha256'), str):
+        raise ComparisonError('Invalid presentation-context.json pointer')
+    path = reference / 'presentation-context.json'
+    with path.open('rb') as stream:
+        if hashlib.file_digest(stream, 'sha256').hexdigest() != pointer['sha256']:
+            raise ComparisonError('presentation-context.json: checksum mismatch')
+    metadata = json.loads(path.read_text(encoding='utf-8'))
+    if type(metadata.get('schema_version')) is not int or metadata['schema_version'] != 1:
+        raise ComparisonError('Only presentation context schema version 1 is mapped')
+    if metadata.get('canonical_snapshot_id') != manifest['snapshot_id'] or metadata.get('canonical_pack') != manifest['pack']:
+        raise ComparisonError('Presentation context snapshot identity or pack/config cohort does not match')
+    expected_files = {name: manifest['files'][name] for name in ('resources.jsonl.gz', 'processes.jsonl.gz')}
+    if metadata.get('canonical_files') != expected_files:
+        raise ComparisonError('Presentation context canonical file binding does not match')
+    scope = metadata.get('scope') or {}
+    if (sorted(scope.get('gt_families', [])) != sorted(GT_FAMILIES)
+            or scope.get('furnace_family') != 'minecraft:smelting'
+            or type(scope.get('alias_template_amount')) is not int or scope['alias_template_amount'] != 1):
+        raise ComparisonError('Presentation context scope is not the pinned item adapter scope')
+    if type(metadata.get('complete')) is not bool or not isinstance(metadata.get('failures'), list):
+        raise ComparisonError('Presentation context completeness/failures were not captured')
+    aliases, pools = {}, {}
+    counts = Counter()
+    for filename, target, key, field in (
+            ('gt-display-aliases.jsonl.gz', aliases, 'resource_id', 'alternatives'),
+            ('item-pools.jsonl.gz', pools, 'registry_name', 'entries')):
+        for record in _records(reference, filename, metadata.get('files', {})):
+            id = record.get(key)
+            if not isinstance(id, str) or not id or id in target:
+                raise ComparisonError(f'{filename}: null, invalid or duplicate {key}')
+            if key == 'resource_id' and (id not in resources or resources[id]['kind'] != 'item'):
+                raise ComparisonError(f'{filename}: unresolved canonical item resource_id {id}')
+            status = record.get('status')
+            if status not in ('ok', 'empty', 'failed') or not isinstance(record.get(field), list):
+                raise ComparisonError(f'{filename}: invalid status or stack collection')
+            stacks = record[field]
+            if (status == 'ok' and not stacks) or (status != 'ok' and stacks):
+                raise ComparisonError(f'{filename}: status disagrees with stack collection')
+            if status == 'failed' and not record.get('failure'):
+                raise ComparisonError(f'{filename}: failed entry has no failure evidence')
+            if status != 'failed' and record.get('failure'):
+                raise ComparisonError(f'{filename}: successful entry has failure evidence')
+            for stack in stacks:
+                if (not isinstance(stack, dict) or not isinstance(stack.get('registry_name'), str)
+                        or not stack['registry_name'] or type(stack.get('metadata')) is not int
+                        or type(stack.get('amount')) is not int or 'nbt' not in stack):
+                    raise ComparisonError(f'{filename}: invalid typed item stack')
+                if key == 'resource_id' and stack['amount'] != 1:
+                    raise ComparisonError(f'{filename}: alias is not a quantity-one template')
+            target[id] = record
+            counts[filename + ':' + status] += 1
+    entry_failures = [{'stream': name, key: id, 'failure': record['failure']}
+                      for name, mapping, key in (('gt-display-aliases.jsonl.gz', aliases, 'resource_id'),
+                                                 ('item-pools.jsonl.gz', pools, 'registry_name'))
+                      for id, record in mapping.items() if record['status'] == 'failed']
+    failures = len(metadata['failures']) + len(entry_failures)
+    if failures and metadata['complete']:
+        raise ComparisonError('Presentation context claims complete despite captured failures')
+    return {'aliases': aliases, 'pools': pools, 'failures': metadata['failures']}, {
+        'available': True, 'complete': metadata['complete'], 'failure_count': failures,
+        'failures': metadata['failures'], 'entry_failures': entry_failures, 'failure_unit': 'events, not distinct affected recipes',
+        'entry_counts': dict(counts), 'readiness': metadata.get('readiness')}
+
+
+def _context_items(context):
+    if context is not None:
+        for mapping, field in ((context['aliases'], 'alternatives'), (context['pools'], 'entries')):
+            for record in mapping.values():
+                for stack in record[field]:
+                    yield dict(stack, kind='item')
+
+
+def _item_presentation(resource_id, resource, amount, unify, context):
+    declared = [dict(resource, amount=amount)]
+    if unify:
+        if context is None:
+            raise Unsupported('Independent GT display alias context was not captured')
+        record = context['aliases'].get(resource_id)
+        if record is None:
+            raise Unsupported(f'GT display alias context is missing for {resource_id}')
+        if record['status'] != 'ok':
+            raise Unsupported(f'GT display alias context is {record["status"]} for {resource_id}: {_json(record.get("failure"))}')
+        declared = [dict(stack, kind='item', amount=amount) for stack in record['alternatives']]
+    expanded = []
+    for stack in declared:
+        if stack['metadata'] != 32767:
+            expanded.append(stack)
+            continue
+        if context is None:
+            raise Unsupported('Independent NEI wildcard item pool was not captured')
+        pool = context['pools'].get(stack['registry_name'])
+        if pool is None:
+            raise Unsupported(f'NEI wildcard item pool is missing for {stack["registry_name"]}')
+        if pool['status'] == 'failed':
+            raise Unsupported(f'NEI wildcard item pool failed for {stack["registry_name"]}: {_json(pool["failure"])}')
+        if pool['status'] == 'empty':
+            expanded.append(dict(stack, metadata=0))
+        else:
+            expanded.extend(dict(entry, kind='item', amount=amount) for entry in pool['entries'])
+    return expanded
+
+
 def _typed_nbt(tag):
     if tag is None:
         return None
@@ -188,7 +295,7 @@ def _view_projection(view, profile, ambiguous):
     return _projection([positioned(value) for value in view['ingredients']], [positioned(value) for value in outputs])
 
 
-def _canonical_projection(process, profile, resources, groups, identities, ambiguous):
+def _canonical_projection(process, profile, resources, ambiguous, context):
     _, adapter, render_real, unify_output = profile
     conditions = process.get('conditions', {})
     if conditions.get('dynamic_output') == 'unresolved':
@@ -196,48 +303,46 @@ def _canonical_projection(process, profile, resources, groups, identities, ambig
     if adapter == 'gt' and conditions.get('special_items') is not None:
         raise Unsupported('GT special-slot presentation is not mapped')
 
-    def alternatives(resource_id, group_id, amount, unify, *, is_input=False):
+    def alternatives(resource_id, amount, unify, *, is_input=False):
+        if resource_id is None:
+            raise Unsupported('Declared native item has no registered canonical resource anchor')
         resource = resources[resource_id]
-        if resource['kind'] == 'item' and resource['metadata'] == 32767:
-            raise Unsupported('NEI wildcard permutation presentation is not mapped')
-        ids = [resource_id]
-        if unify and resource['kind'] == 'item':
-            group = groups.get(group_id or 'unified:' + resource_id)
-            if group is None or group['kind'] != 'unified':
-                raise Unsupported('Persisted GT unification display alternatives are unavailable')
-            ids = group['members']
+        stacks = _item_presentation(resource_id, resource, amount, unify, context) if resource['kind'] == 'item' else [dict(resource, amount=amount)]
         entries = []
-        for id in ids:
-            identity = identities[id]
-            if isinstance(identity, tuple):
-                raise Unsupported(identity[0])
+        for stack in stacks:
+            identity = _resource_identity(stack)
             if identity in ambiguous:
                 raise Unsupported('Ambiguous identity: different typed NBT resources have the same NBTJson projection')
-            display_amount = 1 if (adapter == 'furnace' and is_input) or (resource['kind'] == 'item' and not render_real) else amount
+            display_amount = 1 if (adapter == 'furnace' and is_input) or (stack['kind'] == 'item' and not render_real) else stack['amount']
             entries.append([identity, display_amount])
-        return entries
+        return entries, stacks[0]['amount'] if resource['kind'] == 'item' and stacks else None
 
-    inputs = []
-    for slot in process['inputs']:
-        entries, native_amounts, kinds = [], set(), set()
-        for choice in slot['choices']:
-            match = choice['match']
-            if choice.get('resource_id') is None or match['mode'] not in ('exact', 'unified'):
-                raise Unsupported('Ingredient display predicate/declared alternatives are not mapped')
-            resource = resources[choice['resource_id']]
-            amount = choice.get('native_amount', choice['amount'])
-            native_amounts.add(amount)
-            kinds.add(resource['kind'])
-            entries.extend(alternatives(choice['resource_id'], match.get('group_id'), amount, adapter == 'gt', is_input=True))
-        if adapter == 'gt' and kinds == {'item'} and len(native_amounts) != 1:
-            raise Unsupported('Per-alternative real quantity differs and positioned representative is not mapped')
-        probability = _chance(slot.get('consumption_chance')) if adapter == 'gt' else None
-        inputs.append(_slot(entries, probability, next(iter(native_amounts)) if adapter == 'gt' and kinds == {'item'} else None))
     outputs = []
     for output in process['outputs']:
-        entries = alternatives(output['resource_id'], None, output['amount'], adapter == 'gt' and unify_output)
+        entries, first_amount = alternatives(output['resource_id'], output['amount'], adapter == 'gt' and unify_output)
         kind = resources[output['resource_id']]['kind']
-        outputs.append(_slot(entries, _chance(output['chance']) if adapter == 'gt' else None, output['amount'] if adapter == 'gt' and kind == 'item' else None))
+        outputs.append(_slot(entries, _chance(output['chance']) if adapter == 'gt' else None, first_amount if adapter == 'gt' and kind == 'item' else None))
+    try:
+        inputs = []
+        for slot in process['inputs']:
+            entries, kinds, first_amount = [], set(), None
+            for choice in slot['choices']:
+                if choice['match']['mode'] not in ('exact', 'unified', 'ore_dict', 'wildcard'):
+                    if choice.get('resource_id') is None:
+                        raise Unsupported('Declared native item has no registered canonical resource anchor')
+                    raise Unsupported('Ingredient display predicate/declared alternatives are not mapped')
+                amount = choice.get('native_amount', choice['amount'])
+                choices, representative = alternatives(choice.get('resource_id'), amount, adapter == 'gt', is_input=True)
+                if not entries:
+                    first_amount = representative
+                entries.extend(choices)
+                kinds.add(resources[choice['resource_id']]['kind'])
+            probability = _chance(slot.get('consumption_chance')) if adapter == 'gt' else None
+            inputs.append(_slot(entries, probability, first_amount if adapter == 'gt' and kinds == {'item'} else None))
+    except Unsupported as error:
+        # Known outputs bind an unresolved input projection to its reference case.
+        error.output_key = _output_key({'outputs': outputs})
+        raise
     return _projection(inputs, outputs)
 
 
@@ -312,14 +417,22 @@ def compare(snapshot, reference, *, example_limit=20):
     del signature_indexes
     finish_phase('reference_signatures')
     resources = {record['id']: record for record in _records(snapshot, 'resources.jsonl.gz', manifest['files'])}
-    groups = {record['id']: record for record in _records(snapshot, 'groups.jsonl.gz', manifest['files'])}
-    identities, typed_identities = {}, defaultdict(set)
-    for id, resource in resources.items():
+    for _ in _records(snapshot, 'groups.jsonl.gz', manifest['files']):
+        pass
+    context, context_report = _presentation_context(reference, summary, manifest, resources)
+    typed_identities = defaultdict(set)
+    for resource in resources.values():
         try:
-            identities[id] = _resource_identity(resource)
-            typed_identities[identities[id]].add(_json([resource['kind'], resource['registry_name'], resource['metadata'], resource['nbt']]))
-        except Unsupported as error:
-            identities[id] = (str(error),)
+            identity = _resource_identity(resource)
+            typed_identities[identity].add(_json([resource['kind'], resource['registry_name'], resource['metadata'], resource['nbt']]))
+        except Unsupported:
+            pass
+    for resource in _context_items(context):
+        try:
+            identity = _resource_identity(resource)
+            typed_identities[identity].add(_json(['item', resource['registry_name'], resource['metadata'], resource['nbt']]))
+        except Unsupported:
+            pass
     ambiguous = {identity for identity, typed in typed_identities.items() if len(typed) > 1}
     del typed_identities
     finish_phase('canonical_resources_and_groups')
@@ -361,6 +474,8 @@ def compare(snapshot, reference, *, example_limit=20):
     finish_phase('reference_views_projection')
     catalog = defaultdict(dict)
     output_index = defaultdict(set)
+    unresolved_outputs = defaultdict(list)
+    unresolved_anchors = defaultdict(list)
     for process in _records(snapshot, 'processes.jsonl.gz', manifest['files']):
         counts['canonical_records'] += 1
         applicable = [profile for profile in profiles if profile[0] == process['family']]
@@ -372,12 +487,24 @@ def compare(snapshot, reference, *, example_limit=20):
             continue
         for profile in applicable:
             try:
-                projection = _canonical_projection(process, profile, resources, groups, identities, ambiguous)
+                projection = _canonical_projection(process, profile, resources, ambiguous, context)
                 key = _json(projection)
                 catalog[profile].setdefault(key, {'projection': projection, 'process_ids': []})['process_ids'].append(process['id'])
                 output_index[(profile, _output_key(projection))].add(key)
             except Unsupported as error:
                 unsupported(str(error), {'side': 'canonical', 'process_id': process['id'], 'family': process['family']})
+                unresolved = {'process_id': process['id'], 'reason': str(error)}
+                if hasattr(error, 'output_key'):
+                    unresolved_outputs[(profile, error.output_key)].append(unresolved)
+                else:
+                    try:
+                        anchors = {_resource_identity(resources[output['resource_id']]) for output in process['outputs']}
+                        if anchors and not anchors.intersection(ambiguous) and all(json.loads(identity)[2] != 32767 for identity in anchors):
+                            unresolved['anchors'] = anchors
+                            for identity in anchors:
+                                unresolved_anchors[(profile, identity)].append(unresolved)
+                    except (Unsupported, KeyError):
+                        pass
     finish_phase('canonical_recipe_projection')
     seen, uncertain = set(), set()
     for view, profile, projection in normalized_views:
@@ -387,8 +514,19 @@ def compare(snapshot, reference, *, example_limit=20):
             counts['matched'] += 1
             seen.add((profile, exact))
             continue
-        candidates = output_index.get((profile, _output_key(projection)), set())
-        if len(candidates) == 1:
+        output_key = _output_key(projection)
+        candidates = output_index.get((profile, output_key), set())
+        unresolved = list(unresolved_outputs.get((profile, output_key), []))
+        output_identities = {json.loads(entry)[0] for slot in projection['outputs'] for entry in slot['alternatives']}
+        # Direct canonical output anchors only identify unresolved boundaries.
+        # They never establish expected alternatives or a successful match.
+        unresolved.extend(item for identity in output_identities for item in unresolved_anchors.get((profile, identity), [])
+                          if item['anchors'] <= output_identities)
+        if unresolved:
+            unsupported('Canonical presentation dependencies are unresolved: ' + ' | '.join(sorted({item['reason'] for item in unresolved})),
+                        {'side': 'nei', **detail, 'canonical_process_ids': sorted({item['process_id'] for item in unresolved})[:example_limit]})
+            uncertain.update((profile, key) for key in candidates)
+        elif len(candidates) == 1:
             key = next(iter(candidates))
             candidate = catalog[profile][key]
             counts['differences'] += 1
@@ -422,6 +560,7 @@ def compare(snapshot, reference, *, example_limit=20):
     return {'schema_version': 1, 'canonical_snapshot_id': manifest['snapshot_id'], 'scope': SOURCE_SCOPE, 'counts': dict(counts),
             'unsupported_reasons': dict(reasons), 'examples': examples, 'example_limit': example_limit,
             'reference_complete': summary.get('complete') is True, 'capture_failures': capture_failures,
+            'presentation_context': context_report,
             'capture_failure_unit': 'events, not distinct affected recipes',
             'mapped_profiles': [list(profile) for profile in sorted(profiles)], 'ambiguous_resource_projections': len(ambiguous),
             'ambiguous_canonical_candidates': len(uncertain - seen),
@@ -455,13 +594,16 @@ def main(argv=None):
         passed = (counts['matched'] + counts['differences'] > 0
                   and counts['missing_canonical'] + counts['missing_nei'] <= args.max_missing and counts['differences'] <= args.max_differences
                   and report['capture_failures'] <= args.max_capture_failures and report['reference_complete']
+                  and (not report['presentation_context']['available'] or report['presentation_context']['complete'])
                   and (args.max_unsupported is None or counts['unsupported'] <= args.max_unsupported))
         report['thresholds'] = {'max_missing': args.max_missing, 'max_differences': args.max_differences,
                                 'max_capture_failures': args.max_capture_failures, 'max_unsupported': args.max_unsupported, 'passed': passed}
         args.report.parent.mkdir(parents=True, exist_ok=True)
         args.report.write_text(_json(report) + '\n', encoding='utf-8')
         print(_json({'scope': 'Mapped NEI presentation only', 'counts': counts, 'capture_failures': report['capture_failures'],
-                     'reference_complete': report['reference_complete'], 'thresholds_passed': passed, 'report': str(args.report)}))
+                     'reference_complete': report['reference_complete'],
+                     'presentation_context': {key: report['presentation_context'][key] for key in ('available', 'complete', 'failure_count')},
+                     'thresholds_passed': passed, 'report': str(args.report)}))
         return 0 if passed else 1
     except (ComparisonError, OSError, ValueError, KeyError, TypeError, EOFError) as error:
         args.report.parent.mkdir(parents=True, exist_ok=True)

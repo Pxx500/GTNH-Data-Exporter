@@ -55,14 +55,19 @@ public final class SnapshotWriter implements Closeable {
 
     public long count(String collection) { return counts.get(collection); }
 
-    public void publish(JsonObject manifest) throws IOException {
-        close();
+    JsonObject fileDeclarations() throws IOException {
+        if (!closed) throw new IllegalStateException("Snapshot streams must be closed before declaring files");
         JsonObject files = new JsonObject();
         for (String name : COLLECTIONS) {
             String filename = name + ".jsonl.gz";
             files.add(filename, Jsons.object("sha256", sha256(directory.resolve(filename)), "records", counts.get(name)));
         }
-        manifest.add("files", files);
+        return files;
+    }
+
+    public void publish(JsonObject manifest) throws IOException {
+        close();
+        manifest.add("files", fileDeclarations());
         Path temporary = directory.resolve("manifest.json.tmp");
         Files.write(temporary, JSON.toJson(manifest).getBytes(StandardCharsets.UTF_8), StandardOpenOption.CREATE_NEW);
         Files.move(temporary, directory.resolve("manifest.json"), StandardCopyOption.ATOMIC_MOVE);

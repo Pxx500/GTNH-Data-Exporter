@@ -122,6 +122,7 @@ public final class DataExporterMod {
                 manifest.getAsJsonObject("capture").addProperty("pause_on_lost_focus", client.gameSettings.pauseOnLostFocus);
                 if (neiReference) {
                     writer.close();
+                    manifest.add("files", writer.fileDeclarations());
                     pendingManifest = manifest;
                     pendingDirectory = directory;
                     // Volatile handoff publishes the completed server capture to the client thread.

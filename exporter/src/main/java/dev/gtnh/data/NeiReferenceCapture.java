@@ -49,6 +49,7 @@ final class NeiReferenceCapture implements Closeable {
     private long failedSignatures;
     private long failedViews;
     private long failedStacks;
+    private JsonObject presentationContext;
     private boolean closed;
 
     private NeiReferenceCapture(Path directory) throws IOException {
@@ -73,6 +74,7 @@ final class NeiReferenceCapture implements Closeable {
     static void capture(Path directory, JsonObject manifest) throws IOException {
         if (!isReady()) throw new IllegalStateException("NEI reference capture requested before NEI/item readiness");
         try (NeiReferenceCapture reference = new NeiReferenceCapture(directory)) {
+            reference.presentationContext = NeiPresentationContext.capture(directory, manifest);
             List<ICraftingHandler> handlers = new ArrayList<>(GuiCraftingRecipe.craftinghandlers);
             int parallelCount = handlers.size();
             handlers.addAll(new ArrayList<>(GuiCraftingRecipe.serialCraftingHandlers));
@@ -218,6 +220,7 @@ final class NeiReferenceCapture implements Closeable {
             String filename = name + ".jsonl.gz";
             files.add(filename, object("records", counts.get(name), "sha256", SnapshotWriter.sha256(directory.resolve(filename))));
         }
+        files.add("presentation-context.json", presentationContext);
         JsonObject summary = object("schema_version", 1, "canonical_snapshot_id", manifest.get("snapshot_id"),
             "canonical_pack", manifest.get("pack"), "created_at", Instant.now().toString(),
             "counts", object("handlers", counts.get("handlers"), "signatures", counts.get("signatures"),

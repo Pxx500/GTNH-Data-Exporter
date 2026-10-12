@@ -52,6 +52,11 @@ The fresh `nei-reference/` child contains `handlers.jsonl.gz`,
 `signatures.jsonl.gz`, `handler-views.jsonl.gz` and `summary.json`. These are
 separate from the six canonical streams. The summary binds the same canonical
 snapshot ID and pack/config digest cohort, plus per-file checksums and counts.
+It also checksums `presentation-context.json`, which binds closed canonical
+resource/process files and declares independent `gt-display-aliases.jsonl.gz`
+and `item-pools.jsonl.gz` streams. Context uses direct original GT anchors and
+the public NEI item pools before handler enumeration. It preserves ordered
+quantities and typed NBT rather than deriving alternatives from recipe views.
 Handler errors, empty queries and projection failures remain distinct. A
 completed partial reference can publish with `complete=false`. Fatal I/O or a
 deadline failure exits with code 2 without a canonical manifest.
@@ -149,6 +154,18 @@ rules and captured config digests. Referenced resources are not a full NEI
 catalog. Counts are not a claim of complete semantics.
 
 ## Verification
+
+The independent presentation extension passed all ten Java tests and a
+fresh paired game capture in 176.56 seconds. Typed NBT reconstruction covers
+native types 0 through 11, long bounds, empty typed lists and malformed values.
+Closed stream declarations remain available before delayed publication.
+Context checksum/count tests reject altered input before native queries.
+IntelliJ completed with 46 advisories. The combined audit's PMD launcher
+failed because `Get-FileHash` was unavailable in its environment. Direct PMD
+with the same rules, actual exported classpath and Java 1.8 parser completed
+with 96 advisories across production and test sources and no processing or
+configuration errors. Complexity and existing style findings remain advisory.
+This preserves the failed launcher evidence rather than declaring it healthy.
 
 The bounded EnderIO adapter has a pure probability boundary test covering
 threshold zero, one-half, one, negative values and unsupported nonfinite

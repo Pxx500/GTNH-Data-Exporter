@@ -107,13 +107,21 @@ quantities and alternatives, and NEI's NBT projection loses type information.
 Neither signature agreement nor display agreement proves pack-wide execution
 semantics. See [FORMAT.md](FORMAT.md) for the reference contract.
 
-The paired full-pack run on 2026-10-12 captured 366 handlers and 284,358
-views/signatures in a 277.35-second pipeline. Comparison took about 11 seconds
-and found 44,923 matching projections, 26 differences and 148 views without
-a supported canonical match. Five recipes caused both stack and signature
-capture failures, so the reference is incomplete and validation fails.
-The remaining discrepancies include unmapped ingredient and wildcard display
-behavior. They are investigation results, not confirmed missing recipes.
+The latest paired full-pack run on 2026-10-12 captured 366 handlers and 287,513
+views/signatures in a 176.56-second pipeline. Independent item presentation
+context retains 32,109 original GT alias queries and 223 NEI item pools,
+with exact typed NBT and binding to the closed canonical streams.
+The scoped comparison finds 45,209 matching projections, no differences
+and no missing matches. Earlier runs reported 26 differences and 148 missing
+matches before the alias/wildcard presentation rules were mapped.
+Semantic case accounting confirms 173 earlier observations now match.
+One Lapotron Crystal case remains explicitly unsupported because Java's
+floating-point NBT display formatting is not mapped. It is not a missing recipe.
+Five native recycling recipes still contain unregistered door objects after
+MalisisDoors replaces the vanilla registry entries. NEI cannot serialize
+those objects. Their errors remain explicit, and two scoped canonical anchors
+also make presentation context incomplete. Validation therefore still fails
+its completeness thresholds. This does not establish whole-pack equivalence.
 The comparator exits 1 for failed thresholds and 2 for invalid evidence.
 
 ## Human interface
