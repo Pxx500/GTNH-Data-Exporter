@@ -97,6 +97,25 @@ class TransportTests(unittest.TestCase):
             self.assertEqual(client.get("/api/unknown").status_code, 404)
             self.assertIn("fixture SPA", client.get("/deep/link").text)
 
+    def test_http_rejects_unknown_path_selection_instead_of_ignoring_it(self):
+        with TestClient(create_app(self.dataset)) as client:
+            response = client.get('/api/trace', params={'start_id': 'a', 'target_id': 'b', 'path_selection': 'unknown'})
+            self.assertEqual(response.status_code, 400)
+
+    def test_http_and_cli_share_explicit_path_selection_and_defaults(self):
+        for selection in ('diverse', 'shortest'):
+            with self.subTest(selection=selection):
+                arguments = dict(start_id='a', target_id='b', path_selection=selection)
+                expected = self.dataset.trace_processes(**arguments)
+                with TestClient(create_app(self.dataset)) as client:
+                    self.assertEqual(client.get('/api/trace', params=arguments).json(), expected)
+                output = StringIO()
+                with redirect_stdout(output):
+                    result = main(['trace', '--database', str(self.database), '--start-id', 'a', '--target-id', 'b',
+                                   '--path-selection', selection])
+                self.assertEqual(result, 0)
+                self.assertEqual(json.loads(output.getvalue()), expected)
+
     def test_http_and_cli_forward_recipe_voltage_filters_without_inferring_machine_tiers(self):
         arguments = dict(start_id='a', target_id='b', min_tier=0, max_tier=3, unknown_tier_policy='exclude')
         expected = self.dataset.trace_processes(**arguments)
@@ -177,6 +196,9 @@ class TransportTests(unittest.TestCase):
                 async with ClientSession(read_stream, write_stream, read_timeout_seconds=10) as session:
                     await session.initialize()
                     tools = await session.list_tools()
+                    trace_schema = next(tool.input_schema for tool in tools.tools if tool.name == 'trace_processes')
+                    self.assertEqual(trace_schema['properties']['path_selection'], {'enum': ['diverse', 'shortest'], 'default': 'diverse'})
+                    self.assertEqual(trace_schema['properties']['max_extra_steps']['default'], 6)
                     loop_schema = next(tool.input_schema for tool in tools.tools if tool.name == 'find_loops')
                     for parameter, maximum in [('max_depth', 20), ('max_processes', 1000), ('max_states', 50000)]:
                         self.assertEqual(loop_schema['properties'][parameter]['maximum'], maximum)
@@ -201,6 +223,11 @@ class TransportTests(unittest.TestCase):
                     self.assertEqual([item["id"] for item in result.structured_content["items"]], ["a"])
                     result = await session.call_tool("trace_processes", {"start_id": "a", "target_id": "b"})
                     self.assertEqual(result.structured_content, self.dataset.trace_processes(start_id="a", target_id="b"))
+                    for selection in ('diverse', 'shortest'):
+                        selection_arguments = {'start_id': 'a', 'target_id': 'b', 'path_selection': selection}
+                        result = await session.call_tool('trace_processes', selection_arguments)
+                        self.assertFalse(result.is_error)
+                        self.assertEqual(result.structured_content, self.dataset.trace_processes(**selection_arguments))
                     arguments = {'start_id': 'a', 'target_id': 'b', 'required_resource_ids': ['a', 'middle'],
                                  'excluded_resource_ids': ['excluded'], 'max_paths': 2, 'max_extra_steps': 0}
                     result = await session.call_tool('trace_processes', arguments)

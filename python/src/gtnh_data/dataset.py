@@ -16,6 +16,7 @@ from collections import deque
 from contextlib import contextmanager
 from functools import lru_cache
 from fractions import Fraction
+from heapq import heappop, heappush
 from pathlib import Path
 
 COLLECTIONS = ("resources", "groups", "processes", "sources", "environments", "coverage")
@@ -705,7 +706,7 @@ class Dataset:
         return ((filters['min_tier'] is None or tier >= filters['min_tier'])
                 and (filters['max_tier'] is None or tier <= filters['max_tier']))
 
-    def _find_paths(self, connection, start_id, target_id, max_depth, max_processes, max_paths, required, excluded, max_extra_steps, tier_filter=None):
+    def _find_paths_shortest(self, connection, start_id, target_id, max_depth, max_processes, max_paths, required, excluded, max_extra_steps, tier_filter=None):
         search = {"examined_processes": 0, "limit": 10000, "examined_states": 0, "state_limit": 20000,
                   "expansion_work": 0, "work_limit": 100000, "enumeration_work": 0, "enumeration_limit": 100000,
                   "queued_states": 0, "peak_queue": 0, "truncated": False}
@@ -881,10 +882,335 @@ class Dataset:
         duplicates = [{"representative_id": id, "duplicate_ids": sorted(duplicate_ids[id])} for id in sorted(admitted & duplicate_ids.keys())]
         return route, paths, search, sorted(reasons), duplicates
 
+    def _find_paths(self, connection, start_id, target_id, max_depth, max_processes, max_paths,
+                    required, excluded, max_extra_steps, tier_filter, path_selection):
+        if path_selection == 'shortest':
+            return (*self._find_paths_shortest(connection, start_id, target_id, max_depth, max_processes,
+                max_paths, required, excluded, max_extra_steps, tier_filter), [])
+        primary = self._find_paths_shortest(connection, start_id, target_id, max_depth, max_processes,
+            1, required, excluded, 0, dict(tier_filter))
+        route, paths, primary_search, primary_reasons, primary_duplicates = primary
+        if start_id == target_id or required & excluded or start_id in excluded or target_id in excluded:
+            return (*primary, [])
+        primary_limit_reasons = set(primary_reasons) - {'path_limit'}
+        reasons = set()
+        scope = min(max_depth, len(paths[0]['process_ids']) + max_extra_steps) if paths else max_depth
+        records, choices, fingerprints, duplicate_ids, graph, reverse_cache = {}, {}, {}, {}, {}, {}
+        seen_tiers = set()
+        search = {'examined_processes': 0, 'limit': 10000, 'examined_states': 0, 'state_limit': 40000,
+                  'expansion_work': 0, 'work_limit': 100000, 'enumeration_work': 0, 'enumeration_limit': 100000,
+                  'queued_states': 0, 'peak_queue': 0, 'truncated': False, 'primary': primary_search,
+                  'source': {'depth_limit': 2, 'process_limit': 2000, 'examined_resources': 0, 'examined_processes': 0,
+                             'scope': 'forward_seed_only_reverse_discovery_continues', 'process_limit_reached': False},
+                  'discovery': {'queued_states': 0, 'examined_states': 0, 'state_limit': 20000, 'pending_states': 0},
+                  'enumeration': {'queued_states': 0, 'examined_states': 0, 'state_limit': 20000, 'work': 0, 'work_limit': 100000,
+                                  'pending_states': 0, 'variant_pool_limit': 1000, 'deferred_variants': 0, 'peak_deferred_variants': 0}}
+
+        def read(row):
+            pid = row['id']
+            if pid not in records:
+                if len(records) >= search['limit']:
+                    reasons.add('search_process_limit')
+                    return None
+                records[pid] = json.loads(row['payload'])
+            record = records[pid]
+            if not self._tier_allowed(record, tier_filter):
+                if pid not in seen_tiers:
+                    key = 'excluded_unknown' if self._recipe_tier(record)['tier'] is None else 'excluded_out_of_range'
+                    tier_filter[key] += 1
+                    seen_tiers.add(pid)
+                return None
+            if record['executable'] is False or record['conditions'].get('dynamic_output') == 'unresolved':
+                return None
+            captured = {k: v for k, v in record.items() if k != 'id'}
+            captured['provenance'] = {k: v for k, v in record['provenance'].items() if k != 'index'}
+            representative = fingerprints.setdefault(_json(captured), pid)
+            if representative != pid:
+                duplicate_ids.setdefault(representative, set()).add(pid)
+            return records[representative]
+
+        for path in paths:
+            for pid in path['process_ids']:
+                read({'id': pid, 'payload': _json(self._record(connection, 'processes', pid))})
+
+        def inputs(slot):
+            ids = set()
+            if slot['role'] != 'consume':
+                return ids
+            for choice in slot['choices']:
+                match = choice['match']
+                if (choice['amount'] <= 0 or match['mode'] == 'native_unknown'
+                        or match['mode'] in ('unified', 'ore_dict') and not match.get('group_id')):
+                    continue
+                key = _json({'resource_id': choice.get('resource_id'), 'match': match})
+                if key not in choices:
+                    choices[key] = set(self._choice_resources(connection, choice)) - excluded
+                    search['expansion_work'] += len(choices[key])
+                if search['expansion_work'] > search['work_limit']:
+                    reasons.add('search_work_limit')
+                    return set()
+                ids.update(choices[key])
+            return ids
+
+        def edge(source, pid, output):
+            graph.setdefault(source, set()).add((pid, output))
+            search['expansion_work'] += 1
+            if search['expansion_work'] > search['work_limit']:
+                reasons.add('search_work_limit')
+
+        jobs = []
+        rows = connection.execute("SELECT id,payload FROM records WHERE collection='processes' AND id IN "
+                                  '(SELECT process_id FROM outputs WHERE resource_id=?) ORDER BY id', (target_id,))
+        job_keys = set()
+        for row in rows:
+            record = read(row)
+            if record is None or not any(o['resource_id'] == target_id and self._positive_output(o) for o in record['outputs']):
+                continue
+            for si, slot in enumerate(record['inputs']):
+                candidates = inputs(slot)
+                key = record['id'], si
+                if not candidates or key in job_keys:
+                    continue
+                job_keys.add(key)
+                jobs.append({'pid': record['id'], 'slot': si, 'candidates': candidates,
+                             'queue': deque((id, 1) for id in sorted(candidates)), 'seen': set(candidates)})
+                for id in candidates:
+                    edge(id, record['id'], target_id)
+                search['discovery']['queued_states'] += len(candidates)
+        search['discovery']['pending_states'] = search['discovery']['queued_states']
+        search['peak_queue'] = search['discovery']['pending_states']
+        if len(paths) < max_paths:
+            source_queue, source_seen = deque([(start_id, 0)]), {start_id}
+            while source_queue and len(records) < search['source']['process_limit']:
+                rid, depth = source_queue.popleft()
+                if depth >= min(2, scope):
+                    continue
+                search['source']['examined_resources'] += 1
+                clause, values = self._using_clause(connection, rid)
+                rows = connection.execute("SELECT id,payload FROM records WHERE collection='processes' AND " + clause + ' ORDER BY id', values)
+                for row in rows:
+                    if len(records) >= search['source']['process_limit']:
+                        break
+                    record = read(row)
+                    if record is None or not any(rid in inputs(slot) for slot in record['inputs']):
+                        continue
+                    for output in record['outputs']:
+                        dest = output['resource_id']
+                        if not self._positive_output(output) or dest in excluded:
+                            continue
+                        edge(rid, record['id'], dest)
+                        if dest not in source_seen:
+                            source_seen.add(dest)
+                            source_queue.append((dest, depth + 1))
+                if 'search_work_limit' in reasons:
+                    break
+            search['source']['examined_processes'] = len(records)
+            search['source']['process_limit_reached'] = bool(source_queue and len(records) >= search['source']['process_limit'])
+            while any(job['queue'] for job in jobs):
+                for job in jobs:
+                    if not job['queue']:
+                        continue
+                    rid, depth = job['queue'].popleft()
+                    search['discovery']['pending_states'] -= 1
+                    search['discovery']['examined_states'] += 1
+                    if depth >= scope:
+                        if scope == max_depth and connection.execute('SELECT 1 FROM outputs WHERE resource_id=? LIMIT 1', (rid,)).fetchone():
+                            reasons.add('depth')
+                        continue
+                    if rid not in reverse_cache:
+                        entries = set()
+                        rows = connection.execute("SELECT id,payload FROM records WHERE collection='processes' AND id IN "
+                                                  '(SELECT process_id FROM outputs WHERE resource_id=?) ORDER BY id', (rid,))
+                        for row in rows:
+                            record = read(row)
+                            if record is None or not any(o['resource_id'] == rid and self._positive_output(o) for o in record['outputs']):
+                                continue
+                            for slot in record['inputs']:
+                                entries.update((record['id'], id) for id in inputs(slot))
+                            if reasons & {'search_process_limit', 'search_work_limit'}:
+                                break
+                        reverse_cache[rid] = entries
+                    for pid, input_id in sorted(reverse_cache[rid]):
+                        edge(input_id, pid, rid)
+                        if input_id not in job['seen']:
+                            if search['discovery']['queued_states'] >= search['discovery']['state_limit']:
+                                reasons.add('search_state_limit')
+                                continue
+                            job['seen'].add(input_id)
+                            job['queue'].append((input_id, depth + 1))
+                            search['discovery']['queued_states'] += 1
+                            search['discovery']['pending_states'] += 1
+                            search['peak_queue'] = max(search['peak_queue'], search['discovery']['pending_states'])
+                    if reasons & {'search_process_limit', 'search_work_limit'}:
+                        break
+                if reasons & {'search_process_limit', 'search_work_limit'}:
+                    break
+
+        def candidates(job):
+            adjacency, backwards = {}, {}
+            for source, entries in graph.items():
+                allowed = [(pid, dest) for pid, dest in sorted(entries) if dest != target_id
+                           or job['pid'] is None or pid == job['pid'] and source in job['candidates']]
+                adjacency[source] = allowed
+                for _, dest in allowed:
+                    backwards.setdefault(dest, set()).add(source)
+            distance = {target_id: 0}
+            queue = deque([target_id])
+            while queue:
+                dest = queue.popleft()
+                for source in backwards.get(dest, ()):
+                    if source not in distance:
+                        distance[source] = distance[dest] + 1
+                        queue.append(source)
+            if start_id not in distance:
+                return
+            if search['enumeration']['queued_states'] >= search['enumeration']['state_limit']:
+                reasons.add('search_state_limit')
+                return
+            heap = [(distance[start_id], 0, (start_id,), ())]
+            search['enumeration']['queued_states'] += 1
+            search['enumeration']['pending_states'] += 1
+            turn_work = 0
+            while heap:
+                _, depth, resource_ids, process_ids = heappop(heap)
+                search['enumeration']['pending_states'] -= 1
+                search['enumeration']['examined_states'] += 1
+                for pid, dest in adjacency.get(resource_ids[-1], ()):
+                    search['enumeration']['work'] += 1
+                    turn_work += 1
+                    if turn_work >= 128:
+                        turn_work = 0
+                        yield None
+                    if search['enumeration']['work'] > search['enumeration']['work_limit']:
+                        reasons.add('search_enumeration_limit')
+                        return
+                    if dest in resource_ids or pid in process_ids or depth + 1 + distance.get(dest, scope + 1) > scope:
+                        continue
+                    rr, pp = resource_ids + (dest,), process_ids + (pid,)
+                    if dest == target_id:
+                        if required <= set(rr):
+                            yield {'resource_ids': list(rr), 'process_ids': list(pp)}
+                    else:
+                        if search['enumeration']['queued_states'] >= search['enumeration']['state_limit']:
+                            reasons.add('search_state_limit')
+                            continue
+                        heappush(heap, (depth + 1 + distance[dest], depth + 1, rr, pp))
+                        search['enumeration']['queued_states'] += 1
+                        search['enumeration']['pending_states'] += 1
+                        search['peak_queue'] = max(search['peak_queue'], search['enumeration']['pending_states'])
+
+        if not paths:
+            for path in candidates({'pid': None, 'candidates': set()}):
+                if path is not None:
+                    if len(path['process_ids']) <= max_processes:
+                        paths.append(path)
+                        scope = min(max_depth, len(path['process_ids']) + max_extra_steps)
+                    else:
+                        reasons.add('path_process_limit')
+                    break
+        admitted = {id for path in paths for id in path['process_ids']}
+        signatures = {_json(path) for path in paths}
+        spines = {tuple(path['resource_ids']) for path in paths}
+        def covered(job):
+            return [i for i, path in enumerate(paths) if path['process_ids'] and path['process_ids'][-1] == job['pid']
+                    and path['resource_ids'][-2] in job['candidates']]
+        for job in jobs:
+            job['iterator'] = candidates(job)
+            job['finished'] = False
+            job['deferred'] = deque()
+        def admit(path):
+            nonlocal scope, admitted, signatures, spines
+            next_scope = min(scope, len(path['process_ids']) + max_extra_steps)
+            kept = [p for p in paths if len(p['process_ids']) <= next_scope]
+            if paths and len(path['process_ids']) < min(len(p['process_ids']) for p in paths):
+                included, retained = set(path['process_ids']), [path]
+                for previous in sorted(kept, key=lambda p: len(p['process_ids'])):
+                    union = included | set(previous['process_ids'])
+                    if len(union) <= max_processes:
+                        included = union
+                        retained.append(previous)
+                    else:
+                        reasons.add('path_process_limit')
+                kept = retained
+            else:
+                included = {id for p in kept for id in p['process_ids']} | set(path['process_ids'])
+                kept.append(path)
+            if len(included) > max_processes:
+                reasons.add('path_process_limit')
+                return False
+            if len(path['process_ids']) > next_scope:
+                return False
+            paths[:] = kept
+            scope, admitted = next_scope, included
+            signatures = {_json(p) for p in paths}
+            spines = {tuple(p['resource_ids']) for p in paths}
+            return True
+        while len(paths) < max_paths and any(not job['finished'] or job['deferred'] for job in jobs):
+            progress, active_work = False, False
+            unrepresented = [job for job in jobs if not covered(job) and not job['finished']]
+            for job in sorted(unrepresented or jobs, key=lambda job: (len(covered(job)), job['pid'], job['slot'])):
+                if job['finished']:
+                    continue
+                for path in job['iterator']:
+                    if path is None:
+                        active_work = True
+                        break
+                    signature = _json(path)
+                    if signature in signatures:
+                        continue
+                    if tuple(path['resource_ids']) in spines and covered(job):
+                        if search['enumeration']['deferred_variants'] < search['enumeration']['variant_pool_limit']:
+                            job['deferred'].append(path)
+                            search['enumeration']['deferred_variants'] += 1
+                            search['enumeration']['peak_deferred_variants'] = max(search['enumeration']['peak_deferred_variants'], search['enumeration']['deferred_variants'])
+                        else:
+                            reasons.add('search_variant_limit')
+                        continue
+                    if admit(path):
+                        progress = True
+                        break
+                else:
+                    job['finished'] = True
+                if len(paths) >= max_paths:
+                    break
+            if not progress and not active_work:
+                for job in sorted(jobs, key=lambda job: (len(covered(job)), job['pid'], job['slot'])):
+                    while job['deferred']:
+                        path = job['deferred'].popleft()
+                        search['enumeration']['deferred_variants'] -= 1
+                        if _json(path) not in signatures and admit(path):
+                            progress = True
+                            break
+                    if len(paths) >= max_paths:
+                        break
+                if not progress:
+                    if any(not job['finished'] for job in jobs):
+                        continue
+                    break
+        if len(paths) >= max_paths:
+            reasons.add('path_limit')
+        reasons.update(primary_limit_reasons)
+        if paths:
+            paths.sort(key=lambda path: len(path['process_ids']))
+            route.update(status='found', **paths[0])
+        elif reasons:
+            route['status'] = 'incomplete'
+        branches = [{'target_process_id': job['pid'], 'slot_index': job['slot'], 'candidate_resources': len(job['candidates']),
+                     'paths': len(covered(job)), 'path_indices': covered(job),
+                     'status': 'represented' if covered(job) else 'not_discovered'} for job in jobs]
+        search.update(examined_processes=len(records), examined_states=search['discovery']['examined_states'] + search['enumeration']['examined_states'],
+                      queued_states=search['discovery']['queued_states'] + search['enumeration']['queued_states'],
+                      enumeration_work=search['enumeration']['work'], truncated=bool(reasons))
+        duplicates = [{"representative_id": id, "duplicate_ids": sorted(duplicate_ids[id])} for id in sorted(admitted & duplicate_ids.keys())]
+        duplicates.extend(item for item in primary_duplicates if item['representative_id'] not in duplicate_ids)
+        return route, paths, search, sorted(reasons), duplicates, branches
+
     def trace_processes(self, *, start_id, target_id, max_depth=12, max_processes=300, max_paths=8,
-                        required_resource_ids=None, excluded_resource_ids=None, max_extra_steps=2,
-                        min_tier=None, max_tier=None, unknown_tier_policy='exclude'):
+                        required_resource_ids=None, excluded_resource_ids=None, max_extra_steps=6,
+                        min_tier=None, max_tier=None, unknown_tier_policy='exclude', path_selection='diverse'):
         tier_filter = self._tier_filter(min_tier, max_tier, unknown_tier_policy)
+        if path_selection not in ('diverse', 'shortest'):
+            raise DatasetError('path_selection must be diverse or shortest')
         if isinstance(max_depth, bool) or not isinstance(max_depth, int) or not 1 <= max_depth <= 64:
             raise DatasetError("max_depth must be between 1 and 64")
         if isinstance(max_processes, bool) or not isinstance(max_processes, int) or not 1 <= max_processes <= 5000:
@@ -906,7 +1232,7 @@ class Dataset:
             processes = {}
             edges = {}
             input_slots = {}
-            route, paths, search, limit_reasons, duplicates = self._find_paths(connection, start_id, target_id, max_depth, max_processes, max_paths, required, excluded, max_extra_steps, tier_filter)
+            route, paths, search, limit_reasons, duplicates, branches = self._find_paths(connection, start_id, target_id, max_depth, max_processes, max_paths, required, excluded, max_extra_steps, tier_filter, path_selection)
             unresolved = set()
 
             def admit(id):
@@ -1032,7 +1358,8 @@ class Dataset:
                     "resources": [resources[id] for id in sorted(resources)], "processes": [processes[id] for id in sorted(processes)],
                       "edges": edges_list, "leaves": leaves, "cycles": cycles, "truncated": bool(limit_reasons), "coverage": coverage,
                       "route": route, "paths": paths, "search": search, "limit_reasons": sorted(limit_reasons), "duplicate_process_records": duplicates,
-                      'tier_filter': tier_filter, 'recipe_tiers': [self._recipe_tier(processes[id]) for id in sorted(processes)]}
+                      'tier_filter': tier_filter, 'recipe_tiers': [self._recipe_tier(processes[id]) for id in sorted(processes)],
+                      'path_selection': path_selection, 'branch_coverage': branches}
 
     def _choice_resources(self, connection, choice):
         match = choice["match"]
@@ -1186,7 +1513,7 @@ class Dataset:
         secondary = self.trace_processes(start_id=byproduct_id, target_id=return_id,
             max_depth=max_depth, max_processes=max_processes, max_paths=max_paths,
             max_extra_steps=max_extra_steps, min_tier=min_tier, max_tier=max_tier,
-            unknown_tier_policy=unknown_tier_policy)
+            unknown_tier_policy=unknown_tier_policy, path_selection='shortest')
         with self._connect() as connection:
             for pid, slots in selections.items():
                 record = self._record(connection, 'processes', pid)

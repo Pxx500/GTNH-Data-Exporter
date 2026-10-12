@@ -192,24 +192,28 @@ footer { text-align: center; color: #8593a5; font-size: 10px; padding: 12px 24px
 @media (prefers-reduced-motion: no-preference) { .loading { animation: pulse 1.6s ease-in-out infinite; } @keyframes pulse { 50% { opacity: .55; } } }
 .route-endpoints { display: grid; grid-template-columns: auto minmax(0, 1fr) auto minmax(0, 1fr); gap: 10px; align-items: start; margin: 16px 0; font-size: 11px; color: var(--muted); }
 .recipe-tile { position: relative; z-index: 1; border: 2px solid #a7cfc0; background: white; border-radius: 10px; overflow: hidden; box-shadow: 0 2px 5px #2747370a; }
-.recipe-tile-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; background: #edf7f2; padding: 6px 10px; border-bottom: 1px solid #d6e8df; }
+.recipe-tile-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; background: #edf7f2; padding: 4px 8px; border-bottom: 1px solid #d6e8df; }
 .recipe-tile-toolbar button { margin-left: auto; font-size: 12px; padding: 3px 6px; }
-.recipe-tile .process-detail { padding: 10px; }
+.recipe-tile .process-detail { padding: 8px; }
 .recipe-tile .detail-title .eyebrow, .recipe-tile .detail-title code, .recipe-tile .resource-ref code { display: none; }
 .recipe-tile .detail-title h3 { font-size: 19px; line-height: 1.2; margin-bottom: 3px; overflow-wrap: anywhere; }
 .recipe-tile .eyebrow { font-size: 11px; letter-spacing: .6px; margin-bottom: 3px; }
 .recipe-tile .detail-title code { font-size: 9px; }
-.recipe-tile .metrics { padding: 7px; margin: 8px 0; }
+.recipe-tile .metrics { padding: 6px; margin: 6px 0; }
 .recipe-tile .metrics dt { font-size: 12px; }
 .recipe-tile .metrics dd { font-size: 13px; line-height: 1.25; margin-top: 1px; overflow-wrap: anywhere; }
-.recipe-tile .recipe-io { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; }
-.recipe-tile h4 { font-size: 14px; margin: 7px 0; }
+.recipe-tile .recipe-io { display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; }
+.recipe-tile h4 { font-size: 14px; margin: 4px 0; }
 .recipe-tile h4 span { font-size: 12px; line-height: 1.3; margin-top: 3px; }
-.recipe-tile .slot-list { gap: 6px; }
-.recipe-tile .slot-heading { padding: 5px 6px; font-size: 13px; gap: 4px; flex-wrap: wrap; }
+.recipe-tile .slot-list { display: flex; flex-wrap: wrap; gap: 4px; }
+.recipe-tile .slot-list > .slot { flex: 1 1 150px; min-width: 0; }
+.recipe-tile .slot-heading { padding: 4px 5px; font-size: 13px; gap: 4px; flex-wrap: wrap; }
 .recipe-tile .slot-heading small { font-size: 11px; }
-.recipe-tile .choice { padding: 6px; }
-.recipe-tile .choice-meta { flex-wrap: wrap; margin-top: 4px; gap: 4px; }
+.recipe-tile .choice { padding: 5px; }
+.recipe-tile .choice:has(> .resource-ref) { display: grid; grid-template-columns: minmax(0, 1fr) fit-content(140px); gap: 3px 6px; align-items: start; }
+.recipe-tile .choice > .choice-or, .recipe-tile .choice > .group { grid-column: 1 / -1; }
+.recipe-tile .choice-meta { flex-wrap: wrap; margin-top: 0; gap: 4px; }
+.recipe-tile .choice-meta button { padding: 2px 4px; }
 .recipe-tile .resource-ref, .recipe-tile .text-button { font-size: 15px; line-height: 1.3; overflow-wrap: anywhere; max-width: 100%; }
 .recipe-tile .resource-ref code { font-size: 8px; margin-top: 2px; }
 .recipe-tile .quantity { font-size: 13px; }
@@ -221,8 +225,8 @@ footer { text-align: center; color: #8593a5; font-size: 10px; padding: 12px 24px
 .choice-or { display: block; color: #607898; font-size: 9px; font-weight: 700; letter-spacing: .8px; margin-bottom: 5px; }
 @media (max-width: 800px) { .route-endpoints { grid-template-columns: auto minmax(0, 1fr); } }
 .free-recipe-graph { height: 760px; min-width: 0; background: #f7f9fc; }
-.free-recipe-graph .react-flow__node-recipe { width: 480px; }
-.free-recipe-graph .recipe-tile { width: 100%; }
+.free-recipe-graph .react-flow__node-recipe { width: max-content; }
+.free-recipe-graph .recipe-tile { width: max-content; min-width: 280px; max-width: 420px; }
 .recipe-tile-toolbar { cursor: grab; }
 .recipe-tile-toolbar:active { cursor: grabbing; }
 .path-muted { opacity: .35; }

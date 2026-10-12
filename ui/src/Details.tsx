@@ -35,7 +35,7 @@ function Chance({value, label = 'Chance'}: {value: Output['chance']; label?: str
   return <Badge>{label} {text}</Badge>
 }
 export function OutputRows({outputs, onSelect, resources, onRecycle}: {outputs: Output[]; onSelect?: (id: string) => void; resources?: ReadonlyMap<string, Resource>;onRecycle?:(id:string)=>void}) {
-  return <div className="output-list">{outputs.map((output, index) => <div className="choice" key={index}><ResourceRef id={output.resource_id} onSelect={onSelect} resources={resources}/><div className="choice-meta"><Amount value={output.amount}/><Chance value={output.chance}/>{onRecycle && <button onClick={()=>onRecycle(output.resource_id)} aria-label={`Recycle output ${output.resource_id}`}>Use as recycle output</button>}</div><JsonData label="Output fields" value={output}/></div>)}</div>
+  return <div className="output-list">{outputs.map((output, index) => <div className="choice" key={index}><ResourceRef id={output.resource_id} onSelect={onSelect} resources={resources}/><div className="choice-meta"><Amount value={output.amount}/><Chance value={output.chance}/>{onRecycle && <button onClick={()=>onRecycle(output.resource_id)} aria-label={`Recycle output ${output.resource_id}`}>Recycle output</button>}</div><JsonData label="Output fields" value={output}/></div>)}</div>
 }
 export function ProcessDetail({process, onSelect, resources, onRecycle}: {process: Process; onSelect?: (id: string) => void; resources?: ReadonlyMap<string, Resource>;onRecycle?:(id:string)=>void}) {
   const roles: Record<string, string> = {presence: 'Required presence', tool: 'Tool'}

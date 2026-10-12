@@ -39,7 +39,7 @@ test('labels synthetic data and forwards trace controls to Dataset while retaini
     if(url.pathname.startsWith('/api/resources/'))return response({snapshot_id:'test-snapshot',item:url.pathname.endsWith('result-id') ? targetResource : resource})
     if(url.pathname==='/api/trace'){
       traceCalls.push(url)
-      return response({snapshot_id:'test-snapshot',start_id:resource.id,target_id:targetResource.id,resources:[resource,targetResource],processes:[recipe],edges:[],leaves:[],cycles:[],truncated:true,coverage:status.coverage,route:{status:'found',strategy:'shortest_known_dependency_path',resource_ids:[resource.id,targetResource.id],process_ids:[recipe.id]},paths:[{resource_ids:[resource.id,targetResource.id],process_ids:[recipe.id]}],search:{examined_processes:37,limit:1000,truncated:false},limit_reasons:['path_process_limit']})
+      return response({branch_coverage:[],path_selection:'shortest',snapshot_id:'test-snapshot',start_id:resource.id,target_id:targetResource.id,resources:[resource,targetResource],processes:[recipe],edges:[],leaves:[],cycles:[],truncated:true,coverage:status.coverage,route:{status:'found',strategy:'shortest_known_dependency_path',resource_ids:[resource.id,targetResource.id],process_ids:[recipe.id]},paths:[{resource_ids:[resource.id,targetResource.id],process_ids:[recipe.id]}],search:{examined_processes:37,limit:1000,truncated:false},limit_reasons:['path_process_limit']})
     }
     throw new Error(`Unexpected route ${url.pathname}`)
   }))
@@ -48,6 +48,9 @@ test('labels synthetic data and forwards trace controls to Dataset while retaini
   expect(screen.getByText('Pack: Synthetic contract fixture')).toBeInTheDocument()
   expect(screen.getByText('Capture: synthetic')).toBeInTheDocument()
   fireEvent.click(screen.getByRole('button',{name:/^Trace$/}))
+  expect(screen.getByLabelText('Route selection')).toHaveValue('diverse')
+  expect(screen.getByLabelText('Additional steps')).toHaveValue(6)
+  expect(screen.getByLabelText('Maximum processes')).toHaveValue(150)
   const start=screen.getByLabelText('Supplied start resource')
   fireEvent.focus(start);fireEvent.change(start,{target:{value:'Test mold'}})
   fireEvent.click(await screen.findByRole('option',{name:/Test mold/}))
@@ -58,6 +61,7 @@ test('labels synthetic data and forwards trace controls to Dataset while retaini
   fireEvent.change(screen.getByLabelText('Maximum processes'),{target:{value:'25'}})
   fireEvent.change(screen.getByLabelText('Paths'),{target:{value:'4'}})
   fireEvent.change(screen.getByLabelText('Additional steps'),{target:{value:'3'}})
+  fireEvent.change(screen.getByLabelText('Route selection'),{target:{value:'shortest'}})
   fireEvent.change(screen.getByLabelText('Minimum recipe voltage tier'),{target:{value:'1'}})
   fireEvent.change(screen.getByLabelText('Maximum recipe voltage tier'),{target:{value:'3'}})
   fireEvent.change(screen.getByLabelText('Unknown recipe voltage'),{target:{value:'include'}})
@@ -69,6 +73,7 @@ test('labels synthetic data and forwards trace controls to Dataset while retaini
   expect(traceCalls[0].searchParams.get('max_processes')).toBe('25')
   expect(traceCalls[0].searchParams.get('max_paths')).toBe('4')
   expect(traceCalls[0].searchParams.get('max_extra_steps')).toBe('3')
+  expect(traceCalls[0].searchParams.get('path_selection')).toBe('shortest')
   expect(traceCalls[0].searchParams.get('min_tier')).toBe('1')
   expect(traceCalls[0].searchParams.get('max_tier')).toBe('3')
   expect(traceCalls[0].searchParams.get('unknown_tier_policy')).toBe('include')
@@ -88,7 +93,7 @@ test('concrete intermediate tags forward repeated IDs and changing filters inval
     if(url.pathname.startsWith('/api/resources/'))return response({snapshot_id:'test-snapshot',item:catalog.find(item=>item.id===decodeURIComponent(url.pathname.split('/').pop()!))})
     if(url.pathname==='/api/trace'){
       calls.push(url)
-      return response({snapshot_id:'test-snapshot',start_id:catalog[0].id,target_id:catalog[1].id,resources:catalog,processes:[],edges:[],leaves:[],cycles:[],truncated:false,coverage:[],route:{status:'not_found',strategy:'shortest_known_dependency_path',resource_ids:[],process_ids:[]},paths:[],search:{examined_processes:5,limit:10000,truncated:false},limit_reasons:[]})
+      return response({branch_coverage:[],path_selection:'shortest',snapshot_id:'test-snapshot',start_id:catalog[0].id,target_id:catalog[1].id,resources:catalog,processes:[],edges:[],leaves:[],cycles:[],truncated:false,coverage:[],route:{status:'not_found',strategy:'shortest_known_dependency_path',resource_ids:[],process_ids:[]},paths:[],search:{examined_processes:5,limit:10000,truncated:false},limit_reasons:[]})
     }
     throw new Error(`Unexpected route ${url.pathname}`)
   }))
@@ -131,7 +136,7 @@ test('typing iron dust and iron plate selects concrete IDs, and later editing in
     if (url.pathname === '/api/resources') return response(page(url.searchParams.get('q') === 'iron dust' ? [dust] : url.searchParams.get('q') === 'iron plate' ? [plate] : []))
     if (url.pathname === '/api/environments') return response(page([]))
     if (url.pathname.startsWith('/api/resources/')) return response({snapshot_id:'test-snapshot',item:decodeURIComponent(url.pathname.split('/').pop()!) === dust.id ? dust : plate})
-    if (url.pathname === '/api/trace') {calls.push(url); return response({snapshot_id:'test-snapshot',start_id:dust.id,target_id:plate.id,resources:[],processes:[],edges:[],leaves:[],cycles:[],truncated:false,coverage:[],route:{status:'not_found',strategy:'shortest_known_dependency_path',resource_ids:[],process_ids:[]},search:{examined_processes:0,limit:1000,truncated:false},limit_reasons:[],paths:[]})}
+    if (url.pathname === '/api/trace') {calls.push(url); return response({branch_coverage:[],path_selection:'shortest',snapshot_id:'test-snapshot',start_id:dust.id,target_id:plate.id,resources:[],processes:[],edges:[],leaves:[],cycles:[],truncated:false,coverage:[],route:{status:'not_found',strategy:'shortest_known_dependency_path',resource_ids:[],process_ids:[]},search:{examined_processes:0,limit:1000,truncated:false},limit_reasons:[],paths:[]})}
     throw new Error(`Unexpected route ${url.pathname}`)
   }))
   render(<App/>)

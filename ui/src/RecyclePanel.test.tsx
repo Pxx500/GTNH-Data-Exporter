@@ -8,7 +8,7 @@ afterEach(()=>{cleanup();vi.unstubAllGlobals()})
 const resources:Resource[]=['Start','Product','Byproduct','Circuit'].map((display_name,index)=>({id:`r${index}`,kind:'item',registry_name:`test:r${index}`,metadata:index,nbt:null,display_name,provenance:{}}))
 const main:Process={id:'main',family:'test',display_name:'Main converter',inputs:[{role:'consume',choices:[{resource_id:'r0',amount:1,match:{mode:'exact'}}]}],outputs:[{resource_id:'r1',amount:1,chance:{numerator:1,denominator:1}},{resource_id:'r2',amount:2,chance:{numerator:1,denominator:1}}],duration_ticks:20,eu_per_tick:4,amperage:1,executable:true,conditions:{},provenance:{}}
 const path={resource_ids:['r0','r1'],process_ids:['main']}
-const trace:Trace={snapshot_id:'fixture',start_id:'r0',target_id:'r1',resources,processes:[main],edges:[],leaves:[],cycles:[],truncated:false,coverage:[],route:{status:'found',strategy:'shortest_known_dependency_path',...path},paths:[path],search:{examined_processes:1,limit:10000,truncated:false},limit_reasons:[]}
+const trace:Trace={branch_coverage:[],path_selection:'diverse',snapshot_id:'fixture',start_id:'r0',target_id:'r1',resources,processes:[main],edges:[],leaves:[],cycles:[],truncated:false,coverage:[],route:{status:'found',strategy:'shortest_known_dependency_path',...path},paths:[path],search:{examined_processes:1,limit:10000,truncated:false},limit_reasons:[]}
 const r=(numerator:number)=>({numerator,denominator:1})
 const ledger={status:'complete',yield_mode:'guaranteed',consumed:{r0:r(1)},produced:{r0:r(2)},net:{r0:r(1)},presence:{r3:r(1)},unsupported:[],assumptions:[]}
 const startup={required_start_stock:{r0:r(1)},final_stock:{r0:r(2)},feasible:true}

@@ -39,7 +39,7 @@ function Flow({trace, highlight, inspect, inspectResource,recycle,recycleProcess
   const initialNodes = useMemo(() => {
     const membership = new Map<string,number[]>()
     trace.paths.forEach((path,index) => path.process_ids.forEach(id => membership.set(id,[...(membership.get(id) ?? []),index])))
-    return [...membership].map(([id,paths]) => ({id,type:'recipe' as const,position:{x:0,y:0},style:{width:480},dragHandle:'.recipe-tile-toolbar',data:{process:trace.processes.find(process=>process.id===id)!,resources,paths,muted:false,inspect,inspectResource,recycle:recycleProcesses && !recycleProcesses.includes(id) ? undefined : recycle}}))
+    return [...membership].map(([id,paths]) => ({id,type:'recipe' as const,position:{x:0,y:0},dragHandle:'.recipe-tile-toolbar',data:{process:trace.processes.find(process=>process.id===id)!,resources,paths,muted:false,inspect,inspectResource,recycle:recycleProcesses && !recycleProcesses.includes(id) ? undefined : recycle}}))
   },[trace,resources,inspect,inspectResource,recycle,recycleProcesses])
   const [nodes,setNodes,onNodesChange] = useNodesState<RecipeNode>(initialNodes)
   const loadedTrace = useRef(trace)
@@ -51,13 +51,13 @@ function Flow({trace, highlight, inspect, inspectResource,recycle,recycleProcess
   const connections = useMemo(()=>[...pathConnections(trace),...(attachments??[]).map(link=>({...link,id:JSON.stringify(['attached',link.source,link.target,link.resourceId]),paths:[0,1]}))],[trace,attachments])
   const edges: Edge[] = useMemo(()=>connections.map(link=>({id:link.id,source:link.source,target:link.target,label:('label' in link ? `${link.label}: ` : '')+(resources.get(link.resourceId)?.display_name || resources.get(link.resourceId)?.registry_name || link.resourceId),markerEnd:{type:MarkerType.ArrowClosed},style:{stroke:highlight===null || link.paths.includes(highlight) ? '#087c70' : '#bac5ce',strokeWidth:highlight===null || link.paths.includes(highlight) ? 2.5 : 1},labelStyle:{fontSize:11,fill:'#38596c'},labelBgPadding:[7,4] as [number,number],labelBgBorderRadius:4})),[connections,resources,highlight])
   const arrange = useCallback(() => {
-    const graph = new dagre.graphlib.Graph().setGraph({rankdir:'TB',nodesep:85,ranksep:100,marginx:40,marginy:40}).setDefaultEdgeLabel(()=>({}))
+    const graph = new dagre.graphlib.Graph().setGraph({rankdir:'TB',nodesep:40,ranksep:60,marginx:24,marginy:24}).setDefaultEdgeLabel(()=>({}))
     const current = getNodes()
-    if(current.length!==initialNodes.length || current.some(node=>!initialNodes.some(expected=>expected.id===node.id))) return false
-    current.forEach(node=>graph.setNode(node.id,{width:node.measured?.width ?? 480,height:node.measured?.height ?? 320}))
+    if(current.length!==initialNodes.length || current.some(node=>!initialNodes.some(expected=>expected.id===node.id) || !node.measured?.width || !node.measured?.height)) return false
+    current.forEach(node=>graph.setNode(node.id,{width:node.measured!.width!,height:node.measured!.height!}))
     connections.forEach(edge=>graph.setEdge(edge.source,edge.target))
     dagre.layout(graph)
-    setNodes(current.map(node=>{const point=graph.node(node.id);return {...node,position:{x:point.x-(node.measured?.width ?? 480)/2,y:point.y-(node.measured?.height ?? 320)/2}}}))
+    setNodes(current.map(node=>{const point=graph.node(node.id);return {...node,position:{x:point.x-node.measured!.width!/2,y:point.y-node.measured!.height!/2}}}))
     requestAnimationFrame(()=>{void fitView({padding:.16,maxZoom:.9})})
     return true
   },[getNodes,setNodes,connections,fitView,initialNodes])

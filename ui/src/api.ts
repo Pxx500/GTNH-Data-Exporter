@@ -27,6 +27,8 @@ export interface Page<T> { snapshot_id: string; items: T[]; total: number; limit
 export interface Single<T> { snapshot_id: string; item: T }
 export interface Status { snapshot_id: string; manifest: Record<string, unknown>; counts: Record<string, number>; coverage: Coverage[] }
 export interface Trace {
+  path_selection: 'diverse' | 'shortest'
+  branch_coverage: {target_process_id:string;slot_index:number;candidate_resources:number;paths:number;path_indices:number[];status:'represented'|'not_discovered'}[]
   snapshot_id: string; start_id: string; target_id: string; resources: Resource[]; processes: Process[]
   edges: { source: string; target: string; role: string; [key: string]: unknown }[]
   leaves: { resource_id: string; status: string; sources: string[]; reason?: string }[]
@@ -34,7 +36,7 @@ export interface Trace {
   route: {status: 'found' | 'not_found' | 'incomplete' | 'same_resource'; strategy: 'shortest_known_dependency_path'; resource_ids: string[]; process_ids: string[]}
   paths: {resource_ids: string[]; process_ids: string[]}[]
   search: {examined_processes: number; limit: number; truncated: boolean}
-  limit_reasons: ('depth' | 'search_process_limit' | 'path_limit' | 'path_process_limit' | 'search_state_limit' | 'search_work_limit' | 'search_enumeration_limit')[]
+  limit_reasons: ('depth' | 'search_process_limit' | 'path_limit' | 'path_process_limit' | 'search_state_limit' | 'search_work_limit' | 'search_enumeration_limit' | 'search_variant_limit')[]
   tier_filter?: TierOptions & {active:boolean;excluded_unknown:number;excluded_out_of_range:number}
   recipe_tiers?: {process_id:string;status:'known'|'unknown';tier:number|null;name:string|null;scope:string;reason?:string}[]
 }

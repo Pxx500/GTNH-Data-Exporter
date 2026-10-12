@@ -14,6 +14,7 @@ const limitDescriptions: Record<Trace['limit_reasons'][number],string> = {
   search_state_limit:'Search reached the server state-search bound. More candidate paths remain unexamined.',
   search_work_limit:'Search reached the server work bound. More candidate paths remain unexamined.',
   search_enumeration_limit:'Search reached the server path-enumeration bound. More candidate paths remain unexamined.',
+  search_variant_limit:'Search reached its deferred recipe-variant bound while looking for different material routes. Further routes and recipe variants may remain unexamined.',
   path_limit:'Search reached the requested path count. Increase Paths to request additional alternatives.',
   path_process_limit:'An additional complete path exceeded Maximum processes. Increase that bound to include more paths.',
 }
@@ -67,7 +68,7 @@ export function TraceView({trace,onSelect,tierOptions}: {trace: Trace;onSelect:(
         </div>
         <Badge tone={route.status === 'found' ? 'good' : route.status === 'same_resource' ? '' : 'warning'}>{route.status.replaceAll('_', ' ')}</Badge>
       </div>
-      {route.status === 'found' && <p className="help">Paths are searched by fewest qualifying process steps, within the requested extra-step allowance. This does not optimize yield. Every tile retains its additional ingredients, machine requirements and conditions.</p>}
+        {route.status === 'found' && <p className="help">{trace.path_selection === 'diverse' ? 'Results spread across target ingredient branches, including longer alternatives within the requested bounds.' : 'Results prefer the fewest qualifying process steps within the requested extra-step allowance.'} The first path has the fewest known steps. This does not optimize yield. Every tile retains its additional ingredients, machine requirements and conditions.</p>}
       {route.status === 'not_found' && <p className="help">No connecting dependency path was found in the captured data. Coverage and unresolved mechanics still limit that conclusion.</p>}
       {route.status === 'incomplete' && <p className="help">The bounded result does not establish a complete route to the target. Inspect the limits and coverage before using these records.</p>}
       {route.status === 'same_resource' && <p className="help">Zero production steps are required to identify the same resource. This does not establish its availability or quantity.</p>}
@@ -79,7 +80,7 @@ export function TraceView({trace,onSelect,tierOptions}: {trace: Trace;onSelect:(
       <ul className="trace-limit-reasons">{trace.limit_reasons.map(reason => <li key={reason}><code>{reason}</code><span>{limitDescriptions[reason]}</span></li>)}</ul>
       {trace.search.truncated && <p>Route search stopped at its server bound. More search work remains unexamined.</p>}
     </div>}
-    <div className="trace-summary"><Badge>{trace.paths.length} complete paths</Badge><Badge>{route.process_ids.length} primary path steps</Badge><Badge>{trace.processes.length} included processes</Badge><Badge>{trace.resources.length} included resources</Badge><Badge tone={trace.cycles.length ? 'warning' : ''}>{trace.cycles.length} cycle groups</Badge><code>Snapshot {trace.snapshot_id}</code></div>
+      <div className="trace-summary"><Badge>{trace.paths.length} complete paths</Badge><Badge>{route.process_ids.length} primary path steps</Badge>{trace.branch_coverage.length>0 && <Badge>{trace.branch_coverage.filter(branch=>branch.status==='represented').length}/{trace.branch_coverage.length} target ingredient branches</Badge>}<Badge>{trace.processes.length} included processes</Badge><Badge>{trace.resources.length} included resources</Badge><Badge tone={trace.cycles.length ? 'warning' : ''}>{trace.cycles.length} cycle groups</Badge><code>Snapshot {trace.snapshot_id}</code></div>
       {trace.tier_filter?.active && <div className="notice"><strong>Recipe voltage filter</strong><p>Minimum {trace.tier_filter.min_tier ?? 'any'} · Maximum {trace.tier_filter.max_tier ?? 'any'} · Unknown tiers {trace.tier_filter.unknown_tier_policy} · {trace.tier_filter.excluded_unknown} unknown and {trace.tier_filter.excluded_out_of_range} outside-range recipes excluded.</p></div>}
       {selectedProcess && graphTrace.recipe_tiers && <p className="help">Selected recipe voltage: {graphTrace.recipe_tiers.find(item=>item.process_id===selectedProcess.id)?.name ?? 'Unknown'} · This is not a machine capability estimate.</p>}
 

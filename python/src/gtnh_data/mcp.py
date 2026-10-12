@@ -42,8 +42,9 @@ OPERATIONS = {
     "find_sources": ("Find configured acquisition sources, not observed world deposits", _schema({"resource_id": OPTIONAL_STRING, "environment_id": OPTIONAL_STRING, **PAGING})),
     "get_source": ("Read an exact acquisition source, conditions, parent links and provenance", _schema({"id": STRING}, ("id",))),
     "find_environments": ("Search the registered environment catalog", _schema({"q": STRING, **PAGING})),
-    "trace_processes": ("Find complete shortest-first consume dependency paths with required or excluded materials. Full recipe inputs remain requirements. Not an inventory, yield or throughput proof", _schema({"start_id": STRING, "target_id": STRING, "max_depth": {"type": "integer", "minimum": 1, "maximum": 64, "default": 12}, "max_processes": {"type": "integer", "minimum": 1, "maximum": 5000, "default": 300},
-                            "max_paths": {"type": "integer", "minimum": 1, "maximum": 100, "default": 8}, "max_extra_steps": {"type": "integer", "minimum": 0, "maximum": 64, "default": 2},
+    "trace_processes": ("Find bounded diverse or shortest consume dependency paths with required or excluded materials. Diverse selection spreads routes across target ingredients. Full recipe inputs remain requirements. Not an inventory, yield or throughput proof", _schema({"start_id": STRING, "target_id": STRING, "max_depth": {"type": "integer", "minimum": 1, "maximum": 64, "default": 12}, "max_processes": {"type": "integer", "minimum": 1, "maximum": 5000, "default": 300},
+                            "max_paths": {"type": "integer", "minimum": 1, "maximum": 100, "default": 8}, "max_extra_steps": {"type": "integer", "minimum": 0, "maximum": 64, "default": 6},
+                            "path_selection": {"enum": ["diverse", "shortest"], "default": "diverse"},
                             "required_resource_ids": {"type": "array", "items": STRING}, "excluded_resource_ids": {"type": "array", "items": STRING}, **TIERS}, ("start_id", "target_id"))),
 }
 

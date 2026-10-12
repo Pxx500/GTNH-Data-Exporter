@@ -383,7 +383,18 @@ database model or matcher.
 
 `{snapshot_id, start_id, target_id, resources, processes, edges, leaves,
 cycles, truncated, coverage, route, paths, search, limit_reasons,
-duplicate_process_records}`
+duplicate_process_records, path_selection, branch_coverage}`
+
+`path_selection` is `diverse` by default, or `shortest`. Diverse selection
+spreads emitted dependency paths across consumed input-slot branches at the
+target. Those branches represent different AND requirements, not complete
+alternative production plans. Shortest selection prioritizes fewest steps.
+The primary `route` remains the shortest qualifying witness discovered.
+`branch_coverage` contains `{target_process_id, slot_index,
+candidate_resources, paths, path_indices, status}` for consumed target slots.
+`paths` counts emitted witnesses and `path_indices` points into `paths`.
+Status is `represented` or `not_discovered`. The latter does not establish
+unreachability. Presence and tool slots are not material-flow branches.
 
 `route` contains `status`, `strategy`, ordered `resource_ids` and ordered
 `process_ids`. The strategy is `shortest_known_dependency_path`: fewest process
@@ -401,11 +412,14 @@ identifies the first qualifying path. The returned process IDs are exactly
 the union of complete emitted paths. Only transitions belonging to those
 paths become recipe-to-recipe connections in the GUI.
 
-`max_paths` defaults to 8 and accepts 1..100. `max_extra_steps` defaults to 2
+`max_paths` defaults to 8 and accepts 1..100. `max_extra_steps` defaults to 6
 and accepts 0..64, relative to the shortest qualifying path. `max_depth`
 accepts 1..64 and bounds total path steps. `max_processes` accepts 1..5000
 and bounds the union of distinct recipes. Each path is included whole or
 omitted. A path that cannot fit is never represented as a successful fragment.
+Selected-path recycling explicitly uses shortest selection and retains its
+two-extra-step default. Its quantities and recovery ranking still refer to
+concrete recipe witnesses.
 
 `required_resource_ids` and `excluded_resource_ids` are arrays of exact
 snapshot resource IDs. Every required ID must occur along the material path,
@@ -415,9 +429,14 @@ HTTP uses repeated singular `required_resource_id` and `excluded_resource_id`
 query parameters. CLI uses repeatable `--required-resource-id` and
 `--excluded-resource-id`. MCP uses the plural array arguments.
 
-Search discovers target ancestors once per resource through indexed output
-references, then enumerates simple paths in the discovered graph. A path
-does not repeat a resource or process, so cycles cannot create infinite
+Shortest selection discovers target ancestors through indexed output
+references, then enumerates simple paths in that graph. Diverse selection
+reserves a shortest qualifying witness, seeds a graph with bounded forward
+transitions from the supplied start, and discovers target ingredient branches
+in turn. Enumeration favors distinct material spines before deferred concrete
+recipe variants. Deferral groups search candidates by their ordered resource
+IDs. It does not merge identities, quantities, chances or native recipe data.
+A path does not repeat a resource or process, so cycles cannot create infinite
 enumeration. Bounds and incomplete capture can leave further paths unknown.
 Native-unknown matches, ungrouped unified/ore-dictionary matches, disabled
 recipes and definite zero outputs cannot establish material transitions.
@@ -445,13 +464,21 @@ Only identical captured recipe data is grouped, ignoring record ID and
 energy and conditions remain part of equality. The raw catalog is unchanged.
 
 `search` reports `examined_processes`/`limit` (10,000),
-`examined_states`/`state_limit` (20,000), `queued_states`, `peak_queue`,
+`examined_states`, `queued_states`, `peak_queue`,
 `expansion_work`/`work_limit` (100,000),
 `enumeration_work`/`enumeration_limit` (100,000), and `truncated`.
+Shortest search uses one 20,000-state budget. Diverse search reports separate
+20,000-state discovery and enumeration budgets, plus the primary search under
+`primary`. Its aggregate state limit is 40,000. Source seeding reports its
+two-step depth and 2,000-process optimization bound under `source`. Reaching
+that seed bound does not prune reverse discovery, which continues toward the
+actual start. `enumeration` also reports deferred concrete variants and its
+1,000-variant pool bound.
 
 `limit_reasons` distinguishes `depth`, `path_limit`, `path_process_limit`,
 `search_process_limit`, `search_state_limit`, `search_work_limit` and
-`search_enumeration_limit`. Top-level `truncated` is true if any applies.
+`search_enumeration_limit`, plus `search_variant_limit` when the deferred
+variant pool fills. Top-level `truncated` is true if any applies.
 Found paths can coexist with an incomplete search for further paths.
 Paths and cycles are not claimed exhaustive across the whole snapshot.
 

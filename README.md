@@ -168,6 +168,11 @@ Trace requests use the selected resource IDs rather than the typed text.
 The trace finds several bounded material paths to the target. Require or
 exclude intermediate resources using autocomplete, limit the number of
 paths, and set how many extra steps may follow the shortest qualifying path.
+The default Diverse routes policy spreads paths across ingredients leading
+to the target, instead of filling the result with short recipe variants from
+one ingredient branch. Fewest steps first is also available. Trace defaults
+allow six extra steps within a total depth of 12. The GUI admits up to 150
+distinct processes across eight whole paths. These bounds remain editable.
 Filters run in Dataset before results are selected. Fewest steps does not
 mean best yield or minimum energy. No-route, identical-resource and search
 limits remain explicit. Every included recipe belongs to a returned path.
@@ -179,6 +184,9 @@ appear once on a freely pannable and zoomable map. Drag tiles, fit the view,
 or arrange them automatically. Choose one path to highlight its steps.
 Additional inputs and co-products stay inside each recipe, with identities
 and complete native records available in the inspector.
+Cards use their content size, wrap input slots into rows and place labeled
+outputs below. Automatic arrangement uses measured card dimensions. Recipe
+titles and resource names retain the same readable font sizes.
 Generation definitions describe world blocks. Inventory availability follows
 captured acquisition outputs. Normal-ore mining sources retain separate
 Fortune 0 plain and silk branches, native quantities, harvest requirements,

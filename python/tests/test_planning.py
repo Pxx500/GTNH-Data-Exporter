@@ -178,3 +178,76 @@ class PlanningTests(unittest.TestCase):
         self.assertEqual(alternative['startup']['required_start_stock']['c'], {'numerator': 4, 'denominator': 1})
         self.assertEqual(alternative['external_inputs'], [])
         self.assertEqual(len(alternative['executions']), 2)
+
+    def test_diverse_trace_reserves_shortest_and_covers_longer_and_branch(self):
+        variants = [f'x{i}' for i in range(8)]
+        records = [process(f'variant{i}', [slot(choice('a'))], [id]) for i, id in enumerate(variants)]
+        records += [process('long1', [slot(choice('a'))], ['z1']), process('long2', [slot(choice('z1'))], ['z2']),
+                    process('long3', [slot(choice('z2'))], ['z3']),
+                    process('finish', [slot(*(choice(id) for id in variants)), slot(choice('z3'))], ['b'])]
+        dataset = self.dataset(records, ['a', 'b', 'z1', 'z2', 'z3', *variants])
+        diverse = dataset.trace_processes(start_id='a', target_id='b', max_paths=3)
+        self.assertEqual(len(diverse['paths'][0]['process_ids']), 2)
+        self.assertTrue(any('z3' in path['resource_ids'] for path in diverse['paths']))
+        self.assertEqual(diverse['path_selection'], 'diverse')
+        self.assertEqual({branch['slot_index'] for branch in diverse['branch_coverage'] if branch['status'] == 'represented'}, {0, 1})
+        shortest = dataset.trace_processes(start_id='a', target_id='b', max_paths=3, path_selection='shortest')
+        self.assertTrue(all(len(path['process_ids']) == 2 for path in shortest['paths']))
+        filtered = dataset.trace_processes(start_id='a', target_id='b', max_paths=3, required_resource_ids=['z2'])
+        self.assertTrue(filtered['paths'])
+        self.assertTrue(all('z2' in path['resource_ids'] for path in filtered['paths']))
+        excluded = dataset.trace_processes(start_id='a', target_id='b', max_paths=3, excluded_resource_ids=['z2'])
+        self.assertTrue(all('z2' not in path['resource_ids'] for path in excluded['paths']))
+
+    def test_diverse_single_slot_prefers_new_material_spine_before_recipe_variants(self):
+        variants = [process(f'variant{i}', [slot(choice('a'))], ['x']) for i in range(8)]
+        for index, record in enumerate(variants):
+            record['duration_ticks'] += index
+        records = variants + [process('long1', [slot(choice('a'))], ['z1']),
+            process('long2', [slot(choice('z1'))], ['z2']), process('long3', [slot(choice('z2'))], ['x']),
+            process('finish', [slot(choice('x'))], ['b'])]
+        dataset = self.dataset(records, ['a', 'b', 'x', 'z1', 'z2'])
+        diverse = dataset.trace_processes(start_id='a', target_id='b', max_paths=3)
+        self.assertTrue(any('z2' in path['resource_ids'] for path in diverse['paths']))
+        self.assertEqual(len(diverse['paths']), 3)
+        shortest = dataset.trace_processes(start_id='a', target_id='b', max_paths=3, path_selection='shortest')
+        self.assertTrue(all(len(path['process_ids']) == 2 for path in shortest['paths']))
+
+    def test_prefix_recovers_primary_after_reverse_limit_without_extra_step_violation(self):
+        records = [process('finish', [slot(choice('m'))], ['t']),
+                   process('a_long3', [slot(choice('y'))], ['m']),
+                   process('long1', [slot(choice('s'))], ['x']),
+                   process('long2', [slot(choice('x'))], ['y']),
+                   process('zz_direct', [slot(choice('s'))], ['m'])]
+        for index in range(10001):
+            record = process(f'noise{index:05}', [slot(choice('unreachable'))], ['m'])
+            record['duration_ticks'] = index + 1
+            records.append(record)
+        dataset = self.dataset(records, ['s', 't', 'm', 'x', 'y', 'unreachable'])
+        trace = dataset.trace_processes(start_id='s', target_id='t', max_extra_steps=0, max_processes=2)
+        self.assertEqual(trace['route']['status'], 'found')
+        self.assertEqual([len(p['process_ids']) for p in trace['paths']], [2])
+        self.assertEqual({p['id'] for p in trace['processes']}, {'zz_direct', 'finish'})
+        self.assertIn('search_process_limit', trace['limit_reasons'])
+        self.assertLessEqual(trace['search']['queued_states'], trace['search']['state_limit'])
+
+    def test_new_shorter_primary_takes_process_budget_before_old_bounded_primary(self):
+        records = [process('end', [slot(choice('e'))], ['t']),
+                   process('long_su', [slot(choice('s'))], ['u']),
+                   process('long_uv', [slot(choice('u'))], ['v']),
+                   process('long_vw', [slot(choice('v'))], ['w']),
+                   process('long_we', [slot(choice('w'))], ['e']),
+                   process('short_sx', [slot(choice('s'))], ['x']),
+                   process('short_xe', [slot(choice('x'))], ['e'])]
+        records += [process(f'shortcut_{id}', [slot(choice(id))], ['t']) for id in ['u', 'v', 'w']]
+        for index in range(10001):
+            record = process(f'noise{index:05}', [slot(choice('q'))], ['x'])
+            record['duration_ticks'] = index + 1
+            records.append(record)
+        dataset = self.dataset(records, ['s', 't', 'u', 'v', 'w', 'e', 'x', 'q'])
+        trace = dataset.trace_processes(start_id='s', target_id='t', max_extra_steps=6,
+            max_processes=6, required_resource_ids=['e'])
+        self.assertEqual(len(trace['route']['process_ids']), 3)
+        self.assertIn('x', trace['route']['resource_ids'])
+        self.assertEqual({p['id'] for p in trace['processes']}, {'short_sx', 'short_xe', 'end'})
+        self.assertIn('path_process_limit', trace['limit_reasons'])

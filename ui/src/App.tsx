@@ -75,9 +75,10 @@ function TraceWorkspace({startId,targetId,setStartId,setTargetId,onSelect}: {sta
   const [resolvedStart,setResolvedStart]=useState('')
   const [resolvedTarget,setResolvedTarget]=useState('')
   const [depth,setDepth]=useState(12)
-  const [maxProcesses,setMaxProcesses]=useState(50)
+  const [maxProcesses,setMaxProcesses]=useState(150)
   const [maxPaths,setMaxPaths]=useState(8)
-  const [extraSteps,setExtraSteps]=useState(2)
+  const [extraSteps,setExtraSteps]=useState(6)
+  const [pathSelection,setPathSelection]=useState('diverse')
   const [minTier,setMinTier]=useState('')
   const [maxTier,setMaxTier]=useState('')
   const [unknownTierPolicy,setUnknownTierPolicy]=useState('exclude')
@@ -86,12 +87,12 @@ function TraceWorkspace({startId,targetId,setStartId,setTargetId,onSelect}: {sta
   const [url,setUrl]=useState<string|null>(null)
   const trace=useRequest<Trace>(url)
   const ready=!!startId && !!targetId && resolvedStart===startId && resolvedTarget===targetId
-  const currentUrl=query('trace',{start_id:startId,target_id:targetId,max_depth:depth,max_processes:maxProcesses,max_paths:maxPaths,max_extra_steps:extraSteps,required_resource_id:required,excluded_resource_id:excluded,min_tier:minTier,max_tier:maxTier,unknown_tier_policy:unknownTierPolicy})
+  const currentUrl=query('trace',{start_id:startId,target_id:targetId,max_depth:depth,max_processes:maxProcesses,max_paths:maxPaths,max_extra_steps:extraSteps,path_selection:pathSelection,required_resource_id:required,excluded_resource_id:excluded,min_tier:minTier,max_tier:maxTier,unknown_tier_policy:unknownTierPolicy})
   const current=url===currentUrl
   return <section className="trace-workspace"><div className="panel-heading"><div><h2>Explore concrete production paths</h2><p>Select endpoints, then require or exclude materials that occur between them.</p></div></div><form onSubmit={event=>{event.preventDefault();if(!ready)return;if(current)trace.reload();else setUrl(currentUrl)}}>
-    <div className="trace-controls"><ResourcePicker label="Supplied start resource" selectedId={startId} onSelect={setStartId} onResolve={setResolvedStart}/><ResourcePicker label="Target resource" selectedId={targetId} onSelect={setTargetId} onResolve={setResolvedTarget}/><label>Maximum depth<input type="number" min="1" value={depth} onChange={event=>setDepth(Number(event.target.value))} required/></label><label>Maximum processes<input type="number" min="1" max="300" value={maxProcesses} onChange={event=>setMaxProcesses(Number(event.target.value))} required/></label><label>Paths<input type="number" min="1" max="100" value={maxPaths} onChange={event=>setMaxPaths(Number(event.target.value))} required/></label><label>Additional steps<input type="number" min="0" max="64" value={extraSteps} onChange={event=>setExtraSteps(Number(event.target.value))} required/></label></div>
+    <div className="trace-controls"><ResourcePicker label="Supplied start resource" selectedId={startId} onSelect={setStartId} onResolve={setResolvedStart}/><ResourcePicker label="Target resource" selectedId={targetId} onSelect={setTargetId} onResolve={setResolvedTarget}/><label>Route selection<select value={pathSelection} onChange={event=>setPathSelection(event.target.value)}><option value="diverse">Diverse routes</option><option value="shortest">Fewest steps first</option></select></label><label>Maximum depth<input type="number" min="1" max="64" value={depth} onChange={event=>setDepth(Number(event.target.value))} required/></label><label>Maximum processes<input type="number" min="1" max="5000" value={maxProcesses} onChange={event=>setMaxProcesses(Number(event.target.value))} required/></label><label>Paths<input type="number" min="1" max="100" value={maxPaths} onChange={event=>setMaxPaths(Number(event.target.value))} required/></label><label>Additional steps<input type="number" min="0" max="64" value={extraSteps} onChange={event=>setExtraSteps(Number(event.target.value))} required/></label></div>
     <div className="tier-controls"><label>Minimum recipe voltage tier<input type="number" min="0" max="15" value={minTier} placeholder="Any" onChange={event=>setMinTier(event.target.value)}/></label><label>Maximum recipe voltage tier<input type="number" min="0" max="15" value={maxTier} placeholder="Any" onChange={event=>setMaxTier(event.target.value)}/></label><label>Unknown recipe voltage<select value={unknownTierPolicy} onChange={event=>setUnknownTierPolicy(event.target.value)}><option value="exclude">Exclude when filtering tiers</option><option value="include">Include unresolved tiers</option></select></label></div>
-    <p className="help">Tier bounds use captured recipe voltage requirements, not full machine capability. Unknown tiers are only filtered when a tier bound is set. Additional steps are allowed beyond the shortest qualifying path. Material filters apply to path intermediates, not tools, presence requirements or co-products.</p>
+    <p className="help">Diverse routes spread results across ingredients leading to the target, including longer alternatives. Additional steps limit detours beyond the shortest qualifying path. Material filters apply to path intermediates, not tools, presence requirements or co-products. Tier bounds use recipe voltage, not full machine capability.</p>
     <div className="intermediate-filters"><IntermediateFilter label="Required" ids={required} onChange={setRequired}/><IntermediateFilter label="Excluded" ids={excluded} onChange={setExcluded}/></div>
     <div className="trace-submit"><button className="primary" disabled={!ready || (trace.loading && current)}>Trace dependencies</button></div>
   </form>

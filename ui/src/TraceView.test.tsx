@@ -29,7 +29,7 @@ test('complete alternative paths share recipe tiles and never add unrelated supp
 const resources: Resource[] = ['Crushed Iron Ore','Iron Nugget','Iron Ingot','Double Iron Plate','Side input mold'].map((display_name,index) => ({id:`r${index}`,display_name,registry_name:`fixture:r${index}`,kind:'item',metadata:index,nbt:null,provenance:{fixture:true}}))
 const processes: Process[] = ['Furnace','Alloy Smelter','Bender'].map((display_name,index) => ({id:`p${index}`,display_name,family:display_name,inputs:[{role:'consume',choices:[{resource_id:`r${index}`,amount:1,match:{mode:'exact'}}]}],outputs:[{resource_id:`r${index+1}`,amount:1,chance:{numerator:1,denominator:1}}],duration_ticks:20,eu_per_tick:4,amperage:1,executable:true,conditions:{fixture:true},provenance:{fixture:true}}))
 processes[1].inputs.push({role:'presence',choices:[{resource_id:'r4',amount:1,match:{mode:'exact'}}]})
-const trace: Trace = {snapshot_id:'fixture',start_id:'r0',target_id:'r3',resources:[resources[4],resources[2],resources[0],resources[3],resources[1]],processes:[processes[2],processes[0],processes[1]],edges:[{source:'resource:r0',target:'process:p0',role:'consume'},{source:'process:p0',target:'resource:r1',role:'output'},{source:'resource:r1',target:'process:p1',role:'consume'},{source:'resource:r4',target:'process:p1',role:'presence'},{source:'process:p1',target:'resource:r2',role:'output'},{source:'resource:r2',target:'process:p2',role:'consume'},{source:'process:p2',target:'resource:r3',role:'output'}],leaves:[],cycles:[],truncated:false,coverage:[],route:{status:'found',strategy:'shortest_known_dependency_path',resource_ids:['r0','r1','r2','r3'],process_ids:['p0','p1','p2']},search:{examined_processes:37,limit:1000,truncated:false},limit_reasons:[],paths:[{resource_ids:['r0','r1','r2','r3'],process_ids:['p0','p1','p2']}]}
+const trace: Trace = {branch_coverage:[],path_selection:'diverse',snapshot_id:'fixture',start_id:'r0',target_id:'r3',resources:[resources[4],resources[2],resources[0],resources[3],resources[1]],processes:[processes[2],processes[0],processes[1]],edges:[{source:'resource:r0',target:'process:p0',role:'consume'},{source:'process:p0',target:'resource:r1',role:'output'},{source:'resource:r1',target:'process:p1',role:'consume'},{source:'resource:r4',target:'process:p1',role:'presence'},{source:'process:p1',target:'resource:r2',role:'output'},{source:'resource:r2',target:'process:p2',role:'consume'},{source:'process:p2',target:'resource:r3',role:'output'}],leaves:[],cycles:[],truncated:false,coverage:[],route:{status:'found',strategy:'shortest_known_dependency_path',resource_ids:['r0','r1','r2','r3'],process_ids:['p0','p1','p2']},search:{examined_processes:37,limit:1000,truncated:false},limit_reasons:[],paths:[{resource_ids:['r0','r1','r2','r3'],process_ids:['p0','p1','p2']}]}
 
 test('recycled returns connect every accounted consumer and skip the unselected OR alternative',async()=>{
   const r=(numerator:number)=>({numerator,denominator:1})
@@ -79,6 +79,26 @@ test('the selected route is ordered independently of context records and process
   fireEvent.click(screen.getByRole('button',{name:'Close record inspector'}))
   expect(screen.queryByRole('complementary')).not.toBeInTheDocument()
   expect(within(route).getAllByRole('article')).toHaveLength(3)
+})
+
+test('recipe graph arranges intrinsic card measurements without imposing a shared fixed width',async()=>{
+  const widths:Record<string,number>={p0:280,p1:420,p2:360}
+  const heights:Record<string,number>={p0:220,p1:400,p2:160}
+  const width=vi.spyOn(HTMLElement.prototype,'offsetWidth','get').mockImplementation(function(this:HTMLElement){return parseFloat(this.style.width)||widths[this.dataset.id??'']||1000})
+  const height=vi.spyOn(HTMLElement.prototype,'offsetHeight','get').mockImplementation(function(this:HTMLElement){return parseFloat(this.style.height)||heights[this.dataset.id??'']||350})
+  try{
+    render(<TraceView trace={trace} onSelect={vi.fn()}/>)
+    const furnace=(await screen.findByRole('article',{name:'Recipe Furnace'})).closest('.react-flow__node') as HTMLElement
+    const alloy=screen.getByRole('article',{name:'Recipe Alloy Smelter'}).closest('.react-flow__node') as HTMLElement
+    const position=(node:HTMLElement)=>node.style.transform.match(/translate\(([\d.-]+)px,\s*([\d.-]+)px\)/)!.slice(1).map(Number)
+    await waitFor(()=>expect(position(alloy)[1]).toBeGreaterThan(0))
+    expect(furnace.style.width).toBe('')
+    expect(alloy.style.width).toBe('')
+    expect(position(furnace)[0]+widths.p0/2).toBe(position(alloy)[0]+widths.p1/2)
+    expect(position(alloy)[1]-position(furnace)[1]).toBeGreaterThanOrEqual(heights.p0)
+    expect(screen.getByRole('button',{name:'Arrange recipes'})).toBeInTheDocument()
+    expect(screen.getByRole('button',{name:'Recycle output r1'})).toBeInTheDocument()
+  }finally{width.mockRestore();height.mockRestore()}
 })
 
 test('whole recipe tiles retain OR slots and co-products along complete emitted paths', async () => {
