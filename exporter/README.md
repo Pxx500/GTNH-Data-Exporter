@@ -165,6 +165,31 @@ catalog. Counts are not a claim of complete semantics.
 
 ## Verification
 
+The combined Botania and independent-projection extension passed 22 Java,
+55 Python and 19 GUI tests. Actual Botania `1.13.38-GTNH` resolves in the
+consuming module. The final paired capture/import completed in 179.03 seconds.
+All 152 base Mana Infusion ingredient/result records agree with same-run NEI.
+Eight wildcard cases use independent pools. Eleven Mini Flower and two Magic
+Bees subclass templates remain inspectable with unresolved execution.
+GUI recipe details show exact total mana and required catalysts below the pool.
+
+Schema 3 records the selected serializer through one equivalent public reverse
+dispatch, with one call per reached handler. All 66,415 scoped projections
+selected the default item serializer. The five-map GT/furnace comparison has
+53,909 matches, zero differences and zero missing recipes. This includes 8,699
+Fluid Solidifier matches and the Lapotron double-NBT case. Another 20,196 TiC
+views are unverified because null and empty-compound TGregworks NBT collapse
+in NEI's presentation. Native typed data remains distinct. Known Door failures
+still prevent strict completeness. Historical contexts retain their captured
+scope and original projection rules, with no retrospective inferred facts.
+
+IntelliJ completed with 59 advisory findings. Direct PMD completed against the
+actual classpath with 156 advisories and no processing/configuration errors.
+The combined launcher still skips PMD because the wrapper is in this nested
+module, so its skipped result is not the direct analysis. Complexity metrics,
+Java 11 API suggestions for the Java 8 target and a nullable test-result warning
+remain documented rather than driving unsupported behavior changes.
+
 The Forestry/small-ore extension passed 15 Java tests and 46 Python tests.
 The build resolves the actual Forestry `4.11.39` API. A fresh paired capture
 and validated import completed in 179.46 seconds. All 2,106 small-ore rules

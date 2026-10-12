@@ -44,9 +44,9 @@ class ComparisonTests(unittest.TestCase):
         summary['files']['presentation-context.json'] = {'sha256': hashlib.sha256((reference / 'presentation-context.json').read_bytes()).hexdigest()}
         summary_path.write_text(json.dumps(summary))
 
-    def context(self, directory, reference, *, aliases=None, pools=None, complete=True, failures=None):
+    def context(self, directory, reference, *, aliases=None, pools=None, complete=True, failures=None, projections=None, projection_version=2):
         manifest = json.loads((directory / 'manifest.json').read_text())
-        metadata = {'schema_version': 1, 'canonical_snapshot_id': manifest['snapshot_id'],
+        metadata = {'schema_version': projection_version if projections is not None else 1, 'canonical_snapshot_id': manifest['snapshot_id'],
                     'canonical_pack': manifest['pack'],
                     'canonical_files': {name: manifest['files'][name] for name in ('resources.jsonl.gz', 'processes.jsonl.gz')},
                     'scope': {'gt_families': sorted(comparison.GT_FAMILIES), 'furnace_family': 'minecraft:smelting',
@@ -55,6 +55,18 @@ class ComparisonTests(unittest.TestCase):
         (reference / 'presentation-context.json').write_text(json.dumps(metadata))
         for name, records in [('gt-display-aliases.jsonl.gz', aliases or []), ('item-pools.jsonl.gz', pools or [])]:
             self.replace_records(reference, name, records, 'presentation-context.json')
+        if projections is not None:
+            metadata = json.loads((reference / 'presentation-context.json').read_text())
+            metadata['item_projection'] = {'api': 'StackInfo.itemStackToNBT(stack,true)->NBTJson.toJsonObject',
+                'template_item_amount': 1, 'classification': 'pinned_builtin_default_item_count',
+                'serializer_classes': ['codechicken.nei.recipe.stackinfo.DefaultStackStringifyHandler',
+                    'codechicken.nei.recipe.stackinfo.FluidDisplayStackStringifyHandler', 'codechicken.nei.recipe.stackinfo.GTFluidStackStringifyHandler']}
+            if projection_version == 3:
+                metadata['scope']['supplementary_families'] = ['botania:mana_infusion']
+                metadata['item_projection']['api'] = 'StackInfo.stackStringifyHandlers.reverse.convertItemStackToNBT(stack,true)->NBTJson.toJsonObject'
+                metadata['item_projection']['classification'] = 'selected_pinned_default_item_count'
+            (reference / 'presentation-context.json').write_text(json.dumps(metadata))
+            self.replace_records(reference, 'item-projections.jsonl.gz', projections, 'presentation-context.json')
         summary_path = reference / 'summary.json'
         summary = json.loads(summary_path.read_text())
         summary['files']['presentation-context.json'] = {'sha256': hashlib.sha256((reference / 'presentation-context.json').read_bytes()).hexdigest()}
@@ -62,6 +74,215 @@ class ComparisonTests(unittest.TestCase):
 
     def typed(self, name, *, metadata=0, nbt=None, amount=1):
         return {'registry_name': name, 'metadata': metadata, 'nbt': nbt, 'amount': amount}
+
+    def item_projection(self, name, *, nbt=None, native_tag=None, metadata=0):
+        stack = {'strId': name, 'Damage': metadata, 'Count': 1}
+        if native_tag is not None:
+            stack['tag'] = native_tag
+        return {'registry_name': name, 'metadata': metadata, 'nbt': nbt, 'status': 'ok', 'native_stack': stack,
+                'serializer_class': 'codechicken.nei.recipe.stackinfo.DefaultStackStringifyHandler', 'count_semantics': 'item_stack_size', 'failure': None}
+
+    def native_item_capture(self):
+        charge = {'type': 'compound', 'value': {'charge': {'type': 'double', 'value': 10000000}}}
+        directory, reference = self.capture(resources=[resource('in', registry_name='test:input', nbt=charge), resource('alt'), resource('out', registry_name='test:output')])
+        canonical = self.read_records(directory, 'processes.jsonl.gz')[0]
+        canonical['outputs'][0]['amount'] = 30
+        self.replace_records(directory, 'processes.jsonl.gz', [canonical], 'manifest.json')
+        view = self.read_records(reference, 'handler-views.jsonl.gz')[0]
+        view['ingredients'][0]['alternatives'][0]['native_stack']['tag'] = {'charge': '1.0E7D'}
+        view['other_stacks'][0]['real_stack_size'] = 30
+        view['other_stacks'][0]['alternatives'][0]['native_stack']['Count'] = 30
+        self.replace_records(reference, 'handler-views.jsonl.gz', [view], 'summary.json')
+        aliases = self.read_records(reference, 'gt-display-aliases.jsonl.gz')
+        projections = [self.item_projection('test:input', nbt=charge, native_tag={'charge': '1.0E7D'}), self.item_projection('test:output')]
+        self.context(directory, reference, aliases=aliases, projections=projections)
+        return directory, reference, aliases, projections
+
+    def test_native_item_projection_compares_lapotron_double_and_preserves_thirty_outputs(self):
+        directory, reference, _, _ = self.native_item_capture()
+        report = comparison.compare(directory, reference)
+        self.assertEqual(report['counts']['matched'], 1)
+        self.assertEqual(report['counts']['differences'], 0)
+        self.assertEqual(report['counts']['unsupported'], 0)
+
+    def test_native_projection_double_string_collision_remains_ambiguous(self):
+        directory, reference, aliases, projections = self.native_item_capture()
+        string_tag = {'type': 'compound', 'value': {'charge': {'type': 'string', 'value': '1.0E7D'}}}
+        projections.append(self.item_projection('test:input', nbt=string_tag, native_tag={'charge': '1.0E7D'}))
+        self.context(directory, reference, aliases=aliases, projections=projections)
+        report = comparison.compare(directory, reference)
+        self.assertEqual(report['counts']['matched'], 0)
+        self.assertGreater(report['ambiguous_resource_projections'], 0)
+        self.assertTrue(any('Ambiguous identity' in reason for reason in report['unsupported_reasons']))
+
+    def test_missing_failed_and_converted_native_projections_stay_unsupported(self):
+        directory, reference, aliases, originals = self.native_item_capture()
+        cases = []
+        cases.append(('missing', originals[1:], True))
+        failed = dict(originals[0], status='failed', native_stack=None, serializer_class=None, count_semantics='unknown', failure={'message': 'native serializer failed'})
+        cases.append(('failed', [failed, originals[1]], False))
+        unknown = dict(originals[0], serializer_class=None, count_semantics='unknown')
+        cases.append(('unknown_count', [unknown, originals[1]], True))
+        converted = dict(originals[0], serializer_class=None, count_semantics='native_conversion', native_stack={'neiFluidName': 'water', 'Count': '1000L'})
+        cases.append(('fluid_conversion', [converted, originals[1]], True))
+        original_view = self.read_records(reference, 'handler-views.jsonl.gz')[0]
+        for name, projections, complete in cases:
+            with self.subTest(name=name):
+                view = json.loads(json.dumps(original_view))
+                if name == 'fluid_conversion':
+                    view['ingredients'][0]['alternatives'][0]['native_stack'] = converted['native_stack']
+                self.replace_records(reference, 'handler-views.jsonl.gz', [view], 'summary.json')
+                self.context(directory, reference, aliases=aliases, projections=projections, complete=complete)
+                report = comparison.compare(directory, reference)
+                self.assertEqual(report['counts']['matched'], 0)
+                self.assertGreater(report['counts']['unsupported'], 0)
+                self.assertEqual(report['counts']['missing_canonical'], 0)
+
+    def test_native_projection_registry_classification_and_stream_integrity_are_required(self):
+        directory, reference, aliases, projections = self.native_item_capture()
+        context_path = reference / 'presentation-context.json'
+        original = json.loads(context_path.read_text())
+        for field, value in (('canonical_snapshot_id', 'other'), ('canonical_pack', {}), ('canonical_files', {})):
+            with self.subTest(field=field):
+                context_path.write_text(json.dumps(dict(original, **{field: value})))
+                self.bind_context_pointer(reference)
+                with self.assertRaises(comparison.ComparisonError):
+                    comparison.compare(directory, reference)
+        context_path.write_text(json.dumps(original))
+        self.bind_context_pointer(reference)
+        stream = reference / 'item-projections.jsonl.gz'
+        captured = stream.read_bytes()
+        stream.write_bytes(b'changed')
+        with self.assertRaisesRegex(comparison.ComparisonError, 'checksum'):
+            comparison.compare(directory, reference)
+        stream.write_bytes(captured)
+        metadata = json.loads(json.dumps(original))
+        metadata['files']['item-projections.jsonl.gz']['records'] += 1
+        context_path.write_text(json.dumps(metadata))
+        self.bind_context_pointer(reference)
+        with self.assertRaisesRegex(comparison.ComparisonError, 'record count'):
+            comparison.compare(directory, reference)
+        self.context(directory, reference, aliases=aliases, projections=projections + [projections[0]])
+        with self.assertRaisesRegex(comparison.ComparisonError, 'duplicate typed identity'):
+            comparison.compare(directory, reference)
+        self.context(directory, reference, aliases=aliases, projections=projections)
+        metadata = json.loads(context_path.read_text())
+        metadata['item_projection']['serializer_classes'].append('unknown.CustomSerializer')
+        context_path.write_text(json.dumps(metadata))
+        self.bind_context_pointer(reference)
+        report = comparison.compare(directory, reference)
+        self.assertEqual(report['counts']['matched'], 0)
+        self.assertGreater(report['counts']['unsupported'], 0)
+
+    def test_historical_version_one_does_not_guess_java_float_projection(self):
+        directory, reference, aliases, _ = self.native_item_capture()
+        self.context(directory, reference, aliases=aliases)
+        report = comparison.compare(directory, reference)
+        self.assertEqual(report['counts']['matched'], 0)
+        self.assertTrue(any('floating-point Java formatting' in reason for reason in report['unsupported_reasons']))
+
+    def test_historical_four_map_scope_remains_bounded_when_solidifier_views_exist(self):
+        directory, reference = self.capture()
+        context_path = reference / 'presentation-context.json'
+        metadata = json.loads(context_path.read_text())
+        metadata['scope']['gt_families'] = ['gregtech:gt.recipe.alloysmelter', 'gregtech:gt.recipe.metalbender',
+                                          'gregtech:gt.recipe.macerator', 'gregtech:gt.recipe.orewasher']
+        context_path.write_text(json.dumps(metadata))
+        self.bind_context_pointer(reference)
+        handler = self.read_records(reference, 'handlers.jsonl.gz')[0]
+        extra = dict(handler, handler_key='solidifier', gt_recipe_map_id='gregtech:gt.recipe.fluidsolidifier')
+        self.replace_records(reference, 'handlers.jsonl.gz', [handler, extra], 'summary.json')
+        view = self.read_records(reference, 'handler-views.jsonl.gz')[0]
+        self.replace_records(reference, 'handler-views.jsonl.gz', [view, dict(view, handler_key='solidifier')], 'summary.json')
+        signature = self.read_records(reference, 'signatures.jsonl.gz')[0]
+        self.replace_records(reference, 'signatures.jsonl.gz', [signature, dict(signature, handler_key='solidifier')], 'summary.json')
+        summary_path = reference / 'summary.json'
+        summary = json.loads(summary_path.read_text())
+        summary['counts'] = {'handlers': 2, 'signatures': 2, 'handler_views': 2}
+        summary_path.write_text(json.dumps(summary))
+        report = comparison.compare(directory, reference)
+        self.assertEqual(report['counts']['matched'], 1)
+        self.assertEqual(report['counts']['missing_canonical'], 0)
+        self.assertEqual(report['counts']['differences'], 0)
+        self.assertFalse(any(profile[0] == 'gregtech:gt.recipe.fluidsolidifier' for profile in report['mapped_profiles']))
+        self.assertTrue(any('captured' in reason and 'scope' in reason for reason in report['unsupported_reasons']))
+        metadata['scope']['gt_families'].append('gregtech:gt.recipe.unknown')
+        context_path.write_text(json.dumps(metadata))
+        self.bind_context_pointer(reference)
+        with self.assertRaisesRegex(comparison.ComparisonError, 'scope'):
+            comparison.compare(directory, reference)
+
+    def test_selected_default_serializer_is_supported_in_schema_three_with_actual_five_class_registry(self):
+        directory, reference, aliases, projections = self.native_item_capture()
+        self.context(directory, reference, aliases=aliases, projections=projections, projection_version=3)
+        context_path = reference / 'presentation-context.json'
+        metadata = json.loads(context_path.read_text())
+        metadata['item_projection']['serializer_classes'].extend([
+            'com.gtnewhorizons.aspectrecipeindex.nei.TCAspectStringifyHandler', 'codechicken.enderstorage.internal.StorageStackStringifyHandler'])
+        context_path.write_text(json.dumps(metadata))
+        self.bind_context_pointer(reference)
+        report = comparison.compare(directory, reference)
+        self.assertEqual(report['counts']['matched'], 1)
+        self.assertEqual(report['counts']['unsupported'], 0)
+        metadata['schema_version'] = 2
+        metadata['item_projection']['api'] = 'StackInfo.itemStackToNBT(stack,true)->NBTJson.toJsonObject'
+        metadata['item_projection']['classification'] = 'pinned_builtin_default_item_count'
+        context_path.write_text(json.dumps(metadata))
+        self.bind_context_pointer(reference)
+        self.assertEqual(comparison.compare(directory, reference)['counts']['matched'], 0)
+
+    def test_schema_three_custom_and_fluid_winners_are_not_promoted_to_ordinary_items(self):
+        directory, reference, aliases, original = self.native_item_capture()
+        custom_class = 'com.gtnewhorizons.aspectrecipeindex.nei.TCAspectStringifyHandler'
+        for conversion in (False, True):
+            with self.subTest(conversion=conversion):
+                record = dict(original[0], serializer_class=custom_class,
+                              count_semantics='native_conversion' if conversion else 'unknown')
+                view = self.read_records(reference, 'handler-views.jsonl.gz')[0]
+                if conversion:
+                    record['native_stack'] = {'neiFluidName': 'water', 'Count': '1000L'}
+                    view['ingredients'][0]['alternatives'][0]['native_stack'] = record['native_stack']
+                else:
+                    view['ingredients'][0]['alternatives'][0]['native_stack'] = dict(record['native_stack'], Count=2)
+                self.replace_records(reference, 'handler-views.jsonl.gz', [view], 'summary.json')
+                self.context(directory, reference, aliases=aliases, projections=[record, original[1]], projection_version=3)
+                path = reference / 'presentation-context.json'
+                metadata = json.loads(path.read_text())
+                metadata['item_projection']['serializer_classes'].append(custom_class)
+                path.write_text(json.dumps(metadata))
+                self.bind_context_pointer(reference)
+                report = comparison.compare(directory, reference)
+                self.assertEqual(report['counts']['matched'], 0)
+                self.assertGreater(report['counts']['unsupported'], 0)
+                self.assertEqual(report['counts']['missing_canonical'], 0)
+
+    def test_schema_three_supplementary_scope_does_not_map_generic_botania_handlers(self):
+        directory, reference, aliases, projections = self.native_item_capture()
+        self.context(directory, reference, aliases=aliases, projections=projections, projection_version=3)
+        handlers = self.read_records(reference, 'handlers.jsonl.gz')
+        handlers.append(dict(handlers[0], handler_key='botania', native_class='test.BotaniaHandler', gt_recipe_map_id=None))
+        self.replace_records(reference, 'handlers.jsonl.gz', handlers, 'summary.json')
+        views = self.read_records(reference, 'handler-views.jsonl.gz')
+        views.append(dict(views[0], handler_key='botania'))
+        self.replace_records(reference, 'handler-views.jsonl.gz', views, 'summary.json')
+        signatures = self.read_records(reference, 'signatures.jsonl.gz')
+        signatures.append(dict(signatures[0], handler_key='botania'))
+        self.replace_records(reference, 'signatures.jsonl.gz', signatures, 'summary.json')
+        path = reference / 'summary.json'
+        metadata = json.loads(path.read_text())
+        metadata['counts'] = {'handlers': 2, 'handler_views': 2, 'signatures': 2}
+        path.write_text(json.dumps(metadata))
+        report = comparison.compare(directory, reference)
+        self.assertEqual(report['counts']['matched'], 1)
+        self.assertEqual(report['counts']['missing_canonical'], 0)
+        self.assertFalse(any(profile[0].startswith('botania:') for profile in report['mapped_profiles']))
+        context_path = reference / 'presentation-context.json'
+        metadata = json.loads(context_path.read_text())
+        metadata['scope']['supplementary_families'] = ['botania:unknown']
+        context_path.write_text(json.dumps(metadata))
+        self.bind_context_pointer(reference)
+        with self.assertRaisesRegex(comparison.ComparisonError, 'supplementary'):
+            comparison.compare(directory, reference)
 
     def read_records(self, directory, name):
         with gzip.open(directory / name, 'rt', encoding='utf-8') as stream:

@@ -40,11 +40,30 @@ export function OutputRows({outputs, onSelect, resources}: {outputs: Output[]; o
 export function ProcessDetail({process, onSelect, resources}: {process: Process; onSelect?: (id: string) => void; resources?: ReadonlyMap<string, Resource>}) {
   const roles: Record<string, string> = {presence: 'Required presence', tool: 'Tool'}
   const conditions = process.conditions
+  const native = conditions !== null && typeof conditions === 'object' ? conditions as Record<string, unknown> : undefined
+  const mana = native?.energy_unit === 'mana' && typeof native.total_mana === 'number' && Number.isFinite(native.total_mana)
+    ? native.total_mana : undefined
+  const catalystBelow = native?.catalyst_below !== null && typeof native?.catalyst_below === 'object'
+    ? native.catalyst_below as Record<string, unknown> : undefined
+  const requiredCatalysts = ['alchemy','conjuration'].filter(kind => catalystBelow?.[`${kind}_required`] === true)
+    .map(kind => {
+      const candidate = catalystBelow?.[`${kind}_block`]
+      const block = candidate !== null && typeof candidate === 'object' ? candidate as Record<string, unknown> : undefined
+      return {kind, block}
+    })
   const outputTemplates = conditions !== null && typeof conditions === 'object' && 'dynamic_output' in conditions
     && conditions.dynamic_output === 'unresolved' && process.outputs.length > 0
   return <section className="process-detail">
     <div className="detail-title"><div><p className="eyebrow">{process.family}</p><h3>{process.display_name || process.id}</h3><code>{process.id}</code></div>{process.executable !== true && <Badge tone={process.executable === false ? 'warning' : 'muted'}>{process.executable === false ? 'Informational / fake' : 'Execution unknown'}</Badge>}</div>
-    {(process.duration_ticks != null || process.eu_per_tick != null || (process.amperage != null && process.amperage !== 1)) && <dl className="metrics">{process.duration_ticks != null && <div><dt>Duration</dt><dd>{process.duration_ticks.toLocaleString()} ticks</dd></div>}{process.eu_per_tick != null && <div><dt>Energy</dt><dd>{process.eu_per_tick.toLocaleString()} EU/t</dd></div>}{process.amperage != null && process.amperage !== 1 && <div><dt>Amperage</dt><dd>{process.amperage}</dd></div>}</dl>}
+    {(mana !== undefined || process.duration_ticks != null || process.eu_per_tick != null || (process.amperage != null && process.amperage !== 1)) && <dl className="metrics">{mana !== undefined && <div><dt>Mana cost</dt><dd>{mana.toLocaleString(undefined, {maximumFractionDigits: 20})} mana</dd></div>}{process.duration_ticks != null && <div><dt>Duration</dt><dd>{process.duration_ticks.toLocaleString()} ticks</dd></div>}{process.eu_per_tick != null && <div><dt>Energy</dt><dd>{process.eu_per_tick.toLocaleString()} EU/t</dd></div>}{process.amperage != null && process.amperage !== 1 && <div><dt>Amperage</dt><dd>{process.amperage}</dd></div>}</dl>}
+    {requiredCatalysts.length > 0 && <section className="slot"><h4>Required catalysts</h4>
+      {catalystBelow?.position === 'one_block_below_pool' && <p>Catalyst position: one block below the mana pool.</p>}
+      {requiredCatalysts.map(({kind, block}) => <div className="choice" key={kind}>
+        <strong>{kind === 'alchemy' ? 'Alchemy catalyst' : 'Conjuration catalyst'}</strong>
+        {typeof block?.resource_id === 'string' && <ResourceRef id={block.resource_id} onSelect={onSelect} resources={resources}/>}
+        {block?.consumed === false && <Badge tone="presence">Not consumed</Badge>}
+      </div>)}
+    </section>}
     {outputTemplates && <p className="notice warning">Runtime result is unresolved. Shown outputs are native display templates.</p>}
     <div className="recipe-io"><div className="recipe-inputs"><h4 title="All slots are required. Choose one alternative within each slot.">Inputs</h4>
     {process.inputs.length === 0 && <p className="empty-inline">No input slots captured.</p>}

@@ -58,13 +58,14 @@ final class NativeCapture {
         smelting();
         new EnderIoCapture(this).capture();
         new ForestryCapture(this).capture();
+        new BotaniaCapture(this).capture();
         new WorldgenCapture(this, writer).capture();
         coverage("resources", "partial", writer.count("resources"),
             "Resources referenced by captured recipes, ore groups and acquisition definitions. Not an exhaustive NEI item catalog");
         coverage("recipe-semantics", "partial", writer.count("processes"),
             "Dynamic native matching, machine-specific metadata and custom crafting remain unresolved. Uninterpreted metadata: " + unknownMetadata);
         coverage("other-mod-recipes", "unsupported", 0,
-            "Other non-GT machine recipes beyond bounded EnderIO and Forestry Centrifuge adapters remain unsupported");
+            "Other non-GT machine recipes beyond bounded EnderIO, Forestry Centrifuge and Botania Mana Infusion adapters remain unsupported");
         coverage("other-acquisition", "unsupported", 0,
             "Mob drops, trades, other-mod worldgen, mining drop distributions and saved deposits are not captured");
     }

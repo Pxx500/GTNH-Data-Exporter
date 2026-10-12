@@ -20,7 +20,14 @@ from pathlib import Path
 GT_HANDLER = 'gregtech.nei.GTNEIDefaultHandler'
 FURNACE_HANDLER = 'codechicken.nei.recipe.FurnaceRecipeHandler'
 GT_FRONTEND = 'gregtech.api.recipe.RecipeMapFrontend'
-GT_FAMILIES = frozenset('gregtech:gt.recipe.' + name for name in ('alloysmelter', 'metalbender', 'macerator', 'orewasher'))
+DEFAULT_SERIALIZER = 'codechicken.nei.recipe.stackinfo.DefaultStackStringifyHandler'
+BUILTIN_SERIALIZERS = frozenset((DEFAULT_SERIALIZER, 'codechicken.nei.recipe.stackinfo.FluidDisplayStackStringifyHandler',
+                                'codechicken.nei.recipe.stackinfo.GTFluidStackStringifyHandler'))
+ITEM_PROJECTION_API = 'StackInfo.itemStackToNBT(stack,true)->NBTJson.toJsonObject'
+ITEM_DISPATCH_API = 'StackInfo.stackStringifyHandlers.reverse.convertItemStackToNBT(stack,true)->NBTJson.toJsonObject'
+GT_FAMILIES = frozenset('gregtech:gt.recipe.' + name for name in ('alloysmelter', 'metalbender', 'macerator', 'orewasher', 'fluidsolidifier'))
+HISTORICAL_GT_FAMILIES = frozenset(('gregtech:gt.recipe.alloysmelter', 'gregtech:gt.recipe.metalbender',
+                                   'gregtech:gt.recipe.macerator', 'gregtech:gt.recipe.orewasher'))
 PINNED_MODS = {
     'NotEnoughItems': ('2.8.159-GTNH', '050b2440952adc930e871586f496607959344aa2d7c3be781fd922a5b253a3af'),
     'gregtech': ('5.09.54.221', '60ceb229cd894dd28393efb6d0013de2835289eeef6fcf84ad3e17a6475baf5b'),
@@ -82,21 +89,27 @@ def _presentation_context(reference, summary, manifest, resources):
         if hashlib.file_digest(stream, 'sha256').hexdigest() != pointer['sha256']:
             raise ComparisonError('presentation-context.json: checksum mismatch')
     metadata = json.loads(path.read_text(encoding='utf-8'))
-    if type(metadata.get('schema_version')) is not int or metadata['schema_version'] != 1:
-        raise ComparisonError('Only presentation context schema version 1 is mapped')
+    if type(metadata.get('schema_version')) is not int or metadata['schema_version'] not in (1, 2, 3):
+        raise ComparisonError('Only presentation context schema versions 1, 2 and 3 are mapped')
     if metadata.get('canonical_snapshot_id') != manifest['snapshot_id'] or metadata.get('canonical_pack') != manifest['pack']:
         raise ComparisonError('Presentation context snapshot identity or pack/config cohort does not match')
     expected_files = {name: manifest['files'][name] for name in ('resources.jsonl.gz', 'processes.jsonl.gz')}
     if metadata.get('canonical_files') != expected_files:
         raise ComparisonError('Presentation context canonical file binding does not match')
     scope = metadata.get('scope') or {}
-    if (sorted(scope.get('gt_families', [])) != sorted(GT_FAMILIES)
+    advertised = scope.get('gt_families')
+    if not isinstance(advertised, list) or any(not isinstance(family, str) for family in advertised):
+        raise ComparisonError('Invalid presentation context GT scope')
+    captured_families = frozenset(advertised)
+    if (captured_families not in (HISTORICAL_GT_FAMILIES, GT_FAMILIES) or len(advertised) != len(captured_families)
             or scope.get('furnace_family') != 'minecraft:smelting'
             or type(scope.get('alias_template_amount')) is not int or scope['alias_template_amount'] != 1):
         raise ComparisonError('Presentation context scope is not the pinned item adapter scope')
+    if metadata['schema_version'] == 3 and scope.get('supplementary_families') != ['botania:mana_infusion']:
+        raise ComparisonError('Invalid supplementary declaration scope')
     if type(metadata.get('complete')) is not bool or not isinstance(metadata.get('failures'), list):
         raise ComparisonError('Presentation context completeness/failures were not captured')
-    aliases, pools = {}, {}
+    aliases, pools, projections = {}, {}, {}
     counts = Counter()
     for filename, target, key, field in (
             ('gt-display-aliases.jsonl.gz', aliases, 'resource_id', 'alternatives'),
@@ -126,14 +139,49 @@ def _presentation_context(reference, summary, manifest, resources):
                     raise ComparisonError(f'{filename}: alias is not a quantity-one template')
             target[id] = record
             counts[filename + ':' + status] += 1
+    registry_supported = False
+    if metadata['schema_version'] >= 2:
+        capability = metadata.get('item_projection')
+        expected_api = ITEM_DISPATCH_API if metadata['schema_version'] == 3 else ITEM_PROJECTION_API
+        expected_classification = 'selected_pinned_default_item_count' if metadata['schema_version'] == 3 else 'pinned_builtin_default_item_count'
+        if (not isinstance(capability, dict) or capability.get('api') != expected_api
+                or type(capability.get('template_item_amount')) is not int or capability['template_item_amount'] != 1
+                or capability.get('classification') != expected_classification
+                or not isinstance(capability.get('serializer_classes'), list)
+                or any(not isinstance(name, str) or not name for name in capability['serializer_classes'])):
+            raise ComparisonError('Invalid native item projection capability/serializer registry')
+        classes = capability['serializer_classes']
+        registry_supported = bool(classes) and DEFAULT_SERIALIZER in classes and set(classes) <= BUILTIN_SERIALIZERS
+        for record in _records(reference, 'item-projections.jsonl.gz', metadata['files']):
+            if (not isinstance(record.get('registry_name'), str) or not record['registry_name']
+                    or type(record.get('metadata')) is not int or 'nbt' not in record):
+                raise ComparisonError('item-projections.jsonl.gz: invalid typed identity')
+            key = _typed_item_key(record)
+            if key in projections:
+                raise ComparisonError('item-projections.jsonl.gz: duplicate typed identity')
+            status = record.get('status')
+            if (status not in ('ok', 'failed') or (status == 'ok' and not isinstance(record.get('native_stack'), dict))
+                    or (status == 'failed' and (record.get('native_stack') is not None or not record.get('failure')))
+                    or (status == 'ok' and record.get('failure'))
+                    or record.get('count_semantics') not in ('item_stack_size', 'native_conversion', 'unknown')
+                    or (record.get('serializer_class') is not None and not isinstance(record['serializer_class'], str))):
+                raise ComparisonError('item-projections.jsonl.gz: invalid projection status/payload/classification')
+            if metadata['schema_version'] == 3 and status == 'ok' and (not isinstance(record.get('serializer_class'), str)
+                    or not record['serializer_class'] or record['serializer_class'] not in classes):
+                raise ComparisonError('item-projections.jsonl.gz: selected serializer is absent from the declared registry')
+            projections[key] = record
+            counts['item-projections.jsonl.gz:' + status] += 1
     entry_failures = [{'stream': name, key: id, 'failure': record['failure']}
                       for name, mapping, key in (('gt-display-aliases.jsonl.gz', aliases, 'resource_id'),
                                                  ('item-pools.jsonl.gz', pools, 'registry_name'))
                       for id, record in mapping.items() if record['status'] == 'failed']
+    entry_failures.extend({'stream': 'item-projections.jsonl.gz', 'identity': key, 'failure': record['failure']}
+                          for key, record in projections.items() if record['status'] == 'failed')
     failures = len(metadata['failures']) + len(entry_failures)
     if failures and metadata['complete']:
         raise ComparisonError('Presentation context claims complete despite captured failures')
-    return {'aliases': aliases, 'pools': pools, 'failures': metadata['failures']}, {
+    return {'aliases': aliases, 'pools': pools, 'failures': metadata['failures'], 'version': metadata['schema_version'],
+            'projections': projections, 'registry_supported': registry_supported, 'gt_families': captured_families}, {
         'available': True, 'complete': metadata['complete'], 'failure_count': failures,
         'failures': metadata['failures'], 'entry_failures': entry_failures, 'failure_unit': 'events, not distinct affected recipes',
         'entry_counts': dict(counts), 'readiness': metadata.get('readiness')}
@@ -145,6 +193,8 @@ def _context_items(context):
             for record in mapping.values():
                 for stack in record[field]:
                     yield dict(stack, kind='item')
+        for record in context.get('projections', {}).values():
+            yield dict(record, kind='item')
 
 
 def _item_presentation(resource_id, resource, amount, unify, context):
@@ -198,7 +248,31 @@ def _typed_nbt(tag):
     raise Unsupported(f'NBT projection not mapped: {kind}')
 
 
-def _resource_identity(resource):
+def _typed_item_key(resource):
+    return _json([resource['registry_name'], resource['metadata'], resource['nbt']])
+
+
+def _ordinary_item_projection(context, record):
+    return (record['serializer_class'] == DEFAULT_SERIALIZER and record['count_semantics'] == 'item_stack_size'
+            and (context['version'] == 3 or context['registry_supported']))
+
+
+def _resource_identity(resource, context=None):
+    if resource['kind'] == 'item' and context is not None and context['version'] >= 2:
+        record = context['projections'].get(_typed_item_key(resource))
+        if record is None:
+            raise Unsupported('Exact native item projection is missing for this typed identity')
+        if record['status'] == 'failed':
+            raise Unsupported('Exact native item projection failed: ' + _json(record['failure']))
+        if not _ordinary_item_projection(context, record):
+            raise Unsupported('Native item projection serializer/conversion does not establish ordinary item count semantics')
+        identity, count = _native_identity(record['native_stack'])
+        native = json.loads(identity)
+        if count != 1 or native[:3] != ['item', resource['registry_name'], resource['metadata']]:
+            raise Unsupported('Native item projection does not preserve the declared ordinary item identity/template count')
+        if (resource['registry_name'], resource['metadata']) in context.get('uncertain_buckets', set()):
+            raise Unsupported('A typed variant in this item identity bucket has an unresolved native projection')
+        return identity
     nbt = _typed_nbt(resource.get('nbt'))
     if resource['kind'] == 'fluid' and nbt not in (None, {}):
         raise Unsupported('Fluid display serializers omit fluid NBT')
@@ -241,13 +315,15 @@ def _native_identity(stack):
     return identity, count
 
 
-def _profile(handler, view):
+def _profile(handler, view, context=None):
     if handler['native_class'] == FURNACE_HANDLER:
         return ('minecraft:smelting', 'furnace', True, False)
     family = handler.get('gt_recipe_map_id')
     fields = view.get('displayed_fields') or {}
     if handler['native_class'] != GT_HANDLER or family not in GT_FAMILIES:
         raise Unsupported('Handler/map is outside the source-proven adapter allowlist')
+    if context is not None and family not in context['gt_families']:
+        raise Unsupported('Handler/map is outside the captured presentation context scope')
     if fields.get('frontend_class') != GT_FRONTEND:
         raise Unsupported('Custom or unknown GT frontend transformations are not mapped')
     if type(fields.get('render_real_stack_sizes')) is not bool or type(fields.get('unificate_output')) is not bool:
@@ -255,7 +331,7 @@ def _profile(handler, view):
     return (family, 'gt', fields['render_real_stack_sizes'], fields['unificate_output'])
 
 
-def _view_projection(view, profile, ambiguous):
+def _view_projection(view, profile, ambiguous, context=None):
     if view.get('failure') or view.get('failures'):
         raise Unsupported('Handler getter failed during reference capture')
     family, adapter, _, _ = profile
@@ -274,6 +350,12 @@ def _view_projection(view, profile, ambiguous):
             if alternative.get('failure'):
                 raise Unsupported('Stack serialization failed during reference capture')
             identity, count = _native_identity(alternative.get('native_stack'))
+            native = json.loads(identity)
+            if context is not None and context['version'] >= 2:
+                if (identity in context.get('uncertain_native_identities', set())
+                        or (native[0] == 'item' and ((context['version'] == 2 and not context['registry_supported'])
+                            or (native[1], native[2]) in context.get('uncertain_buckets', set())))):
+                    raise Unsupported('Independent native item projection coverage/count semantics are unresolved for this identity')
             if identity in ambiguous:
                 raise Unsupported('Ambiguous identity: different typed NBT resources have the same NBTJson projection')
             alternatives.append([identity, count])
@@ -310,7 +392,7 @@ def _canonical_projection(process, profile, resources, ambiguous, context):
         stacks = _item_presentation(resource_id, resource, amount, unify, context) if resource['kind'] == 'item' else [dict(resource, amount=amount)]
         entries = []
         for stack in stacks:
-            identity = _resource_identity(stack)
+            identity = _resource_identity(stack, context)
             if identity in ambiguous:
                 raise Unsupported('Ambiguous identity: different typed NBT resources have the same NBTJson projection')
             display_amount = 1 if (adapter == 'furnace' and is_input) or (stack['kind'] == 'item' and not render_real) else stack['amount']
@@ -421,18 +503,29 @@ def compare(snapshot, reference, *, example_limit=20):
         pass
     context, context_report = _presentation_context(reference, summary, manifest, resources)
     typed_identities = defaultdict(set)
+    uncertain_buckets = set()
     for resource in resources.values():
         try:
-            identity = _resource_identity(resource)
+            identity = _resource_identity(resource, context)
             typed_identities[identity].add(_json([resource['kind'], resource['registry_name'], resource['metadata'], resource['nbt']]))
         except Unsupported:
-            pass
+            if resource['kind'] == 'item':
+                uncertain_buckets.add((resource['registry_name'], resource['metadata']))
     for resource in _context_items(context):
         try:
-            identity = _resource_identity(resource)
+            identity = _resource_identity(resource, context)
             typed_identities[identity].add(_json(['item', resource['registry_name'], resource['metadata'], resource['nbt']]))
         except Unsupported:
-            pass
+            uncertain_buckets.add((resource['registry_name'], resource['metadata']))
+    if context is not None and context['version'] >= 2:
+        context['uncertain_buckets'] = uncertain_buckets
+        context['uncertain_native_identities'] = set()
+        for record in context['projections'].values():
+            if record['status'] == 'ok' and not _ordinary_item_projection(context, record):
+                try:
+                    context['uncertain_native_identities'].add(_native_identity(record['native_stack'])[0])
+                except Unsupported:
+                    pass
     ambiguous = {identity for identity, typed in typed_identities.items() if len(typed) > 1}
     del typed_identities
     finish_phase('canonical_resources_and_groups')
@@ -458,10 +551,10 @@ def compare(snapshot, reference, *, example_limit=20):
         observed_failures += sum(bool(alternative.get('failure')) for positioned in positions for alternative in positioned.get('alternatives', []))
         handler = handlers[view['handler_key']]
         try:
-            profile = _profile(handler, view)
+            profile = _profile(handler, view, context)
             profiles.add(profile)
             normalized_views.append(({'handler_key': view['handler_key'], 'recipe_index': view['recipe_index']}, profile,
-                                     _view_projection(view, profile, ambiguous)))
+                                     _view_projection(view, profile, ambiguous, context)))
         except Unsupported as error:
             unsupported(str(error), {'side': 'nei', 'handler_key': view['handler_key'], 'recipe_index': view['recipe_index']})
     del view_indexes
@@ -498,7 +591,7 @@ def compare(snapshot, reference, *, example_limit=20):
                     unresolved_outputs[(profile, error.output_key)].append(unresolved)
                 else:
                     try:
-                        anchors = {_resource_identity(resources[output['resource_id']]) for output in process['outputs']}
+                        anchors = {_resource_identity(resources[output['resource_id']], context) for output in process['outputs']}
                         if anchors and not anchors.intersection(ambiguous) and all(json.loads(identity)[2] != 32767 for identity in anchors):
                             unresolved['anchors'] = anchors
                             for identity in anchors:

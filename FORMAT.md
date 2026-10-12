@@ -94,6 +94,15 @@ duration and energy stay unknown because machine state and scaling affect them.
 Recipe-side wildcard metadata and asymmetric NBT matching remain explicit.
 Native HashSet selection order describes the captured run, not a stable priority.
 
+Botania Mana Infusion retains one-item consumption, output quantity and typed
+NBT, plus `conditions.total_mana` and `energy_unit: mana`. Catalyst predicates
+in `conditions.catalyst_below` identify the required block one block below the
+pool. They ignore block metadata and do not consume the catalyst. Both native
+requirement flags are retained. Mana availability, native list priority,
+entity-age gates and item pre-hooks remain runtime conditions. Unknown recipe
+subclasses and unresolved pre-hooks do not inherit base matching or guaranteed
+execution. Duration and EU rates remain unknown.
+
 ### Source
 
 `{id, kind, display_name, outputs, environment_ids, status, conditions,
@@ -184,10 +193,11 @@ separately. Auxiliary stacks can be furnace fuel, so they do not universally
 represent products. GT-specific views retain real quantities and native
 presentation fields. Generic presentation chances are not production chances.
 
-`presentation-context.json` schema 1 binds the same snapshot and pack, plus
+`presentation-context.json` schema 3 binds the same snapshot and pack, plus
 the closed canonical resource/process count and hash declarations. Its pointer
-in `summary.files` contains its SHA-256. The context declares two checksummed
-gzip JSONL streams, `gt-display-aliases.jsonl.gz` and `item-pools.jsonl.gz`.
+in `summary.files` contains its SHA-256. The context declares three checksummed
+gzip JSONL streams, `gt-display-aliases.jsonl.gz`, `item-pools.jsonl.gz` and
+`item-projections.jsonl.gz`.
 Direct GT aliases are keyed by canonical resource ID and queried from the
 original reconstructed stack at quantity one. Item pools are keyed by registry
 name. Both retain ordered `{registry_name, metadata, nbt, amount}` entries
@@ -195,13 +205,38 @@ with lossless typed NBT. Status distinguishes successful, empty and failed
 queries. Unregistered canonical anchors remain explicit top-level failures.
 
 Context capture runs before handler enumeration and reads no observed recipe
-views to establish expected alternatives. Scope is the four mapped GT families
-and furnace. GT aliases precede wildcard expansion, whose pool metadata and
+views to establish expected alternatives. Scope is the five mapped GT families
+including Fluid Solidifier, and furnace. GT aliases precede wildcard expansion, whose pool metadata and
 NBT replace the declaration's while the declared quantity is retained.
 Empty native pools follow the pinned metadata-zero presentation rule.
 The comparator uses successful records from partial context but reports its
 failures. Incomplete advertised context cannot pass validation thresholds.
 Without context, dependent alias/wildcard projections remain unsupported.
+
+Item projections map complete typed item identities to exact native stack
+serialization followed by `NBTJson.toJsonObject`. Capture uses the same reverse
+public `StackInfo.stackStringifyHandlers` dispatch as the pinned NEI API. It
+invokes `convertItemStackToNBT(stack, true)` once per reached handler and stops
+at the first non-null result, retaining the actual selected serializer class.
+Each copied template has quantity one. Rows retain
+`status`, `native_stack`, `failure`, `serializer_class` and `count_semantics`.
+The context records the ordered native serializer classes and projection API,
+with `classification: selected_pinned_default_item_count`.
+Scoped declarations, aliases, pools and canonical identity collision variants
+are captured independently before recipe views. Native Java floating-point
+NBT formatting is preserved without a Python approximation. Supplementary
+declaration scope includes `botania:mana_infusion` with no GT unification,
+capturing its independent wildcard pools without mapping its NEI handler.
+
+Only an exact default-item serializer winner with its source-proven identity
+and count envelope permits applying a declared
+recipe quantity. Unknown serializers and item-to-fluid conversions retain
+their payloads but do not establish ordinary item quantities. Distinct typed
+identities with the same native projection remain ambiguous. Historical schema
+1 and 2 contexts remain readable within their captured scope and original
+projection rules. Schema 1 lacks native projections. Schema 2 infers ordinary
+counts only under its pinned built-in serializer registry. Missing or unknown
+historical facts cannot retrospectively establish native identity agreement.
 
 The comparator validates all canonical and reference streams and the paired
 cohort before applying its version-pinned adapter allowlist. It reports

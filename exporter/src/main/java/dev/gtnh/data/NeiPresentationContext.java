@@ -4,6 +4,9 @@ import static dev.gtnh.data.Jsons.object;
 
 import codechicken.nei.ItemList;
 import codechicken.nei.NEIClientConfig;
+import codechicken.nei.api.IStackStringifyHandler;
+import codechicken.nei.recipe.StackInfo;
+import codechicken.nei.util.NBTJson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -21,6 +24,8 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.util.Arrays;
+import java.util.ArrayList;
+import java.util.AbstractMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -39,9 +44,14 @@ import net.minecraftforge.oredict.OreDictionary;
 final class NeiPresentationContext {
     private static final List<String> GT_FAMILIES = Arrays.asList(
         "gregtech:gt.recipe.alloysmelter", "gregtech:gt.recipe.metalbender",
-        "gregtech:gt.recipe.macerator", "gregtech:gt.recipe.orewasher");
+        "gregtech:gt.recipe.macerator", "gregtech:gt.recipe.orewasher",
+        "gregtech:gt.recipe.fluidsolidifier");
     private static final String FURNACE_FAMILY = "minecraft:smelting";
+    private static final List<String> SUPPLEMENTARY_FAMILIES = Arrays.asList("botania:mana_infusion");
+    private static final String DEFAULT_SERIALIZER = "codechicken.nei.recipe.stackinfo.DefaultStackStringifyHandler";
     private final Map<String, JsonObject> resources = new LinkedHashMap<>();
+    private final Map<String, JsonObject> projectionItems = new LinkedHashMap<>();
+    private final Set<String> projectionBuckets = new LinkedHashSet<>();
     private final Set<String> aliases = new LinkedHashSet<>();
     private final Set<String> poolOwners = new LinkedHashSet<>();
     private final JsonArray failures = new JsonArray();
@@ -65,6 +75,8 @@ final class NeiPresentationContext {
         JsonObject start = readiness();
         boolean ready = ready(start);
         ListMultimap<Item, ItemStack> pools = ItemList.itemMap;
+        List<String> serializers = serializerClasses();
+        Set<String> emptyPools = new LinkedHashSet<>();
         long aliasCount = 0;
         long poolCount = 0;
         try (BufferedWriter aliasWriter = writer(directory.resolve("gt-display-aliases.jsonl.gz"));
@@ -81,6 +93,7 @@ final class NeiPresentationContext {
                         JsonObject stack = serialize(alternative);
                         encoded.add(stack);
                         context.addPoolOwner(stack);
+                        context.addProjection(stack);
                     }
                     row.add("alternatives", encoded);
                     row.addProperty("status", encoded.size() == 0 ? "empty" : "ok");
@@ -98,7 +111,12 @@ final class NeiPresentationContext {
                     Item item = (Item) Item.itemRegistry.getObject(owner);
                     if (item == null) throw new IllegalArgumentException("Unknown item pool registry owner: " + owner);
                     JsonArray encoded = new JsonArray();
-                    for (ItemStack stack : pools.get(item)) encoded.add(serialize(stack));
+                    for (ItemStack stack : pools.get(item)) {
+                        JsonObject typed = serialize(stack);
+                        encoded.add(typed);
+                        context.addProjection(typed);
+                    }
+                    if (encoded.size() == 0) emptyPools.add(owner);
                     row.add("entries", encoded);
                     row.addProperty("status", encoded.size() == 0 ? "empty" : "ok");
                 } catch (RuntimeException | LinkageError failure) {
@@ -109,20 +127,58 @@ final class NeiPresentationContext {
                 poolCount++;
             }
         }
+        // Empty wildcard pools produce metadata zero with the declaration's original tag.
+        for (JsonObject identity : new ArrayList<>(context.projectionItems.values())) {
+            if (identity.get("metadata").getAsInt() == OreDictionary.WILDCARD_VALUE
+                && emptyPools.contains(identity.get("registry_name").getAsString())) {
+                JsonObject fallback = object("registry_name", identity.get("registry_name"), "metadata", 0, "nbt", identity.get("nbt"));
+                context.addProjection(fallback);
+            }
+        }
+        // Include other captured typed variants that could collide with scoped presentation identities.
+        for (JsonObject resource : context.resources.values()) {
+            if ("item".equals(resource.get("kind").getAsString()) && context.projectionBuckets.contains(bucket(resource)))
+                context.addProjection(resource);
+        }
+        long projectionCount = 0;
+        try (BufferedWriter projectionWriter = writer(directory.resolve("item-projections.jsonl.gz"))) {
+            for (JsonObject identity : context.projectionItems.values()) {
+                JsonObject row;
+                try {
+                    if (!ready) throw new IllegalStateException("NEI presentation context is not ready");
+                    row = itemProjection(reconstruct(identity));
+                    row.add("nbt", identity.get("nbt"));
+                } catch (RuntimeException | LinkageError failure) {
+                    row = object("registry_name", identity.get("registry_name"), "metadata", identity.get("metadata"),
+                        "nbt", identity.get("nbt"), "status", "failed", "native_stack", null,
+                        "serializer_class", null, "count_semantics", "unknown", "failure", failure("item_projection", failure));
+                    context.failedRows++;
+                }
+                append(projectionWriter, row);
+                projectionCount++;
+            }
+        }
         JsonObject end = readiness();
         end.addProperty("item_pool_unchanged", pools == ItemList.itemMap);
+        end.addProperty("serializer_registry_unchanged", serializers.equals(serializerClasses()));
         boolean complete = ready && ready(end) && pools == ItemList.itemMap
+            && end.get("serializer_registry_unchanged").getAsBoolean()
             && context.failedRows == 0 && context.failures.size() == 0;
         JsonObject files = object(
             "gt-display-aliases.jsonl.gz", object("records", aliasCount,
                 "sha256", SnapshotWriter.sha256(directory.resolve("gt-display-aliases.jsonl.gz"))),
             "item-pools.jsonl.gz", object("records", poolCount,
-                "sha256", SnapshotWriter.sha256(directory.resolve("item-pools.jsonl.gz"))));
-        JsonObject summary = object("schema_version", 1, "canonical_snapshot_id", manifest.get("snapshot_id"),
+                "sha256", SnapshotWriter.sha256(directory.resolve("item-pools.jsonl.gz"))),
+            "item-projections.jsonl.gz", object("records", projectionCount,
+                "sha256", SnapshotWriter.sha256(directory.resolve("item-projections.jsonl.gz"))));
+        JsonObject summary = object("schema_version", 3, "canonical_snapshot_id", manifest.get("snapshot_id"),
             "canonical_pack", manifest.get("pack"), "canonical_files", declarations,
-            "scope", object("gt_families", GT_FAMILIES, "furnace_family", FURNACE_FAMILY, "alias_template_amount", 1),
+            "scope", object("gt_families", GT_FAMILIES, "furnace_family", FURNACE_FAMILY, "alias_template_amount", 1,
+                "supplementary_families", SUPPLEMENTARY_FAMILIES),
             "readiness", object("start", start, "end", end), "complete", complete,
             "failed_rows", context.failedRows, "failures", context.failures, "files", files);
+        summary.add("item_projection", object("api", "StackInfo.stackStringifyHandlers.reverse.convertItemStackToNBT(stack,true)->NBTJson.toJsonObject",
+            "template_item_amount", 1, "classification", "selected_pinned_default_item_count", "serializer_classes", serializers));
         Path temporary = directory.resolve("presentation-context.json.tmp");
         Files.write(temporary, SnapshotWriter.JSON.toJson(summary).getBytes(StandardCharsets.UTF_8), StandardOpenOption.CREATE_NEW);
         Files.move(temporary, directory.resolve("presentation-context.json"), StandardCopyOption.ATOMIC_MOVE);
@@ -137,7 +193,7 @@ final class NeiPresentationContext {
         read(directory, "processes", declarations, process -> {
             String family = process.get("family").getAsString();
             boolean gt = GT_FAMILIES.contains(family);
-            if (!gt && !FURNACE_FAMILY.equals(family)) return;
+            if (!gt && !FURNACE_FAMILY.equals(family) && !SUPPLEMENTARY_FAMILIES.contains(family)) return;
             for (JsonElement element : process.getAsJsonArray("inputs")) {
                 JsonObject slot = element.getAsJsonObject();
                 for (JsonElement choice : slot.getAsJsonArray("choices"))
@@ -160,6 +216,7 @@ final class NeiPresentationContext {
         JsonObject resource = resources.get(id);
         if (resource == null) throw new IllegalArgumentException("Unknown declared resource: " + id);
         if (!"item".equals(resource.get("kind").getAsString())) return;
+        addProjection(resource);
         if (gt) aliases.add(id);
         addPoolOwner(resource);
     }
@@ -167,6 +224,59 @@ final class NeiPresentationContext {
     private void addPoolOwner(JsonObject stack) {
         if (stack.get("metadata").getAsInt() == OreDictionary.WILDCARD_VALUE)
             poolOwners.add(stack.get("registry_name").getAsString());
+    }
+
+    private static String bucket(JsonObject stack) {
+        return SnapshotWriter.JSON.toJson(object("registry_name", stack.get("registry_name"), "metadata", stack.get("metadata")));
+    }
+
+    private void addProjection(JsonObject stack) {
+        JsonObject identity = object("registry_name", stack.get("registry_name"), "metadata", stack.get("metadata"), "nbt", stack.get("nbt"));
+        projectionItems.putIfAbsent(SnapshotWriter.JSON.toJson(identity), identity);
+        projectionBuckets.add(bucket(stack));
+    }
+
+    private static List<String> serializerClasses() {
+        List<String> classes = new ArrayList<>();
+        for (IStackStringifyHandler handler : StackInfo.stackStringifyHandlers) classes.add(handler.getClass().getName());
+        return classes;
+    }
+
+    /** Same live reverse dispatch as the pinned StackInfo API, with the selected handler retained. */
+    static Map.Entry<IStackStringifyHandler, NBTTagCompound> dispatchItem(ItemStack stack, boolean saveStackSize,
+        List<IStackStringifyHandler> handlers) {
+        for (int index = handlers.size() - 1; index >= 0; index--) {
+            IStackStringifyHandler handler = handlers.get(index);
+            NBTTagCompound serialized = handler.convertItemStackToNBT(stack, saveStackSize);
+            if (serialized != null) return new AbstractMap.SimpleImmutableEntry<>(handler, serialized);
+        }
+        return null;
+    }
+
+    private static JsonObject itemProjection(ItemStack original) {
+        JsonObject typed = serialize(original);
+        ItemStack template = original.copy();
+        template.stackSize = 1;
+        Map.Entry<IStackStringifyHandler, NBTTagCompound> selected = dispatchItem(template, true, StackInfo.stackStringifyHandlers);
+        if (selected == null) throw new IllegalStateException("Native item serializer returned null");
+        NBTTagCompound serialized = selected.getValue();
+        String serializer = selected.getKey().getClass().getName();
+        String semantics = itemCountSemantics(typed, serialized, serializer);
+        return object("registry_name", typed.get("registry_name"), "metadata", typed.get("metadata"), "nbt", typed.get("nbt"),
+            "status", "ok", "native_stack", NBTJson.toJsonObject(serialized),
+            "serializer_class", serializer,
+            "count_semantics", semantics, "failure", null);
+    }
+
+    static String itemCountSemantics(JsonObject typed, NBTTagCompound serialized, String selectedSerializer) {
+        boolean ordinary = DEFAULT_SERIALIZER.equals(selectedSerializer) && serialized.hasKey("strId", 8)
+            && serialized.hasKey("Damage", 3) && serialized.hasKey("Count", 3)
+            && serialized.getString("strId").equals(typed.get("registry_name").getAsString())
+            && serialized.getInteger("Damage") == typed.get("metadata").getAsInt() && serialized.getInteger("Count") == 1
+            && (!serialized.hasKey("tag") || serialized.hasKey("tag", 10));
+        @SuppressWarnings("unchecked") Set<String> keys = serialized.func_150296_c();
+        ordinary &= Arrays.asList("strId", "Damage", "Count", "tag").containsAll(keys);
+        return ordinary ? "item_stack_size" : serialized.hasKey("neiFluidName") ? "native_conversion" : "unknown";
     }
 
     private static void read(Path directory, String stream, JsonObject declarations, Consumer<JsonObject> consumer)

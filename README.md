@@ -3,11 +3,12 @@
 Capture a versioned GregTech New Horizons dataset, then explore it with a
 human UI or query it through MCP and CLI while Minecraft is closed.
 
-The 2026-10-12 full-pack capture contains 259,616 processes, 122,972 resources
+The 2026-10-12 full-pack capture contains 259,781 processes, 123,005 resources
 and 25,228 acquisition-source records. Its six compressed streams total
-11.27 MiB. Build, launch, capture, shutdown and import took 179.46 seconds
+11.28 MiB. Build, launch, capture, shutdown and import took 179.03 seconds
 on the local setup. This adds 1,663 native EnderIO Sag Mill baseline recipes,
 11 ordinary Alloy Smelter recipes, 154 Forestry Centrifuge recipes,
+152 interpreted Botania Mana Infusion recipes and 13 unresolved subclass records,
 22,898 conditional normal-ore mining branches and 2,106 small-ore drop rules.
 Public Sievert and Materials metadata is structured in 279 GT
 records. Timings describe this captured scope and machine.
@@ -22,7 +23,7 @@ draws, while joint inventory feasibility and final tool/event delivery remain
 unresolved. Grinding-ball variants and other non-GT machine families are still
 incomplete or unsupported.
 
-A later full-pack run verified declared inputs in all 34,881 GT shaped and
+A previous full-pack run verified declared inputs in all 34,881 GT shaped and
 2,702 GT shapeless records. That snapshot has 257,788 processes and 122,972
 resources. Its compressed streams total 10.46 MiB. Capture took about nine
 seconds and the full build/launch/capture/import pipeline took 153.18 seconds.
@@ -110,22 +111,31 @@ quantities and alternatives, and NEI's NBT projection loses type information.
 Neither signature agreement nor display agreement proves pack-wide execution
 semantics. See [FORMAT.md](FORMAT.md) for the reference contract.
 
-The latest paired full-pack run on 2026-10-12 captured 366 handlers and 287,499
-views/signatures in a 179.46-second pipeline. Independent item presentation
-context retains 32,109 original GT alias queries and 223 NEI item pools,
-with exact typed NBT and binding to the closed canonical streams.
-The scoped comparison finds 45,209 matching projections, no differences
-and no missing matches. Earlier runs reported 26 differences and 148 missing
-matches before the alias/wildcard presentation rules were mapped.
-Semantic case accounting confirms 173 earlier observations now match.
-One Lapotron Crystal case remains explicitly unsupported because Java's
-floating-point NBT display formatting is not mapped. It is not a missing recipe.
+The latest paired full-pack run on 2026-10-12 captured 366 handlers and 284,357
+views/signatures in a 179.03-second pipeline. Independent item presentation
+context retains 55,875 original GT alias queries, 231 NEI item pools and
+66,415 native item projections, bound to the closed canonical streams.
+The scoped five-map GT/furnace comparison finds 53,909 matching projections,
+no differences and no missing matches. Of these, 8,699 belong to Fluid
+Solidifier. The original four-map/furnace scope has 45,210 matches, including
+the previously unsupported Lapotron Crystal double-NBT case. Native Java
+serialization now supplies its exact display without approximated formatting.
+An additional 20,196 TiC Bolt Molding views remain unverified because NEI
+collapses null and empty-compound NBT for TGregworks input identities.
+The authoritative native dataset retains that distinction.
 Five native recycling recipes still contain unregistered door objects after
 MalisisDoors replaces the vanilla registry entries. NEI cannot serialize
 those objects. Their errors remain explicit, and two scoped canonical anchors
 also make presentation context incomplete. Validation therefore still fails
 its completeness thresholds. This does not establish whole-pack equivalence.
 The comparator exits 1 for failed thresholds and 2 for invalid evidence.
+
+Botania is checked separately against its ingredient/result views. All 152
+base recipes agree, including eight wildcard cases resolved by independent
+pools. The 13 subclass display templates agree while execution stays unknown.
+Auxiliary catalyst fields agree in raw presentation, without a selected-writer
+proof. Mana, production probabilities and runtime gates remain source-backed
+facts rather than independent NEI validation results.
 
 ## Human interface
 

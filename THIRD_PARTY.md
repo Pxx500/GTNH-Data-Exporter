@@ -37,6 +37,7 @@ affected files.
 | NotEnoughItems, host API | 2.8.159-GTNH | LGPL-3.0-or-later declaration in upstream README |
 | EnderIO, host API | 2.10.49 | LGPL-3.0-or-later GTNH modifications, original public-domain declaration |
 | ForestryMC, host API | 4.11.39 | Upstream host dependency, no implementation bundled |
+| Botania, host API | 1.13.38-GTNH | Upstream host dependency, no implementation bundled |
 
 UI package license metadata was checked in the actual lockfile. Python
 direct versions are pinned in pyproject.toml. Upstream license texts:
