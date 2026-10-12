@@ -18,7 +18,21 @@ STRING = {"type": "string"}
 OPTIONAL_STRING = {"type": ["string", "null"]}
 PAGING = {"offset": {"type": "integer", "minimum": 0, "default": 0},
           "limit": {"type": "integer", "minimum": 1, "maximum": 500, "default": 50}}
+TIERS = {"min_tier": {"type": ["integer", "null"], "minimum": 0, "maximum": 15},
+         "max_tier": {"type": ["integer", "null"], "minimum": 0, "maximum": 15},
+         "unknown_tier_policy": {"enum": ["exclude", "include"], "default": "exclude"}}
 OPERATIONS = {
+    "inspect_chemistry": ("Inspect source-backed material accounting facts and unsupported scope. Formula text alone is not purity or balance proof", _schema({"resource_id": STRING}, ("resource_id",))),
+    "find_loops": ("Audit bounded closed resource paths for guaranteed or expected gains, losses and external consumption", _schema({
+        "start_id": STRING, "kind": {"enum": ["any", "gaining", "lossy", "conserving"]}, "chemical_kind": {"enum": ["any", "balanced", "gaining", "lossy", "mixed", "unsupported"]}, "yield_mode": {"enum": ["guaranteed", "expected"]}, "selections": {"type":["object","null"]},
+        "max_depth": {"type": "integer", "minimum": 1, "maximum": 20}, "max_processes": {"type": "integer", "minimum": 1, "maximum": 1000},
+        "max_paths": {"type": "integer", "minimum": 1, "maximum": 100}, "max_states": {"type": "integer", "minimum": 1, "maximum": 50000}, **TIERS}, ("start_id",))),
+    "plan_recycling": ("Evaluate a chosen main path and bounded byproduct return paths with explicit quantities and native limitations", _schema({
+        "main_path": _schema({"resource_ids": {"type": "array", "items": STRING}, "process_ids": {"type": "array", "items": STRING}}, ("resource_ids", "process_ids")),
+        "byproduct_id": STRING, "return_id": STRING, "main_runs": {"oneOf": [{"type": "integer"}, _schema({"numerator": {"type": "integer"}, "denominator": {"type": "integer"}}, ("numerator", "denominator"))]},
+        "selections": {"type": ["object", "null"]}, "yield_mode": {"enum": ["guaranteed", "expected"]},
+        "max_depth": {"type": "integer", "minimum": 1, "maximum": 64}, "max_processes": {"type": "integer", "minimum": 1, "maximum": 5000},
+        "max_paths": {"type": "integer", "minimum": 1, "maximum": 100}, "max_extra_steps": {"type": "integer", "minimum": 0, "maximum": 64}, **TIERS}, ("main_path", "byproduct_id", "return_id"))),
     "status": ("Describe the fixed snapshot, counts and capture coverage", _schema()),
     "find_resources": ("Search snapshot resources with bounded pagination", _schema({"q": STRING, "kind": {"enum": ["item", "fluid", None]}, **PAGING})),
     "get_resource": ("Read an exact canonical resource and provenance", _schema({"id": STRING}, ("id",))),
@@ -30,7 +44,7 @@ OPERATIONS = {
     "find_environments": ("Search the registered environment catalog", _schema({"q": STRING, **PAGING})),
     "trace_processes": ("Find complete shortest-first consume dependency paths with required or excluded materials. Full recipe inputs remain requirements. Not an inventory, yield or throughput proof", _schema({"start_id": STRING, "target_id": STRING, "max_depth": {"type": "integer", "minimum": 1, "maximum": 64, "default": 12}, "max_processes": {"type": "integer", "minimum": 1, "maximum": 5000, "default": 300},
                             "max_paths": {"type": "integer", "minimum": 1, "maximum": 100, "default": 8}, "max_extra_steps": {"type": "integer", "minimum": 0, "maximum": 64, "default": 2},
-                            "required_resource_ids": {"type": "array", "items": STRING}, "excluded_resource_ids": {"type": "array", "items": STRING}}, ("start_id", "target_id"))),
+                            "required_resource_ids": {"type": "array", "items": STRING}, "excluded_resource_ids": {"type": "array", "items": STRING}, **TIERS}, ("start_id", "target_id"))),
 }
 
 

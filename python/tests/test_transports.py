@@ -97,6 +97,79 @@ class TransportTests(unittest.TestCase):
             self.assertEqual(client.get("/api/unknown").status_code, 404)
             self.assertIn("fixture SPA", client.get("/deep/link").text)
 
+    def test_http_and_cli_forward_recipe_voltage_filters_without_inferring_machine_tiers(self):
+        arguments = dict(start_id='a', target_id='b', min_tier=0, max_tier=3, unknown_tier_policy='exclude')
+        expected = self.dataset.trace_processes(**arguments)
+        with TestClient(create_app(self.dataset)) as client:
+            response = client.get('/api/trace', params=arguments)
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(response.json(), expected)
+        output = StringIO()
+        with redirect_stdout(output):
+            result = main(['trace', '--database', str(self.database), '--start-id', 'a', '--target-id', 'b',
+                           '--min-tier', '0', '--max-tier', '3', '--unknown-tier-policy', 'exclude'])
+        self.assertEqual(result, 0)
+        self.assertEqual(json.loads(output.getvalue()), expected)
+
+    def test_recycling_structured_http_and_cli_requests_use_the_dataset_owner(self):
+        arguments = dict(main_path={'resource_ids':['a','b'], 'process_ids':['convert']},
+                         byproduct_id='b', return_id='a', main_runs=2, yield_mode='expected',
+                         min_tier=0, max_tier=3, unknown_tier_policy='include', max_paths=2)
+        expected = self.dataset.plan_recycling(**arguments)
+        with TestClient(create_app(self.dataset)) as client:
+            response = client.post('/api/recycling-plan', json=arguments)
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(response.json(), expected)
+            self.assertEqual(client.post('/api/recycling-plan', json={'unexpected':True}).status_code, 400)
+            invalid = client.post('/api/recycling-plan', json={**arguments, 'selections': {'convert': {'0': {'choice_index': 999, 'resource_id': 'a'}}}})
+            self.assertEqual(invalid.status_code, 400)
+            self.assertEqual(invalid.json(), {'error': 'Invalid concrete input selection'})
+        request = self.root / 'recycling-request.json'
+        request.write_text(json.dumps(arguments), encoding='utf-8')
+        output = StringIO()
+        with redirect_stdout(output):
+            result = main(['recycle', '--database', str(self.database), '--request-file', str(request)])
+        self.assertEqual(result, 0)
+        self.assertEqual(json.loads(output.getvalue()), expected)
+
+    def test_chemical_facts_and_bounded_loop_filters_are_shared_across_http_and_cli(self):
+        arguments = dict(start_id='a', kind='any', chemical_kind='unsupported', yield_mode='expected',
+                         max_depth=3, max_processes=20, max_paths=4, max_states=100,
+                         min_tier=0, max_tier=3, unknown_tier_policy='include')
+        expected = self.dataset.find_loops(**arguments)
+        facts = self.dataset.inspect_chemistry(resource_id='a')
+        with TestClient(create_app(self.dataset)) as client:
+            self.assertEqual(client.get('/api/chemistry/a').json(), facts)
+            self.assertEqual(client.get('/api/loops', params=arguments).json(), expected)
+            self.assertEqual(client.post('/api/loops', json=arguments).json(), expected)
+            self.assertEqual(client.post('/api/loops', json={'unexpected':True}).status_code, 400)
+        output = StringIO()
+        with redirect_stdout(output):
+            result = main(['chemistry', 'a', '--database', str(self.database)])
+        self.assertEqual(result, 0)
+        self.assertEqual(json.loads(output.getvalue()), facts)
+        output = StringIO()
+        with redirect_stdout(output):
+            result = main(['loops', '--database', str(self.database), '--start-id', 'a', '--kind', 'any',
+                           '--chemical-kind', 'unsupported', '--yield-mode', 'expected', '--max-depth', '3',
+                           '--max-processes', '20', '--max-paths', '4', '--max-states', '100',
+                           '--min-tier', '0', '--max-tier', '3', '--unknown-tier-policy', 'include'])
+        self.assertEqual(result, 0)
+        self.assertEqual(json.loads(output.getvalue()), expected)
+
+    def test_loop_advertised_http_bounds_and_cli_limits_match_the_owner(self):
+        with TestClient(create_app(self.dataset)) as client:
+            advertised = {item['name']: item['schema'] for item in client.get('/openapi.json').json()['paths']['/api/loops']['get']['parameters']}
+            for parameter, maximum in [('max_depth', 20), ('max_processes', 1000), ('max_states', 50000)]:
+                self.assertEqual(advertised[parameter]['maximum'], maximum)
+                self.assertEqual(client.get('/api/loops', params={'start_id': 'a', parameter: maximum + 1}).status_code, 422)
+                self.assertEqual(client.post('/api/loops', json={'start_id': 'a', parameter: maximum + 1}).status_code, 400)
+                error_output = StringIO()
+                with redirect_stderr(error_output):
+                    result = main(['loops', '--database', str(self.database), '--start-id', 'a', '--' + parameter.replace('_', '-'), str(maximum + 1)])
+                self.assertEqual(result, 2)
+                self.assertEqual(json.loads(error_output.getvalue()), {'error': f'{parameter} must be between 1 and {maximum}'})
+
     def test_official_mcp_stdio_matches_dataset_operations(self):
         async def exercise():
             parameters = StdioServerParameters(command=sys.executable, args=["-m", "gtnh_data", "mcp", "--database", str(self.database)], env=dict(os.environ))
@@ -104,7 +177,10 @@ class TransportTests(unittest.TestCase):
                 async with ClientSession(read_stream, write_stream, read_timeout_seconds=10) as session:
                     await session.initialize()
                     tools = await session.list_tools()
-                    self.assertEqual({tool.name for tool in tools.tools}, {"status", "find_resources", "get_resource", "find_processes", "get_process", "get_group", "find_sources", "get_source", "find_environments", "trace_processes"})
+                    loop_schema = next(tool.input_schema for tool in tools.tools if tool.name == 'find_loops')
+                    for parameter, maximum in [('max_depth', 20), ('max_processes', 1000), ('max_states', 50000)]:
+                        self.assertEqual(loop_schema['properties'][parameter]['maximum'], maximum)
+                    self.assertTrue({"status", "find_resources", "get_resource", "find_processes", "get_process", "get_group", "find_sources", "get_source", "find_environments", "trace_processes", "plan_recycling"} <= {tool.name for tool in tools.tools})
                     result = await session.call_tool("get_source", {"id": self.mining_source["id"]})
                     self.assertFalse(result.is_error)
                     self.assertEqual(result.structured_content, self.dataset.get_source(self.mining_source["id"]))
@@ -130,6 +206,27 @@ class TransportTests(unittest.TestCase):
                     result = await session.call_tool('trace_processes', arguments)
                     self.assertFalse(result.is_error)
                     self.assertEqual(result.structured_content, self.dataset.trace_processes(**arguments))
+                    tier_arguments = dict(start_id='a', target_id='b', min_tier=0, max_tier=3, unknown_tier_policy='exclude')
+                    result = await session.call_tool('trace_processes', tier_arguments)
+                    self.assertFalse(result.is_error)
+                    self.assertEqual(result.structured_content, self.dataset.trace_processes(**tier_arguments))
+                    recycling = dict(main_path={'resource_ids':['a','b'],'process_ids':['convert']}, byproduct_id='b', return_id='a', main_runs=2, yield_mode='expected')
+                    result = await session.call_tool('plan_recycling', recycling)
+                    self.assertFalse(result.is_error)
+                    self.assertEqual(result.structured_content, self.dataset.plan_recycling(**recycling))
+                    self.assertEqual(len(result.content), 1)
+                    self.assertLess(len(result.content[0].text), 256)
+                    self.assertNotIn('main_path', result.content[0].text)
+                    loop_arguments = dict(start_id='a', kind='any', chemical_kind='unsupported', yield_mode='expected',
+                                          max_depth=3, max_processes=20, max_paths=4, max_states=100,
+                                          min_tier=0, max_tier=3, unknown_tier_policy='include')
+                    result = await session.call_tool('find_loops', loop_arguments)
+                    self.assertFalse(result.is_error)
+                    self.assertEqual(result.structured_content, self.dataset.find_loops(**loop_arguments))
+                    result = await session.call_tool('inspect_chemistry', {'resource_id':'a'})
+                    self.assertFalse(result.is_error)
+                    self.assertEqual(result.structured_content, self.dataset.inspect_chemistry(resource_id='a'))
+                    self.assertLess(len(result.content[0].text), 256)
                     error = await session.call_tool("get_resource", {"id": "missing"})
                     self.assertTrue(error.is_error)
         asyncio.run(exercise())

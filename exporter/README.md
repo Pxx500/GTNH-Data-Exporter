@@ -167,6 +167,31 @@ catalog. Counts are not a claim of complete semantics.
 
 ## Verification
 
+The developer accounting extension passed 26 Java, 92 Python and 28 GUI tests
+with a successful production UI build. The final paired capture/import exited
+0 in 210.53 seconds. It preserves 259,781 processes and 118,717 resources and
+adds versioned material facts plus nominal native GT recipe voltage tiers.
+The same scoped NEI comparison retains 78,389 matches, zero differences and
+zero missing matches. Known Door errors keep its strict completeness false.
+
+All 4,695 query-accountable resources passed actual native-unit inspection.
+Iron dust, small/tiny dust and molten forms yield Fe amounts 1, 1/4, 1/9 and
+1/144. Native density and hierarchical component units remain significant.
+The native fluid dispatcher omits water, while Water and Ice share its public
+phase identity. The capture retains both candidates. Query consensus confirms
+the same H2/O1 per 1,000 units without choosing a material identity or
+certifying purity. Missing associations/components remain unsupported.
+
+IntelliJ audit 6e413a6d-6309-48ea-86a2-3533fe4e6972 completed with 61 advisories.
+Direct PMD against the actual compile classpath completed with 170 advisories
+and no processing/configuration errors. The combined runner still reports its
+nested-wrapper PMD stage as skipped. No metric suppressions were added.
+
+One consolidated review and focused correction check closed five reachable
+UI/transport findings. Fresh configured official MCP and HTTP match Dataset
+for native chemistry, a tier-filtered GT path, selected 100%/50% reagent
+recycling, bounded loop queries and exact source records.
+
 The combined Botania and independent-projection extension passed 22 Java,
 60 Python and 19 GUI tests. Actual Botania `1.13.38-GTNH` resolves in the
 consuming module. The final paired capture/import completed in 186.22 seconds.

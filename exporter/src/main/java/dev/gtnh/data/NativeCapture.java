@@ -8,10 +8,12 @@ import com.google.gson.JsonObject;
 import cpw.mods.fml.common.Loader;
 import cpw.mods.fml.common.ModContainer;
 import gregtech.api.enums.Materials;
+import gregtech.api.enums.GTValues;
 import gregtech.api.recipe.RecipeMap;
 import gregtech.api.recipe.RecipeMetadataKey;
 import gregtech.api.util.GTOreDictUnificator;
 import gregtech.api.util.GTRecipe;
+import gregtech.api.util.GTUtility;
 import gregtech.api.util.recipe.Sievert;
 import java.io.IOException;
 import java.lang.reflect.Array;
@@ -42,13 +44,17 @@ import net.minecraftforge.oredict.OreDictionary;
  */
 final class NativeCapture {
     private final SnapshotWriter writer;
+    private final MaterialFacts materialFacts;
     private final Map<String, String> resourceIds = new HashMap<>();
     private final Map<String, String> oreGroups = new HashMap<>();
     private final Map<String, String> unifiedGroups = new HashMap<>();
     private int processNumber;
     private int unknownMetadata;
 
-    NativeCapture(SnapshotWriter writer) { this.writer = writer; }
+    NativeCapture(SnapshotWriter writer) {
+        this.writer = writer;
+        materialFacts = new MaterialFacts(Loader.instance().getIndexedModList().get("gregtech").getVersion());
+    }
 
     void capture() throws IOException {
         oreDictionary();
@@ -62,6 +68,8 @@ final class NativeCapture {
         new WorldgenCapture(this, writer).capture();
         coverage("resources", "partial", writer.count("resources"),
             "Resources referenced by captured recipes, ore groups and acquisition definitions. Not an exhaustive NEI item catalog");
+        coverage("resource.material_facts", "partial", writer.count("resources"),
+            "Versioned GT associations and native component trees. Accounting eligibility is bounded and does not certify purity. Unassociated and unresolved resources are explicit");
         coverage("recipe-semantics", "partial", writer.count("processes"),
             "Dynamic native matching, machine-specific metadata and custom crafting remain unresolved. Uninterpreted metadata: " + unknownMetadata);
         coverage("other-mod-recipes", "unsupported", 0,
@@ -111,22 +119,25 @@ final class NativeCapture {
         String name = Item.itemRegistry.getNameForObject(stack.getItem());
         if (name == null) throw new IllegalArgumentException("Unregistered native item: " + stack.getItem().getClass().getName());
         JsonElement nbt = TypedNbt.encode(stack.getTagCompound());
-        return resource("item", name, stack.getItemDamage(), nbt, displayName(stack, name));
+        return resource("item", name, stack.getItemDamage(), nbt, displayName(stack, name), stack);
     }
 
     String fluid(FluidStack stack) throws IOException {
         if (stack == null) return null;
-        return resource("fluid", stack.getFluid().getName(), null, TypedNbt.encode(stack.tag), stack.getLocalizedName());
+        return resource("fluid", stack.getFluid().getName(), null, TypedNbt.encode(stack.tag), stack.getLocalizedName(), stack);
     }
 
-    private String resource(String kind, String registry, Integer damage, JsonElement nbt, String label) throws IOException {
+    private String resource(String kind, String registry, Integer damage, JsonElement nbt, String label, Object stack) throws IOException {
         String key = kind + "|" + registry + "|" + damage + "|" + nbt;
         String id = resourceIds.get(key);
         if (id == null) {
             id = "r" + resourceIds.size();
             resourceIds.put(key, id);
+            JsonObject facts = stack instanceof ItemStack ? materialFacts.item((ItemStack) stack)
+                : materialFacts.fluid((FluidStack) stack);
             writer.append("resources", object("id", id, "kind", kind, "registry_name", registry,
                 "metadata", damage, "nbt", nbt, "display_name", label,
+                "material_facts", facts,
                 "provenance", object("owner", "native_registry")));
         }
         return id;
@@ -367,6 +378,17 @@ final class NativeCapture {
 
     void emitProcess(String family, String label, JsonArray inputs, JsonArray outputs, Integer duration,
         Integer energy, Integer amperage, Boolean executable, JsonObject conditions, JsonObject provenance) throws IOException {
+        if (family.startsWith("gregtech:")) {
+            if (energy != null && energy >= 0) {
+                int tier = GTUtility.getTier(energy);
+                conditions.addProperty("recipe_voltage_tier", tier);
+                conditions.addProperty("recipe_voltage_tier_name", GTValues.VN[tier]);
+                conditions.addProperty("recipe_voltage_tier_source", "GTUtility.getTier(mEUt)");
+                conditions.addProperty("recipe_voltage_tier_semantics", "nominal recipe voltage class, not machine capability");
+            } else {
+                conditions.addProperty("recipe_voltage_tier_status", "unresolved");
+            }
+        }
         writer.append("processes", object("id", "p" + processNumber++, "family", family, "display_name", label,
             "inputs", inputs, "outputs", outputs, "duration_ticks", duration, "eu_per_tick", energy,
             "amperage", amperage, "executable", executable, "conditions", conditions, "provenance", provenance));

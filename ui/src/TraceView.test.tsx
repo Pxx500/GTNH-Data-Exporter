@@ -31,6 +31,40 @@ const processes: Process[] = ['Furnace','Alloy Smelter','Bender'].map((display_n
 processes[1].inputs.push({role:'presence',choices:[{resource_id:'r4',amount:1,match:{mode:'exact'}}]})
 const trace: Trace = {snapshot_id:'fixture',start_id:'r0',target_id:'r3',resources:[resources[4],resources[2],resources[0],resources[3],resources[1]],processes:[processes[2],processes[0],processes[1]],edges:[{source:'resource:r0',target:'process:p0',role:'consume'},{source:'process:p0',target:'resource:r1',role:'output'},{source:'resource:r1',target:'process:p1',role:'consume'},{source:'resource:r4',target:'process:p1',role:'presence'},{source:'process:p1',target:'resource:r2',role:'output'},{source:'resource:r2',target:'process:p2',role:'consume'},{source:'process:p2',target:'resource:r3',role:'output'}],leaves:[],cycles:[],truncated:false,coverage:[],route:{status:'found',strategy:'shortest_known_dependency_path',resource_ids:['r0','r1','r2','r3'],process_ids:['p0','p1','p2']},search:{examined_processes:37,limit:1000,truncated:false},limit_reasons:[],paths:[{resource_ids:['r0','r1','r2','r3'],process_ids:['p0','p1','p2']}]}
 
+test('recycled returns connect every accounted consumer and skip the unselected OR alternative',async()=>{
+  const r=(numerator:number)=>({numerator,denominator:1})
+  const choice=(resource_id:string)=>({resource_id,amount:1,match:{mode:'exact'}})
+  const extra:Resource[]=['Byproduct','Other OR input'].map((display_name,index)=>({...resources[0],id:`extra${index}`,registry_name:`fixture:extra${index}`,display_name}))
+  const mainProcesses=processes.map(process=>({...process,inputs:[...process.inputs],outputs:[...process.outputs]}))
+  mainProcesses[0].inputs.push({role:'consume',choices:[choice('r4'),choice('extra1')]})
+  mainProcesses[0].outputs.push({resource_id:'extra0',amount:1,chance:r(1)})
+  mainProcesses[1].inputs.push({role:'consume',choices:[choice('r4')]})
+  mainProcesses[2].inputs.push({role:'consume',choices:[choice('r4')]})
+  const side={...processes[0],id:'side',display_name:'Side recycler',inputs:[{role:'consume',choices:[choice('extra0')]}],outputs:[{resource_id:'r4',amount:2,chance:r(1)}]}
+  const allResources=[...resources,...extra]
+  const fullTrace={...trace,resources:allResources,processes:mainProcesses,edges:[...trace.edges,{source:'resource:r4',target:'process:p0',role:'consume'},{source:'resource:r4',target:'process:p1',role:'consume'},{source:'resource:r4',target:'process:p2',role:'consume'}]}
+  const ledger=(consumed:Record<string,ReturnType<typeof r>>)=>({status:'complete',yield_mode:'guaranteed',consumed,produced:{},net:{},presence:{},unsupported:[],assumptions:[]})
+  vi.stubGlobal('fetch',vi.fn(async(input:string)=>{
+    const url=new URL(input,'http://localhost')
+    if(url.pathname.startsWith('/api/resources/'))return new Response(JSON.stringify({snapshot_id:'fixture',item:allResources.find(item=>url.pathname.endsWith(item.id))}))
+    if(url.pathname==='/api/resources')return new Response(JSON.stringify({snapshot_id:'fixture',items:[resources[4]],total:1,offset:0,limit:8}))
+    if(url.pathname==='/api/recycling-plan')return new Response(JSON.stringify({snapshot_id:'fixture',status:'complete',main_path:trace.paths[0],byproduct_id:'extra0',return_id:'r4',yield_mode:'guaranteed',limitations:[],
+      main_plan:{status:'complete',ledger:ledger({r4:r(2)}),selected_inputs:{p0:{'1':{choice_index:1,resource_id:'extra1'}},p1:{'2':{choice_index:0,resource_id:'r4'}},p2:{'1':{choice_index:0,resource_id:'r4'}}},
+        startup:{required_start_stock:{},final_stock:{},feasible:true,steps:[{process_id:'p0',ledger:ledger({r0:r(1),extra1:r(1)})},{process_id:'p1',ledger:ledger({r1:r(1),r4:r(1)})},{process_id:'p2',ledger:ledger({r2:r(1),r4:r(1)})}]},byproduct_available:r(1),return_consumed:r(2),unsupported:[]},
+      secondary_trace:{...trace,resources:allResources,processes:[side]},alternatives:[{path:{resource_ids:['extra0','r4'],process_ids:['side']},status:'complete',ledger:null,startup:null,combined_ledger:null,combined_startup:null,recovery:null,external_inputs:[],unsupported:[]}]}))
+    throw new Error(`Unexpected ${url.pathname}`)
+  }))
+  render(<TraceView trace={fullTrace} onSelect={vi.fn()}/>)
+  fireEvent.click(await within(screen.getByRole('region',{name:'Recipe path graph'})).findByRole('button',{name:'Recycle output extra0'}))
+  fireEvent.change(screen.getByRole('combobox',{name:'Returned resource'}),{target:{value:'mold'}})
+  fireEvent.click(await screen.findByRole('option',{name:/Side input mold/}))
+  fireEvent.click(screen.getByRole('button',{name:'Inspect return paths and recovery'}))
+  fireEvent.click(await screen.findByRole('button',{name:'Show connected return path in map'}))
+  expect(screen.getByText('Returned input: Side recycler → Alloy Smelter · Side input mold')).toBeInTheDocument()
+  expect(screen.getByText('Returned input: Side recycler → Bender · Side input mold')).toBeInTheDocument()
+  expect(screen.queryByText('Returned input: Side recycler → Furnace · Side input mold')).not.toBeInTheDocument()
+})
+
 test('the selected route is ordered independently of context records and process clicks retain all input slots', async () => {
   vi.stubGlobal('fetch', vi.fn(async (input:string) => new Response(JSON.stringify({snapshot_id:'fixture',item:resources.find(resource => input.endsWith(resource.id))}))))
   render(<TraceView trace={trace} onSelect={vi.fn()}/>)

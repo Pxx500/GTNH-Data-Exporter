@@ -6,13 +6,14 @@ import type { Process, Resource, Trace } from './api'
 import { Badge, ProcessDetail } from './Details'
 import '@xyflow/react/dist/style.css'
 
-type RecipeNodeData = {process: Process; resources: ReadonlyMap<string, Resource>; paths: number[]; muted: boolean; inspect: (id: string) => void; inspectResource: (id: string) => void}
+type RecipeNodeData = {process: Process; resources: ReadonlyMap<string, Resource>; paths: number[]; muted: boolean; inspect: (id: string) => void; inspectResource: (id: string) => void;recycle?:(processId:string,resourceId:string)=>void}
 type RecipeNode = Node<RecipeNodeData, 'recipe'>
+export interface AttachedConnection {source:string;target:string;resourceId:string;label:string}
 function RecipeTile({data}: NodeProps<RecipeNode>) {
   return <article aria-label={`Recipe ${data.process.display_name || data.process.id}`} className={`recipe-tile ${data.muted ? 'path-muted' : ''}`}>
     <Handle type="target" position={Position.Top}/>
     <div className="recipe-tile-toolbar"><Badge tone="good">{data.paths.length > 1 ? `Shared by ${data.paths.length} paths` : `Path ${data.paths[0] + 1}`}</Badge><button className="nodrag" aria-label={`Process ${data.process.display_name || data.process.id}`} onClick={() => data.inspect(data.process.id)}>Inspect details</button></div>
-    <div className="nodrag nowheel" onClick={event=>event.stopPropagation()}><ProcessDetail process={data.process} resources={data.resources} onSelect={data.inspectResource}/></div>
+    <div className="nodrag nowheel" onClick={event=>event.stopPropagation()}><ProcessDetail process={data.process} resources={data.resources} onSelect={data.inspectResource} onRecycle={data.recycle ? id=>data.recycle!(data.process.id,id) : undefined}/></div>
     <Handle type="source" position={Position.Bottom}/>
   </article>
 }
@@ -30,16 +31,16 @@ export function pathConnections(trace: Trace) {
   return [...connections.values()]
 }
 
-export function RecipeGraph(props: {trace: Trace; highlight: number | null; inspect: (id: string) => void; inspectResource: (id: string) => void}) {
+export function RecipeGraph(props: {trace: Trace; highlight: number | null; inspect: (id: string) => void; inspectResource: (id: string) => void;recycle?:(processId:string,resourceId:string)=>void;recycleProcesses?:string[];attachments?:AttachedConnection[]}) {
   return <ReactFlowProvider><Flow {...props}/></ReactFlowProvider>
 }
-function Flow({trace, highlight, inspect, inspectResource}: {trace: Trace; highlight: number | null; inspect: (id: string) => void; inspectResource: (id: string) => void}) {
+function Flow({trace, highlight, inspect, inspectResource,recycle,recycleProcesses,attachments}: {trace: Trace; highlight: number | null; inspect: (id: string) => void; inspectResource: (id: string) => void;recycle?:(processId:string,resourceId:string)=>void;recycleProcesses?:string[];attachments?:AttachedConnection[]}) {
   const resources = useMemo(() => new Map(trace.resources.map(resource => [resource.id,resource])),[trace.resources])
   const initialNodes = useMemo(() => {
     const membership = new Map<string,number[]>()
     trace.paths.forEach((path,index) => path.process_ids.forEach(id => membership.set(id,[...(membership.get(id) ?? []),index])))
-    return [...membership].map(([id,paths]) => ({id,type:'recipe' as const,position:{x:0,y:0},style:{width:480},dragHandle:'.recipe-tile-toolbar',data:{process:trace.processes.find(process=>process.id===id)!,resources,paths,muted:false,inspect,inspectResource}}))
-  },[trace,resources,inspect,inspectResource])
+    return [...membership].map(([id,paths]) => ({id,type:'recipe' as const,position:{x:0,y:0},style:{width:480},dragHandle:'.recipe-tile-toolbar',data:{process:trace.processes.find(process=>process.id===id)!,resources,paths,muted:false,inspect,inspectResource,recycle:recycleProcesses && !recycleProcesses.includes(id) ? undefined : recycle}}))
+  },[trace,resources,inspect,inspectResource,recycle,recycleProcesses])
   const [nodes,setNodes,onNodesChange] = useNodesState<RecipeNode>(initialNodes)
   const loadedTrace = useRef(trace)
   const arrangedTrace = useRef<Trace | null>(null)
@@ -47,8 +48,8 @@ function Flow({trace, highlight, inspect, inspectResource}: {trace: Trace; highl
   const initialized = useNodesInitialized()
   const {getNodes,fitView} = useReactFlow<RecipeNode>()
   const dimensions = nodes.map(node => `${node.id}:${node.measured?.width}:${node.measured?.height}`).join('|')
-  const connections = useMemo(()=>pathConnections(trace),[trace])
-  const edges: Edge[] = useMemo(()=>connections.map(link=>({id:link.id,source:link.source,target:link.target,label:resources.get(link.resourceId)?.display_name || resources.get(link.resourceId)?.registry_name || link.resourceId,markerEnd:{type:MarkerType.ArrowClosed},style:{stroke:highlight===null || link.paths.includes(highlight) ? '#087c70' : '#bac5ce',strokeWidth:highlight===null || link.paths.includes(highlight) ? 2.5 : 1},labelStyle:{fontSize:11,fill:'#38596c'},labelBgPadding:[7,4] as [number,number],labelBgBorderRadius:4})),[connections,resources,highlight])
+  const connections = useMemo(()=>[...pathConnections(trace),...(attachments??[]).map(link=>({...link,id:JSON.stringify(['attached',link.source,link.target,link.resourceId]),paths:[0,1]}))],[trace,attachments])
+  const edges: Edge[] = useMemo(()=>connections.map(link=>({id:link.id,source:link.source,target:link.target,label:('label' in link ? `${link.label}: ` : '')+(resources.get(link.resourceId)?.display_name || resources.get(link.resourceId)?.registry_name || link.resourceId),markerEnd:{type:MarkerType.ArrowClosed},style:{stroke:highlight===null || link.paths.includes(highlight) ? '#087c70' : '#bac5ce',strokeWidth:highlight===null || link.paths.includes(highlight) ? 2.5 : 1},labelStyle:{fontSize:11,fill:'#38596c'},labelBgPadding:[7,4] as [number,number],labelBgBorderRadius:4})),[connections,resources,highlight])
   const arrange = useCallback(() => {
     const graph = new dagre.graphlib.Graph().setGraph({rankdir:'TB',nodesep:85,ranksep:100,marginx:40,marginy:40}).setDefaultEdgeLabel(()=>({}))
     const current = getNodes()

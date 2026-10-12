@@ -41,6 +41,22 @@ Lists retain `element_type_id`, including the native type of an empty list.
 NBT `long` values use decimal strings so JavaScript clients preserve all
 64 bits. Other finite numeric tag values use JSON numbers.
 
+Resources can also carry `material_facts` schema 1. These facts retain the
+actual GT version, accounting profile, source API, associations, prefix/native
+material amounts, component trees, density fields, element/isotope data and
+display formula. Source status is `associated`, `unassociated`, `ambiguous`
+or `failed`. Accounting eligibility is bounded. `chemistry_purity` remains
+`not_certified` and a display formula is never parsed into authoritative facts.
+
+Item quantities use native GT material units. Ordinary chemical fluids use
+formula units per 1,000 native fluid units. Molten solids use material units
+per 144. Nested components retain their own unit basis and native density.
+Unknown profiles, material classes, states, phases and compositions remain
+unresolved. `association.candidates` preserves every native dispatcher/public
+phase-identity candidate, with its tree, phases, accounting and evidence.
+Ambiguous identity is not resolved by name. Query accounting may establish a
+common vector only when all candidate bases, scales and vectors agree exactly.
+
 ### Group
 
 `{id, kind, name, members, provenance}`
@@ -297,6 +313,52 @@ Search proposes concrete identities. Equally named metadata or NBT variants
 remain distinct. Callers choose an ID before process lookup or tracing.
 The GUI performs that selection through autocomplete. MCP and CLI callers
 use `find_resources` followed by the operation on the chosen ID.
+
+## Selected-path accounting operations
+
+`trace_processes` accepts optional `min_tier`, `max_tier` and
+`unknown_tier_policy: exclude|include`. Tier bounds are integers 0 through 15.
+With no bound, the existing search scope is retained. An active filter uses
+source-backed nominal GT recipe voltage, including native Assembly Line.
+`tier_filter` and `recipe_tiers` disclose exclusions and uncertainty. Other
+machine requirements are not inferred from voltage.
+
+`plan_recycling` accepts a selected `main_path` of resource/process IDs,
+`byproduct_id`, `return_id`, positive `main_runs`, concrete slot `selections`,
+yield mode, tier filters and secondary path bounds. It validates the path,
+accounts all AND slots and discovers secondary C to D paths through the same
+Dataset trace. Slot selections are keyed by process ID and zero-based slot
+index, with `{choice_index, resource_id}`. UI and transports do not implement
+their own ingredient matcher.
+
+The result contains `main_plan`, `alternatives`, `secondary_trace`, exact
+ledgers, startup stocks, recovery and scope metadata. The available byproduct
+is the main net surplus. Side scaling uses its full ordered startup requirement
+so repeated consumption cannot silently import more C. Complete alternatives
+rank by exact net recovery within the bounded discovered paths. Unsupported
+alternatives retain their records and reasons. Quantitative amounts are JSON
+`{numerator, denominator}` with positive denominator. Native facts can retain
+decimal strings, while query arithmetic uses exact rational values.
+
+`find_loops` accepts `start_id`, returned-resource `kind`, independent
+`chemical_kind`, yield mode, selections, tier bounds and finite search limits.
+Maximum depth/process/state bounds are 20/1,000/50,000. Filters apply before
+the accepted witness count. Limits and unsupported chemical candidates remain
+explicit. Each witness contains ordered steps, exact return ratio, full ledger,
+initial stock, external consumption and chemical input/output/delta vectors.
+Chemical imbalance without a return witness is not a loop proof. Material
+closure does not establish energy independence or machine executability.
+
+`inspect_chemistry(resource_id)` returns native-unit accounting or explicit
+unsupported reasons, bound to the snapshot. It never equates resource identities
+or certifies purity. Loss can be intentional under the GTNH balancing rule.
+
+Guaranteed mode uses certain outputs and conservative consumption. Expected
+mode is labelled as a scenario and does not certify inventory availability.
+Startup scope is conservative batch-prefix stock, not globally minimal
+interleaved scheduling. Fractional executions expose `integer_batch_scale`
+and require scaling before native batch feasibility can be claimed. The full
+net ledger retains side effects on the main target and every co-product.
 This is lexical discovery with typo tolerance, without synonym inference,
 translation or embeddings. It does not change ingredient matching semantics.
 

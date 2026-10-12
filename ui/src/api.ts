@@ -35,7 +35,10 @@ export interface Trace {
   paths: {resource_ids: string[]; process_ids: string[]}[]
   search: {examined_processes: number; limit: number; truncated: boolean}
   limit_reasons: ('depth' | 'search_process_limit' | 'path_limit' | 'path_process_limit' | 'search_state_limit' | 'search_work_limit' | 'search_enumeration_limit')[]
+  tier_filter?: TierOptions & {active:boolean;excluded_unknown:number;excluded_out_of_range:number}
+  recipe_tiers?: {process_id:string;status:'known'|'unknown';tier:number|null;name:string|null;scope:string;reason?:string}[]
 }
+export interface TierOptions {min_tier?:number;max_tier?:number;unknown_tier_policy:'exclude'|'include'}
 
 export function query(path: string, params: Record<string, string | number | string[] | undefined> = {}) {
   const search = new URLSearchParams()
@@ -43,23 +46,24 @@ export function query(path: string, params: Record<string, string | number | str
   return `/api/${path}${search.size ? `?${search}` : ''}`
 }
 
-export function useRequest<T>(url: string | null) {
+export function useRequest<T>(url: string | null, body?: unknown) {
+  const payload = body === undefined ? undefined : JSON.stringify(body)
   const [revision, setRevision] = useState(0)
-  const [state, setState] = useState<{url: string | null; data?: T; loading: boolean; error?: string}>({url, loading: !!url})
+  const [state, setState] = useState<{url: string | null; payload?:string; data?: T; loading: boolean; error?: string}>({url, payload, loading: !!url})
   useEffect(() => {
-    if (!url) { setState({url, loading: false}); return }
+    if (!url) { setState({url, payload, loading: false}); return }
     const controller = new AbortController()
-    setState({url, loading: true})
-    fetch(url, {signal: controller.signal})
+    setState({url, payload, loading: true})
+    fetch(url, {signal: controller.signal, ...(payload === undefined ? {} : {method:'POST',headers:{'Content-Type':'application/json'},body:payload})})
       .then(async response => {
         const body = await response.json()
         if (!response.ok) throw new Error(typeof body.detail === 'string' ? body.detail : JSON.stringify(body.detail ?? body))
         return body as T
       })
-      .then(data => { if (!controller.signal.aborted) setState({url, data, loading: false}) })
-      .catch(error => { if (!controller.signal.aborted) setState({url, loading: false, error: error instanceof Error ? error.message : String(error)}) })
+      .then(data => { if (!controller.signal.aborted) setState({url, payload, data, loading: false}) })
+      .catch(error => { if (!controller.signal.aborted) setState({url, payload, loading: false, error: error instanceof Error ? error.message : String(error)}) })
     return () => controller.abort()
-  }, [url, revision])
+  }, [url, payload, revision])
   const reload = useCallback(() => setRevision(value => value + 1), [])
-  return state.url === url ? {...state, reload} : {loading: !!url, data: undefined, error: undefined, reload}
+  return state.url === url && state.payload === payload ? {...state, reload} : {loading: !!url, data: undefined, error: undefined, reload}
 }

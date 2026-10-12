@@ -5,7 +5,7 @@ human UI or query it through MCP and CLI while Minecraft is closed.
 
 The 2026-10-12 full-pack capture contains 259,781 processes, 118,717 resources
 and 25,228 acquisition-source records. Its six compressed streams total
-11.23 MiB. Build, launch, capture, shutdown and import took 186.22 seconds
+13.47 MiB. Build, launch, capture, shutdown and import took 210.53 seconds
 on the local setup. This adds 1,663 native EnderIO Sag Mill baseline recipes,
 11 ordinary Alloy Smelter recipes, 154 Forestry Centrifuge recipes,
 152 interpreted Botania Mana Infusion recipes and 13 unresolved subclass records,
@@ -47,6 +47,11 @@ implement its own recipe matcher or graph discovery. No embeddings or remote
 service are required. See [FORMAT.md](FORMAT.md) for the shared contract.
 Potential later extensions are recorded in [FUTURE.md](FUTURE.md). The current
 focus is faithful capture, offline lookup and bounded material paths.
+
+Developer analysis now adds nominal GT recipe voltage bounds, selected-path
+recycling and exact material/chemical loop ledgers. The latest snapshot has
+4,695 resources with source-backed chemical accounting. Unknown composition
+and resource states remain unsupported rather than inferred from names.
 
 ## Install the offline tools
 
@@ -111,8 +116,8 @@ quantities and alternatives, and NEI's NBT projection loses type information.
 Neither signature agreement nor display agreement proves pack-wide execution
 semantics. See [FORMAT.md](FORMAT.md) for the reference contract.
 
-The latest paired full-pack run on 2026-10-12 captured 366 handlers and 287,513
-views/signatures in a 186.22-second pipeline. Independent item presentation
+The latest paired full-pack run on 2026-10-12 captured 366 handlers and 287,464
+views/signatures in a 210.53-second pipeline. Independent item presentation
 context retains 55,875 original GT alias queries, 231 NEI item pools and
 62,131 native item projections, bound to the closed canonical streams.
 The scoped five-map GT/furnace comparison finds 78,389 matching projections,
@@ -186,6 +191,68 @@ availability or dependency cycles.
 The UI omits routine 100% chances and default flags. Exceptional chances
 appear as percentages, while unknown chances remain explicit. Exact fractions
 and technical fields remain available in the full recipe record.
+
+## Developer route and loop analysis
+
+Trace accepts minimum and maximum recipe voltage tiers, from ULV 0 through
+the captured GT range. HV is 3. An active bound excludes unknown tiers unless
+the caller explicitly includes them. These are nominal recipe voltage
+requirements, not a certificate of machine capability or overclocking.
+
+Select a recipe output in the trace graph to search recycling paths. Choose
+the consumed main input to return, then resolve any ambiguous ingredient
+alternatives. The shared Dataset calculates the selected main path and bounded
+secondary paths. It reports exact net recovery, returned-input percentage,
+all extra inputs, presence requirements and initial stocks. Complete
+alternatives rank by recovery within the discovered paths. This does not prove
+a global optimum. Side paths cannot import extra copies of the selected
+byproduct beyond the main path's available surplus.
+
+The combined ledger retains effects on every product, including the main
+target. Inspect it when a recycling path consumes useful output. Guaranteed
+accounting and expected probabilistic yield are separate modes. Fractional
+execution counts describe normalized quantities and expose the required
+integer batch scale. Startup stock is sufficient for the declared batch
+order, rather than globally minimal scheduling stock. Machine gates and
+energy remain separate from material accounting.
+
+Resource inspection shows native material trees and elemental accounting
+per native resource unit. The developer loop audit below a trace searches
+bounded closed return witnesses. Material gain/loss and chemical gain/loss
+have separate filters. Every witness retains recipe IDs, selected inputs,
+quantities, startup stock, external consumption and exact net balances.
+Loop witnesses currently use ordered recipe inspection rather than a separate
+interactive loop map.
+
+Chemical accounting follows the [GTNH Chemical Balance convention](https://wiki.gtnewhorizons.com/wiki/Chemical_Balance)
+and pinned native quantity rules. It uses native GT component trees, density,
+prefix amounts and fluid identities. Formula text is display-only and purity
+is not certified. If a fluid has several native associations, all candidates
+are preserved. Accounting is resolved only if every candidate agrees exactly
+on quantity basis and elemental vector. Water retains Water and Ice while
+both yield H2/O1 per 1,000 native fluid units. Unsupported material integrations,
+tagged states and missing components remain explicit.
+
+Native validation confirms a conserving Iron dust/molten/ingot loop and a
+Forge Hammer variant returning two dusts from three, with Fe loss one. A loss
+can be intentional. No pack-wide absence of amplification is claimed.
+
+HTTP, MCP and CLI expose `plan_recycling`, `find_loops` and
+`inspect_chemistry`, alongside the tier-filtered trace. For structured CLI
+recycling requests:
+
+```powershell
+python/.venv/Scripts/python.exe -m gtnh_data recycle --database PATH_TO_INDEX.sqlite --request-file plan.json
+python/.venv/Scripts/python.exe -m gtnh_data loops --database PATH_TO_INDEX.sqlite --start-id RESOURCE_ID --chemical-kind lossy --max-tier 3
+python/.venv/Scripts/python.exe -m gtnh_data chemistry RESOURCE_ID --database PATH_TO_INDEX.sqlite
+```
+
+Loop bounds are depth 20, processes 1,000 and states 50,000. Partial discovery
+and unresolved alternatives remain visible. The latest changes passed 26 Java,
+92 Python and 28 GUI tests, the UI production build and native HTTP/MCP parity
+checks. The full Crushed Iron Ore to Double Iron Plate query with an HV bound
+hit the 10,000-process trace search limit. Its result is incomplete rather
+than evidence that no qualifying route exists.
 
 ## Agent interface
 

@@ -1,34 +1,37 @@
 # Potential future extensions
 
-These ideas are deferred while the core capture, faithful recipe lookup,
-bounded path search, GUI and MCP are completed. They are candidates for
-later work, not commitments or requirements of the current milestone.
+These ideas extend the implemented capture, lookup, bounded path search,
+selected-path recycling, chemical loop witnesses, GUI and MCP. They are
+candidates for later work, not requirements of the current milestone.
 
 ## Production planning
 
-- Quantitative plans for a requested amount of output, including all input
-  slots, alternative ingredients, co-products, losses and external supplies
+- Joint quantitative plans with several secondary material roles at once,
+  protecting requested target output and accounting shared side inputs
 - Multiple starting resources and multiple target products
-- Net resource, reagent and energy balances
-- Recycling loops with separate startup stocks and ongoing consumption
-- Separate guaranteed production from expected probabilistic yields
+- Energy accounting and shared resource balances across several plans
+- Minimal startup stocks under interleaved native batch scheduling
+- Native correlated stochastic behavior beyond labelled expected quantities
 - Throughput and overclocking models where native machine behavior is known
 - Explicit comparisons of yield, energy, steps and machine requirements
 
 ## Richer discovery and constraints
 
-- Function-based recipe search, such as acid recovery, returning verifiable
-  native recipes with an explanation of why they match
-- Material composition, formula and form catalogs captured from native data
+- Additional side-material roles and explicit reagent-budget constraints
+- Native composition integration for unresolved GT++, BartWorks and other
+  materials, without treating display formulas as authoritative chemistry
 - Constraints on side-input consumption, distinct from path intermediates
 - Supplied-resource boundaries and permitted external imports
-- Machine, tier, temperature, cleanroom and environment constraints, with
-  unknown requirements reported explicitly
+- Full machine, amperage, temperature, cleanroom and environment constraints
+  beyond nominal recipe voltage tiers, with unknown requirements explicit
 - More diverse alternatives, grouping similar paths without losing costs
 - Collapsible form conversions and packaging, retaining empty containers,
   returns and the complete underlying operations
 - Material/form filters spanning variants only where captured relations
   justify that grouping
+- Dedicated free-flow loop maps and direct library entry points for audits
+- More selective bounded trace discovery for broad full-pack queries that
+  currently reach the server's process-search bound
 
 ## Design boundaries
 

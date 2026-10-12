@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from fastapi import FastAPI, Query, Request
+from fastapi import Body, FastAPI, Query, Request
 from fastapi.responses import FileResponse, JSONResponse
 
 from .dataset import Dataset, DatasetError
@@ -55,10 +55,38 @@ def create_app(dataset: Dataset, ui_dist: str | Path | None = None) -> FastAPI:
 
     @app.get("/api/trace")
     def trace(start_id: str, target_id: str, max_depth: int = 12, max_processes: int = 300, max_paths: int = 8,
-              max_extra_steps: int = 2, required_resource_id: list[str] = Query(default=[]), excluded_resource_id: list[str] = Query(default=[])):
+              max_extra_steps: int = 2, required_resource_id: list[str] = Query(default=[]), excluded_resource_id: list[str] = Query(default=[]),
+              min_tier: int | None = None, max_tier: int | None = None, unknown_tier_policy: str = 'exclude'):
         return dataset.trace_processes(start_id=start_id, target_id=target_id, max_depth=max_depth, max_processes=max_processes,
                                        max_paths=max_paths, max_extra_steps=max_extra_steps,
-                                       required_resource_ids=required_resource_id, excluded_resource_ids=excluded_resource_id)
+                                       required_resource_ids=required_resource_id, excluded_resource_ids=excluded_resource_id,
+                                       min_tier=min_tier, max_tier=max_tier, unknown_tier_policy=unknown_tier_policy)
+
+    @app.post('/api/recycling-plan')
+    def recycling_plan(arguments: dict = Body(...)):
+        try:
+            return dataset.plan_recycling(**arguments)
+        except TypeError as error:
+            raise DatasetError(str(error)) from error
+
+    @app.get('/api/chemistry/{resource_id:path}')
+    def chemistry(resource_id: str):
+        return dataset.inspect_chemistry(resource_id=resource_id)
+
+    @app.get('/api/loops')
+    def loops(start_id: str, kind: str = 'any', chemical_kind: str = 'any', yield_mode: str = 'guaranteed', max_depth: int = Query(default=6, ge=1, le=20),
+              max_processes: int = Query(default=200, ge=1, le=1000), max_paths: int = 20, max_states: int = Query(default=5000, ge=1, le=50000),
+              min_tier: int | None = None, max_tier: int | None = None, unknown_tier_policy: str = 'exclude'):
+        return dataset.find_loops(start_id=start_id, kind=kind, chemical_kind=chemical_kind, yield_mode=yield_mode, max_depth=max_depth,
+                                  max_processes=max_processes, max_paths=max_paths, max_states=max_states,
+                                  min_tier=min_tier, max_tier=max_tier, unknown_tier_policy=unknown_tier_policy)
+
+    @app.post('/api/loops')
+    def selected_loops(arguments: dict = Body(...)):
+        try:
+            return dataset.find_loops(**arguments)
+        except TypeError as error:
+            raise DatasetError(str(error)) from error
 
     if ui_dist is not None:
         directory = Path(ui_dist).resolve()

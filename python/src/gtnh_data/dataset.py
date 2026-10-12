@@ -662,14 +662,57 @@ class Dataset:
     def _positive_output(output):
         return output['amount'] > 0 and (output['chance'] is None or output['chance']['numerator'] > 0)
 
-    def _find_paths(self, connection, start_id, target_id, max_depth, max_processes, max_paths, required, excluded, max_extra_steps):
+    @staticmethod
+    def _recipe_tier(record):
+        voltage = record.get('eu_per_tick')
+        result = {'process_id': record['id'], 'status': 'unknown', 'tier': None, 'name': None,
+                  'scope': 'recipe_voltage_not_machine_capability'}
+        native_owner = record['provenance'].get('owner') in ('GTRecipe', 'RecipeAssemblyLine.sAssemblylineRecipes')
+        captured_source = record['conditions'].get('recipe_voltage_tier_source') == 'GTUtility.getTier(mEUt)'
+        if (not record['family'].startswith('gregtech:') or not (native_owner or captured_source)
+                or type(voltage) is not int or voltage < 0):
+            result['reason'] = 'No supported GT native recipe-voltage declaration'
+            return result
+        # GT5 .221 GTUtility.getTier(long), including its nominal zero-EU tier.
+        thresholds = (8, 32, 128, 512, 2048, 8192, 32768, 131072, 524288, 2097152,
+                      8388608, 33554432, 134217728, 536870912, 2147483640)
+        names = ('ULV', 'LV', 'MV', 'HV', 'EV', 'IV', 'LuV', 'ZPM', 'UV', 'UHV', 'UEV', 'UIV', 'UMV', 'UXV', 'MAX', 'MAX+')
+        tier = next((tier for tier, maximum in enumerate(thresholds) if voltage <= maximum), 15)
+        if captured_source and record['conditions'].get('recipe_voltage_tier') != tier:
+            result['reason'] = 'Captured native recipe tier disagrees with its voltage declaration'
+            return result
+        result.update(status='known', tier=tier, name=names[tier])
+        return result
+
+    @staticmethod
+    def _tier_filter(min_tier, max_tier, unknown_tier_policy):
+        for name, value in (('min_tier', min_tier), ('max_tier', max_tier)):
+            if value is not None and (type(value) is not int or not 0 <= value <= 15):
+                raise DatasetError(f'{name} must be an integer between 0 and 15')
+        if min_tier is not None and max_tier is not None and min_tier > max_tier:
+            raise DatasetError('min_tier must not exceed max_tier')
+        if unknown_tier_policy not in ('exclude', 'include'):
+            raise DatasetError('unknown_tier_policy must be exclude or include')
+        return {'min_tier': min_tier, 'max_tier': max_tier, 'unknown_tier_policy': unknown_tier_policy,
+                'active': min_tier is not None or max_tier is not None, 'excluded_unknown': 0, 'excluded_out_of_range': 0}
+
+    def _tier_allowed(self, record, filters):
+        if not filters['active']:
+            return True
+        tier = self._recipe_tier(record)['tier']
+        if tier is None:
+            return filters['unknown_tier_policy'] == 'include'
+        return ((filters['min_tier'] is None or tier >= filters['min_tier'])
+                and (filters['max_tier'] is None or tier <= filters['max_tier']))
+
+    def _find_paths(self, connection, start_id, target_id, max_depth, max_processes, max_paths, required, excluded, max_extra_steps, tier_filter=None):
         search = {"examined_processes": 0, "limit": 10000, "examined_states": 0, "state_limit": 20000,
                   "expansion_work": 0, "work_limit": 100000, "enumeration_work": 0, "enumeration_limit": 100000,
                   "queued_states": 0, "peak_queue": 0, "truncated": False}
         route = {"status": "not_found", "strategy": "shortest_known_dependency_path", "resource_ids": [], "process_ids": []}
         paths, records, choices, adjacency = [], {}, {}, {}
         fingerprints, duplicate_ids = {}, {}
-        reasons, admitted = set(), set()
+        reasons, admitted, tier_checked = set(), set(), set()
         if required & excluded or start_id in excluded or target_id in excluded:
             return route, paths, search, [], []
         if start_id == target_id:
@@ -691,6 +734,12 @@ class Dataset:
                         break
                     records[process_id] = self._record(connection, "processes", process_id)
                 record = records[process_id]
+                if tier_filter is not None and not self._tier_allowed(record, tier_filter):
+                    if process_id not in tier_checked:
+                        key = 'excluded_unknown' if self._recipe_tier(record)['tier'] is None else 'excluded_out_of_range'
+                        tier_filter[key] += 1
+                        tier_checked.add(process_id)
+                    continue
                 if (record["executable"] is False or record["conditions"].get("dynamic_output") == "unresolved"
                         or not any(output["resource_id"] == resource_id and self._positive_output(output) for output in record["outputs"])):
                     continue
@@ -833,7 +882,9 @@ class Dataset:
         return route, paths, search, sorted(reasons), duplicates
 
     def trace_processes(self, *, start_id, target_id, max_depth=12, max_processes=300, max_paths=8,
-                        required_resource_ids=None, excluded_resource_ids=None, max_extra_steps=2):
+                        required_resource_ids=None, excluded_resource_ids=None, max_extra_steps=2,
+                        min_tier=None, max_tier=None, unknown_tier_policy='exclude'):
+        tier_filter = self._tier_filter(min_tier, max_tier, unknown_tier_policy)
         if isinstance(max_depth, bool) or not isinstance(max_depth, int) or not 1 <= max_depth <= 64:
             raise DatasetError("max_depth must be between 1 and 64")
         if isinstance(max_processes, bool) or not isinstance(max_processes, int) or not 1 <= max_processes <= 5000:
@@ -855,7 +906,7 @@ class Dataset:
             processes = {}
             edges = {}
             input_slots = {}
-            route, paths, search, limit_reasons, duplicates = self._find_paths(connection, start_id, target_id, max_depth, max_processes, max_paths, required, excluded, max_extra_steps)
+            route, paths, search, limit_reasons, duplicates = self._find_paths(connection, start_id, target_id, max_depth, max_processes, max_paths, required, excluded, max_extra_steps, tier_filter)
             unresolved = set()
 
             def admit(id):
@@ -980,7 +1031,8 @@ class Dataset:
             return {"snapshot_id": self.snapshot_id, "start_id": start_id, "target_id": target_id,
                     "resources": [resources[id] for id in sorted(resources)], "processes": [processes[id] for id in sorted(processes)],
                       "edges": edges_list, "leaves": leaves, "cycles": cycles, "truncated": bool(limit_reasons), "coverage": coverage,
-                      "route": route, "paths": paths, "search": search, "limit_reasons": sorted(limit_reasons), "duplicate_process_records": duplicates}
+                      "route": route, "paths": paths, "search": search, "limit_reasons": sorted(limit_reasons), "duplicate_process_records": duplicates,
+                      'tier_filter': tier_filter, 'recipe_tiers': [self._recipe_tier(processes[id]) for id in sorted(processes)]}
 
     def _choice_resources(self, connection, choice):
         match = choice["match"]
@@ -1015,6 +1067,341 @@ class Dataset:
                 values += (_json(anchor["nbt"]),)
             return [row[0] for row in connection.execute("SELECT id FROM resources WHERE " + clause + " ORDER BY id", values)]
         return [resource_id]
+
+    def _selected_path(self, connection, path, selections, preferred_input=None):
+        if not isinstance(path, dict) or set(path) != {'resource_ids', 'process_ids'}:
+            raise DatasetError('main_path must contain resource_ids and process_ids')
+        resource_ids, process_ids = path['resource_ids'], path['process_ids']
+        if (not isinstance(resource_ids, list) or not isinstance(process_ids, list)
+                or not 1 <= len(process_ids) <= 64 or len(resource_ids) != len(process_ids) + 1
+                or any(not isinstance(id, str) or not id for id in resource_ids + process_ids)
+                or len(set(resource_ids)) != len(resource_ids) or len(set(process_ids)) != len(process_ids)):
+            raise DatasetError('A selected path must be a complete simple path of 1 to 64 processes')
+        for id in resource_ids:
+            self._record(connection, 'resources', id)
+        records, selected, unsupported = {}, {}, []
+        for index, id in enumerate(process_ids):
+            raw = self._record(connection, 'processes', id)
+            previous, following = resource_ids[index:index + 2]
+            if (raw['executable'] is False or raw['conditions'].get('dynamic_output') == 'unresolved'
+                    or not any(o['resource_id'] == following and self._positive_output(o) for o in raw['outputs'])):
+                raise DatasetError(f'{id} does not establish the selected material output')
+            if any(raw['conditions'].get(k) == 'unresolved' for k in ('dynamic_inputs', 'dynamic_output')):
+                unsupported.append({'process_id': id, 'reason': 'Native dynamic recipe semantics are unresolved'})
+            narrowed = json.loads(_json(raw))
+            selected[id] = {}
+            flow_slots = 0
+            for slot_index, slot in enumerate(raw['inputs']):
+                candidates = [set(self._choice_resources(connection, c)) if c['match']['mode'] != 'native_unknown'
+                              and (c['match']['mode'] not in ('unified', 'ore_dict') or c['match'].get('group_id')) else set()
+                              for c in slot['choices']]
+                requested = selections.get(id, {}).get(str(slot_index), selections.get(id, {}).get(slot_index))
+                flow_matches = [i for i, c in enumerate(slot['choices']) if slot['role'] == 'consume'
+                                and c['amount'] > 0 and previous in candidates[i]]
+                if flow_matches:
+                    flow_slots += 1
+                if requested is None:
+                    if len(flow_matches) == 1:
+                        requested = {'choice_index': flow_matches[0], 'resource_id': previous}
+                    elif not flow_matches and preferred_input is not None and slot['role'] == 'consume':
+                        matches = [i for i, c in enumerate(slot['choices']) if c['amount'] > 0 and preferred_input in candidates[i]]
+                        if len(matches) == 1:
+                            requested = {'choice_index': matches[0], 'resource_id': preferred_input}
+                    if requested is None and len(slot['choices']) == 1 and slot['choices'][0]['match']['mode'] == 'exact':
+                        requested = {'choice_index': 0, 'resource_id': slot['choices'][0].get('resource_id')}
+                if requested is None:
+                    unsupported.append({'process_id': id, 'reason': f'Input slot {slot_index} needs an explicit concrete OR/group selection'})
+                    continue
+                if not isinstance(requested, dict) or set(requested) != {'choice_index', 'resource_id'}:
+                    raise DatasetError('Each input selection must contain choice_index and resource_id')
+                ci, rid = requested['choice_index'], requested['resource_id']
+                if type(ci) is not int or not 0 <= ci < len(slot['choices']) or not isinstance(rid, str):
+                    raise DatasetError('Invalid concrete input selection')
+                self._record(connection, 'resources', rid)
+                if rid not in candidates[ci]:
+                    raise DatasetError(f'{rid} does not match {id} input slot {slot_index}')
+                selected[id][str(slot_index)] = dict(requested)
+                narrowed_choice = dict(slot['choices'][ci], resource_id=rid,
+                                       match={'mode': 'exact', 'nbt_sensitive': True})
+                narrowed['inputs'][slot_index]['choices'] = [narrowed_choice]
+            if not flow_slots:
+                raise DatasetError(f'{id} does not consume the selected preceding resource')
+            # Input matching belongs here. Accounting receives resolved concrete facts.
+            records[id] = narrowed
+        return records, selected, unsupported
+
+    def _path_plan(self, connection, path, first_runs, selections, yield_mode, preferred_input=None):
+        from .balance import net_ledger, witness_ledger
+        records, selected, unsupported = self._selected_path(connection, path, selections, preferred_input)
+        result = {'status': 'unsupported', 'executions': [], 'selected_inputs': selected,
+                  'ledger': None, 'startup': None, 'unsupported': unsupported,
+                  'native_executability': {id: record['executable'] for id, record in records.items()},
+                  'machine_conditions': {id: record['conditions'] for id, record in records.items()},
+                  'execution_scope': 'selected_material_accounting_not_machine_execution'}
+        if unsupported:
+            return result, records, []
+        units = {id: net_ledger(records, {id: 1}, yield_mode=yield_mode) for id in path['process_ids']}
+        for unit in units.values():
+            unsupported.extend(unit['unsupported'])
+        if unsupported:
+            return result, records, []
+        steps, count = [], first_runs
+        for index, id in enumerate(path['process_ids']):
+            incoming, outgoing = path['resource_ids'][index:index + 2]
+            required = units[id]['consumed'].get(incoming, Fraction())
+            produced = units[id]['produced'].get(outgoing, Fraction())
+            if required <= 0 or produced <= 0:
+                unsupported.append({'process_id': id, 'reason': 'Selected flow has no positive consumption or modeled output in this yield mode'})
+                return result, records, []
+            if index:
+                count = available / required
+            steps.append({'process_id': id, 'runs': count})
+            available = produced * count
+        result['executions'] = steps
+        result['ledger'] = net_ledger(records, {step['process_id']: step['runs'] for step in steps}, yield_mode=yield_mode)
+        result['startup'] = witness_ledger(records, steps, yield_mode=yield_mode)
+        result['status'] = result['ledger']['status']
+        result['unsupported'] = result['ledger']['unsupported']
+        return result, records, steps
+
+    def plan_recycling(self, *, main_path, byproduct_id, return_id, main_runs=1, selections=None,
+                       yield_mode='guaranteed', max_depth=12, max_processes=300, max_paths=8,
+                       max_extra_steps=2, min_tier=None, max_tier=None, unknown_tier_policy='exclude'):
+        """Account bounded selected paths, with external supplies and startup stock explicit."""
+        from .balance import quantity, witness_ledger, ledger_json
+        try:
+            runs = quantity(main_runs)
+        except ValueError as exc:
+            raise DatasetError(str(exc)) from exc
+        if runs <= 0:
+            raise DatasetError('main_runs must be positive')
+        if yield_mode not in ('guaranteed', 'expected'):
+            raise DatasetError('yield_mode must be guaranteed or expected')
+        if selections is not None and (not isinstance(selections, dict)
+                or any(not isinstance(pid, str) or not isinstance(slots, dict) for pid, slots in selections.items())):
+            raise DatasetError('selections must map process IDs to input-slot selections')
+        selections = selections or {}
+        filters = self._tier_filter(min_tier, max_tier, unknown_tier_policy)
+        # The same query owner supplies every secondary path and its full raw recipe records.
+        secondary = self.trace_processes(start_id=byproduct_id, target_id=return_id,
+            max_depth=max_depth, max_processes=max_processes, max_paths=max_paths,
+            max_extra_steps=max_extra_steps, min_tier=min_tier, max_tier=max_tier,
+            unknown_tier_policy=unknown_tier_policy)
+        with self._connect() as connection:
+            for pid, slots in selections.items():
+                record = self._record(connection, 'processes', pid)
+                for index in slots:
+                    if (not isinstance(index, (str, int)) or isinstance(index, bool) or str(index) not in
+                            {str(i) for i in range(len(record['inputs']))}):
+                        raise DatasetError(f'Invalid input slot selection for {pid}')
+            main, main_records, main_steps = self._path_plan(connection, main_path, runs, selections, yield_mode, return_id)
+            main.update(byproduct_available=None, return_consumed=None)
+            if any(not self._tier_allowed(record, filters) for record in main_records.values()):
+                raise DatasetError('The selected main path violates the recipe tier filter')
+            result = {'snapshot_id': self.snapshot_id, 'status': 'unsupported', 'main_path': main_path,
+                      'byproduct_id': byproduct_id, 'return_id': return_id, 'yield_mode': yield_mode,
+                      'main_plan': main, 'alternatives': [], 'secondary_trace': secondary,
+                      'byproduct_feed_policy': 'no_additional_byproduct_imports',
+                      'ranking': {'criterion': 'net_returned_per_main_consumed',
+                                  'scope': 'bounded_discovered_paths', 'global_optimum_proven': False},
+                      'limitations': ['Selected dependency paths require every AND input and machine condition',
+                                      'Fractional executions are per-unit accounting, not an integer batch execution proof',
+                                      'Recovered material does not eliminate startup stock needed before it exists',
+                                      'Expected quantities are scenarios and cannot prove available stock',
+                                      'Recovery ranking covers bounded discovered paths, not a proven global maximum']}
+            if main['status'] != 'complete':
+                return ledger_json(result)
+            surplus = max(main['ledger']['net'].get(byproduct_id, Fraction()), Fraction())
+            demand = main['ledger']['consumed'].get(return_id, Fraction())
+            main.update(byproduct_available=surplus, return_consumed=demand)
+            if surplus <= 0 or demand <= 0 or byproduct_id == return_id:
+                main['unsupported'].append({'process_id': None, 'reason': 'Choose a net surplus main output and a distinct consumed main input'})
+                main['status'] = 'unsupported'
+                return ledger_json(result)
+            for path in secondary['paths']:
+                side, side_records, side_steps = self._path_plan(connection, path, Fraction(1), selections, yield_mode)
+                alternative = {'path': path, **side, 'combined_ledger': None, 'combined_startup': None,
+                               'recovery': None, 'external_inputs': []}
+                result['alternatives'].append(alternative)
+                if side['status'] != 'complete':
+                    continue
+                required_feed = side['startup']['required_start_stock'][byproduct_id]
+                side, side_records, side_steps = self._path_plan(connection, path, surplus / required_feed, selections, yield_mode)
+                alternative.update(side)
+                # Distinct occurrences may resolve the same raw recipe to different OR inputs.
+                ordered_records, ordered_steps, occurrence_ids = {}, [], {}
+                for phase, records, steps in (('main', main_records, main_steps), ('side', side_records, side_steps)):
+                    for step in steps:
+                        key = f'{phase}:{step["process_id"]}'
+                        occurrence_ids[key] = (step['process_id'], phase)
+                        ordered_records[key] = dict(records[step['process_id']], id=key)
+                        ordered_steps.append(dict(step, process_id=key))
+                combined = witness_ledger(ordered_records, ordered_steps, yield_mode=yield_mode)
+                def restore_occurrences(value):
+                    if isinstance(value, dict):
+                        if value.get('process_id') in occurrence_ids:
+                            value['process_id'], value['phase'] = occurrence_ids[value['process_id']]
+                        for nested in value.values():
+                            restore_occurrences(nested)
+                    elif isinstance(value, list):
+                        for nested in value:
+                            restore_occurrences(nested)
+                restore_occurrences(combined)
+                alternative['combined_startup'] = combined
+                alternative['combined_ledger'] = {k: v for k, v in combined.items()
+                                                  if k not in ('steps', 'required_start_stock', 'final_stock', 'feasible', 'feasibility_scope')}
+                produced = side['ledger']['produced'].get(return_id, Fraction())
+                consumed_return = side['ledger']['consumed'].get(return_id, Fraction())
+                recovered = max(produced - consumed_return, Fraction())
+                alternative['recovery'] = {'resource_id': return_id, 'main_consumed': demand,
+                    'side_produced': produced, 'side_consumed': consumed_return, 'net_returned': recovered,
+                    'main_input_returned_percent': recovered * 100 / demand,
+                    'usable_returned': min(recovered, demand), 'surplus_returned': max(recovered - demand, Fraction())}
+                alternative['external_inputs'] = [{'resource_id': id, 'amount': -amount - (surplus if id == byproduct_id else 0)}
+                    for id, amount in sorted(side['ledger']['net'].items())
+                    if -amount > (surplus if id == byproduct_id else 0)]
+            result['alternatives'].sort(key=lambda a: (a['status'] != 'complete',
+                -a['recovery']['main_input_returned_percent'] if a['recovery'] is not None else Fraction()))
+            if any(a['status'] == 'complete' for a in result['alternatives']):
+                result['status'] = 'complete'
+            elif result['alternatives']:
+                result['status'] = 'unsupported'
+            else:
+                result['status'] = 'incomplete' if secondary['truncated'] else 'not_found'
+            return ledger_json(result)
+
+    def inspect_chemistry(self, resource_id):
+        from .balance import inspect_chemistry, ledger_json
+        with self._connect() as connection:
+            resource = self._record(connection, 'resources', resource_id)
+            facts = resource.get('material_facts')
+            return ledger_json({'snapshot_id': self.snapshot_id, 'resource_id': resource_id,
+                                'material_facts': facts, **inspect_chemistry(facts)})
+
+    def find_loops(self, *, start_id, max_depth=6, max_processes=200, max_paths=20, max_states=5000,
+                   min_tier=None, max_tier=None, unknown_tier_policy='exclude',
+                   kind='any', chemical_kind='any', yield_mode='guaranteed', selections=None):
+        """Discover finite native-matched candidates, then share exact cycle accounting."""
+        from .balance import find_loops, ledger_json
+        for name, value, maximum in (('max_depth', max_depth, 20), ('max_processes', max_processes, 1000),
+                                     ('max_paths', max_paths, 100), ('max_states', max_states, 50000)):
+            if type(value) is not int or not 1 <= value <= maximum:
+                raise DatasetError(f'{name} must be between 1 and {maximum}')
+        if (kind not in ('any', 'gaining', 'lossy', 'conserving') or yield_mode not in ('guaranteed', 'expected')
+                or chemical_kind not in ('any', 'balanced', 'gaining', 'lossy', 'mixed', 'unsupported')):
+            raise DatasetError('Unsupported loop kind or yield mode')
+        if selections is not None and (not isinstance(selections, dict)
+                or any(not isinstance(pid, str) or not isinstance(slots, dict) for pid, slots in selections.items())):
+            raise DatasetError('selections must map process IDs to input-slot selections')
+        selections = selections or {}
+        filters = self._tier_filter(min_tier, max_tier, unknown_tier_policy)
+        with self._connect() as connection:
+            self._record(connection, 'resources', start_id)
+            queue, visited, records, raw, choices = deque([(start_id, 0)]), {start_id}, {}, {}, {}
+            reasons, tier_checked = set(), set()
+            work, work_limit, examined = 0, 100000, 0
+            while queue:
+                resource_id, depth = queue.popleft()
+                examined += 1
+                if depth >= max_depth:
+                    reasons.add('candidate_depth')
+                    continue
+                clause, values = self._using_clause(connection, resource_id)
+                for row in connection.execute('SELECT id,payload FROM records WHERE collection=\'processes\' AND '
+                                               + clause + ' ORDER BY id', values):
+                    pid = row['id']
+                    if pid in records:
+                        continue
+                    record = json.loads(row['payload'])
+                    if (record['executable'] is False or record['conditions'].get('dynamic_output') == 'unresolved'):
+                        continue
+                    if not self._tier_allowed(record, filters):
+                        if pid not in tier_checked:
+                            key = 'excluded_unknown' if self._recipe_tier(record)['tier'] is None else 'excluded_out_of_range'
+                            filters[key] += 1
+                            tier_checked.add(pid)
+                        continue
+                    concrete = json.loads(_json(record))
+                    carries_input = False
+                    for si, slot in enumerate(record['inputs']):
+                        resolved = []
+                        for ci, choice in enumerate(slot['choices']):
+                            match = choice['match']
+                            key = _json({'resource_id': choice.get('resource_id'), 'match': match})
+                            if key not in choices:
+                                choices[key] = (self._choice_resources(connection, choice) if match['mode'] != 'native_unknown'
+                                                and (match['mode'] not in ('unified', 'ore_dict') or match.get('group_id')) else [])
+                                work += len(choices[key])
+                            if work > work_limit:
+                                reasons.add('candidate_work_limit')
+                                break
+                            for rid in choices[key]:
+                                resolved.append(dict(choice, resource_id=rid, match={'mode': 'exact', 'nbt_sensitive': True},
+                                                     declared_choice_index=ci))
+                            if slot['role'] == 'consume' and choice['amount'] > 0 and resource_id in choices[key]:
+                                carries_input = True
+                        concrete['inputs'][si]['choices'] = resolved
+                    if 'candidate_work_limit' in reasons:
+                        break
+                    if not carries_input:
+                        continue
+                    if len(records) >= max_processes:
+                        reasons.add('candidate_process_limit')
+                        break
+                    records[pid], raw[pid] = concrete, record
+                    for output in record['outputs']:
+                        rid = output['resource_id']
+                        if not self._positive_output(output) or rid in visited:
+                            continue
+                        if len(visited) >= max_states:
+                            reasons.add('candidate_state_limit')
+                            break
+                        visited.add(rid)
+                        queue.append((rid, depth + 1))
+                if reasons & {'candidate_process_limit', 'candidate_work_limit', 'candidate_state_limit'}:
+                    break
+            resolved_selections = {}
+            for pid, slots in selections.items():
+                self._record(connection, 'processes', pid)
+                if pid not in records:
+                    continue
+                resolved_selections[pid] = {}
+                for si, requested in slots.items():
+                    if (str(si) not in {str(i) for i in range(len(records[pid]['inputs']))}
+                            or not isinstance(requested, dict) or set(requested) != {'choice_index', 'resource_id'}
+                            or type(requested['choice_index']) is not int or not isinstance(requested['resource_id'], str)):
+                        raise DatasetError('Invalid loop input selection')
+                    resolved = records[pid]['inputs'][int(si)]['choices']
+                    matches = [i for i, c in enumerate(resolved) if c['declared_choice_index'] == requested['choice_index']
+                               and c['resource_id'] == requested['resource_id']]
+                    if len(matches) != 1:
+                        raise DatasetError('Selected loop input does not match the declared predicate')
+                    resolved_selections[pid][str(si)] = {'choice_index': matches[0], 'resource_id': requested['resource_id']}
+            used = {start_id} | {c['resource_id'] for r in records.values() for s in r['inputs'] for c in s['choices']} \
+                   | {o['resource_id'] for r in records.values() for o in r['outputs']}
+            facts = {}
+            ids = sorted(used)
+            for offset in range(0, len(ids), 500):
+                batch = ids[offset:offset + 500]
+                rows = connection.execute('SELECT id,payload FROM records WHERE collection=\'resources\' AND id IN ('
+                                          + ','.join('?' for _ in batch) + ')', batch)
+                facts.update({row['id']: json.loads(row['payload']).get('material_facts') for row in rows})
+            result = find_loops(records, start_id, chemical_facts=facts, selections=resolved_selections,
+                                kind=kind, chemical_kind=chemical_kind, yield_mode=yield_mode, max_depth=max_depth, max_processes=max_processes,
+                                max_paths=max_paths, max_states=max_states)
+            for witness in result['witnesses']:
+                for step in witness['steps']:
+                    for si, selection in step.get('selections', {}).items():
+                        choice = records[step['process_id']]['inputs'][int(si)]['choices'][selection['choice_index']]
+                        selection['choice_index'] = choice['declared_choice_index']
+            result.update(snapshot_id=self.snapshot_id, start_id=start_id, tier_filter=filters,
+                          recipe_tiers=[self._recipe_tier(raw[id]) for id in sorted(raw)],
+                          candidate_search={'examined_resources': examined, 'discovered_resources': len(visited),
+                                            'processes': len(records), 'expansion_work': work, 'work_limit': work_limit})
+            result['limit_reasons'] = sorted(set(result['limit_reasons']) | reasons)
+            if reasons:
+                result['status'] = 'limited'
+            return ledger_json(result)
 
     @staticmethod
     def _cycles(edges):
