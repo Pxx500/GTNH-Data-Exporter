@@ -1,7 +1,7 @@
 # Plan pracy: przygotowanie danych i lepsze wyszukiwanie receptur
 
 **Data:** 2026-10-14  
-**Status:** plan zaakceptowany. Implementacja rozpoczęta po sygnale użytkownika.
+**Status:** zakres implementacji ukończony. Wyniki i ograniczenia zapisano w WORK_RESULTS.md.
 
 ## Cel
 
@@ -55,91 +55,113 @@ własności naszego modelu receptur i porównań na rzeczywistych danych.
 
 ### 1. Baseline i przykłady definiujące oczekiwane zachowanie
 
-- [ ] Rozpoznać dokładne tożsamości materiałów i produktów w bieżącym snapshotcie.
-- [ ] Przygotować przypadki Iron Dust → LV Machine Casing, Iron Dust → LV Machine
+- [x] Rozpoznać dokładne tożsamości materiałów i produktów w bieżącym snapshotcie.
+- [x] Przygotować przypadki Iron Dust → LV Machine Casing, Iron Dust → LV Machine
   Hull, Crushed Iron Ore → Double Iron Plate i Iron Dust → Volcanus Controller.
-- [ ] Dla każdego zapisać dostępne w dumpie sensowne drogi, wymagane składniki
+- [x] Dla każdego zapisać dostępne w dumpie sensowne drogi, wymagane składniki
   poboczne oraz wyniki obecnego wyszukiwania. Nie wymyślać brakujących receptur.
-- [ ] Powtórzyć odpowiednie przykłady z jawnymi limitami LV i MV oraz bez limitu.
-- [ ] Dodać regresje dla OR, NBT, wymaganej obecności narzędzia, wariantów
+- [x] Powtórzyć odpowiednie przykłady z jawnymi limitami LV i MV oraz bez limitu.
+- [x] Dodać regresje dla OR, NBT, wymaganej obecności narzędzia, wariantów
   kanonicznych i niekanonicznych oraz tras przechodzących przez cykle.
-- [ ] Zachować wodę → wodór i znany obieg regeneracyjny jako regresję audytu
+- [x] Zachować wodę → wodór i znany obieg regeneracyjny jako regresję audytu
   energii. Nowe preferencje ścieżek materiałowych nie mogą ukryć takich obiegów.
-- [ ] Zmierzyć czas, unikalne odczytane procesy, rozwinięcia dopasowań i stanów,
+- [x] Zmierzyć czas, unikalne odczytane procesy, rozwinięcia dopasowań i stanów,
   powtarzaną pracę, osiągane limity oraz pokrycie gałęzi celu.
-- [ ] Porównać pierwsze zapytanie po uruchomieniu klienta z kolejnymi zapytaniami.
+- [x] Porównać pierwsze zapytanie po uruchomieniu klienta z kolejnymi zapytaniami.
   Nie ukrywać kosztu przygotowania indeksu albo rozgrzewania cache.
 
 **Wynik:** powtarzalny zestaw porównań z oczekiwaniami opartymi na danych.
 
 ### 2. Porównanie istniejących metod i wybór kierunku
 
-- [ ] Przejrzeć pierwotne źródła dotyczące wyszukiwania kierowanego celem,
+- [x] Przejrzeć pierwotne źródła dotyczące wyszukiwania kierowanego celem,
   A* i dolnych oszacowań, przygotowania informacji o osiągalności, hierarchicznej
   abstrakcji grafu oraz planowania w grafach AND/OR lub sieciach reakcji.
-- [ ] Wybrać do testu dwa lub trzy uzasadnione podejścia. Punktem odniesienia jest
+- [x] Wybrać do testu dwa lub trzy uzasadnione podejścia. Punktem odniesienia jest
   obecny algorytm z istniejącymi indeksami, nie sztucznie osłabiony baseline.
-- [ ] Sprawdzić, ile daje lepsze wykorzystanie obecnych indeksów i współdzielenie
+- [x] Sprawdzić, ile daje lepsze wykorzystanie obecnych indeksów i współdzielenie
   przygotowanych dopasowań między zapytaniami, zanim dodamy kolejną strukturę.
-- [ ] Osobno ocenić szybkość, dobór użytecznych tras i pokrycie alternatyw.
+- [x] Osobno ocenić szybkość, dobór użytecznych tras i pokrycie alternatyw.
   Szybszy algorytm, który gubi drogę przez stal, nie spełnia celu.
-- [ ] Zapisać wybraną metodę, źródła, odrzucone alternatywy i wyniki pomiarów.
+- [x] Zapisać wybraną metodę, źródła, odrzucone alternatywy i wyniki pomiarów.
 
 **Wynik:** uzasadniona decyzja, a nie implementacja pierwszego pomysłu.
 
 ### 3. Eksperyment z wyspami i połączeniami na wyższym poziomie
 
-- [ ] Porównać grupowanie według cykli, materiałów lub rodzin przemian z innymi
+- [x] Porównać grupowanie według cykli, materiałów lub rodzin przemian z innymi
   metodami abstrakcji, jeśli badania wskazują, że warto je sprawdzić.
-- [ ] Zmierzyć rozmiary grup, udział największej grupy, liczbę przejść między
+- [x] Zmierzyć rozmiary grup, udział największej grupy, liczbę przejść między
   grupami i wpływ hubów takich jak woda, wodór oraz tlen.
-- [ ] Zachować konkretne receptury i zasoby stanowiące wejścia i wyjścia grup.
+- [x] Zachować konkretne receptury i zasoby w eksperymentalnym grafie.
   Sama sekwencja wyspa 1 → 2 → 4 nie dowodzi poprawnego chaina.
-- [ ] Weryfikować, czy wejście do wyspy prowadzi do właściwego wyjścia oraz czy
-  konkretne receptury mają spełnione wymagania AND i poprawne wybory OR.
-- [ ] Porównać efektywność wyszukiwania makro → mikro z baseline i innymi
-  kandydatami. Nie blokować legalnych przejść między grupami dla wygody modelu.
-- [ ] Przyjąć wyspy do produkcyjnego wyszukiwania tylko przy wykazanej korzyści.
+- [x] Ocenić wymagania dla poprawnego przejścia przez wyspę i świadków AND/OR.
+  Nie wdrożono makrotras, więc nie przedstawiamy relaksowanej osiągalności jako
+  dowodu spełnienia wszystkich składników.
+- [x] Ocenić zasadność makro → mikro na pomiarach grup i portali oraz porównać
+  pozostałe kandydaty z baseline. Negatywny wynik SCC zakończył tę gałąź badań
+  przed implementacją pełnego wyszukiwania makro → mikro.
+- [x] Przyjąć wyspy do produkcyjnego wyszukiwania tylko przy wykazanej korzyści.
   Negatywny wynik eksperymentu jest poprawnym wynikiem badania.
 
 **Wynik:** decyzja, czy ta abstrakcja pomaga naszemu datasetowi.
 
+### 3a. Eksperyment z odległością od źródeł w grze
+
+- [x] Sprawdzić hipotezę użytkownika: potwierdzone źródła itemów ze świata gry
+  otrzymują poziom 0, a kolejne przemiany zwiększają odległość od pozyskania.
+  Jest to wyliczona wskazówka do wyszukiwania, a nie entropia fizyczna.
+- [x] Porównać poziom receptury oparty na najdalszym wymaganym składniku z kosztem
+  sumującym drogi składników. Uwzględnić wszystkie sloty AND i legalne wybory OR.
+  Osobno traktować narzędzia wymagane przez obecność oraz ich pozyskanie.
+- [x] Zachować nieznaną odległość przy braku dowodów. Generowany blok, potencjalny
+  drop z reguły i potwierdzony item wydobycia nie są tym samym źródłem poziomu 0.
+  Jawne podstawowe surowce profilu mogą tworzyć oddzielny zestaw założonych wejść.
+- [x] Nie pozwolić cyklom bez wejść ze źródeł uzyskiwać sztucznie niskiego poziomu.
+  Sama malejąca liczba nie dowodzi wykonalności, dobrego uzysku ani braku strat.
+- [x] Zmierzyć przydatność tej wskazówki do porządku eksploracji i propozycji granic
+  Target from basics. Sprawdzić skróty przez wodę, wodór i produkty uboczne.
+  Wdrożyć ją tylko przy potwierdzonej korzyści i z jawnym opisem ograniczeń.
+
+**Wynik:** sprawdzona hipoteza potencjału źródłowego z porównaniem metod oraz
+decyzją o użyciu lub odrzuceniu jej w produkcyjnym wyszukiwaniu.
+
 ### 4. Przygotowany indeks przepływów
 
-- [ ] Wdrożyć wybrane przygotowanie po dumpie, poza głównym wątkiem gry.
-- [ ] Oprzeć je na istniejącym imporcie i właścicielu `Dataset`. Szczegóły
+- [x] Wdrożyć wybrane przygotowanie po dumpie, poza głównym wątkiem gry.
+- [x] Oprzeć je na istniejącym imporcie i właścicielu `Dataset`. Szczegóły
   przechowywania ustalić po pomiarach, zaczynając od obecnego SQLite.
-- [ ] Przygotować potrzebne powiązania, dopasowania, cechy materiałowe,
+- [x] Przygotować potrzebne powiązania, dopasowania, cechy materiałowe,
   informacje o cyklach, osiągalności lub przejściach między grupami.
   Zakres wynika z wybranej metody, nie z chęci zapisywania wszystkiego.
-- [ ] Kontrolować koszt grup i alternatyw. Nie materializować wszystkich kombinacji
+- [x] Kontrolować koszt grup i alternatyw. Nie materializować wszystkich kombinacji
   składników ani wszystkich możliwych chainów, jeśli wystarczy zapis symboliczny.
-- [ ] Zachować pełne receptury, ilości, szanse, AND/OR, NBT i warunki. Nie scalać
+- [x] Zachować pełne receptury, ilości, szanse, AND/OR, NBT i warunki. Nie scalać
   tożsamości przedmiotów tylko dlatego, że mają podobną nazwę lub wspólną grupę.
-- [ ] Oddzielić dane źródłowe od wyliczonych wskazówek. Niepewne informacje
+- [x] Oddzielić dane źródłowe od wyliczonych wskazówek. Niepewne informacje
   pozostają niepewne, a hipotezy nie stają się warunkami wykonania receptury.
-- [ ] Powiązać indeks ze snapshotem i wersją analizy. Umożliwić jawne
+- [x] Powiązać indeks ze snapshotem i wersją analizy. Umożliwić jawne
   przebudowanie bez ponownego uruchamiania Minecrafta i bez cichego mieszania wersji.
-- [ ] Zmierzyć czas przygotowania, rozmiar, pamięć, start klienta i wpływ na zapytania.
+- [x] Zmierzyć czas przygotowania, rozmiar, pamięć, start klienta i wpływ na zapytania.
 
 **Wynik:** przebudowywalny indeks używany przez wspólny silnik zapytań.
 
 ### 5. Użyteczne trasy i uczciwy opis ich zakresu
 
-- [ ] Używać przygotowanych danych również do wyboru kolejności eksploracji.
+- [x] Używać przygotowanych danych również do wyboru kolejności eksploracji.
   Sam ranking wyników po osiągnięciu limitu nie wystarczy.
-- [ ] Preferować istotny przepływ materiału od A do części konstrukcyjnych B,
+- [x] Preferować istotny przepływ materiału od A do części konstrukcyjnych B,
   jeśli potwierdzają go dane. Nie kodować wyjątków dla żelaza lub stali.
-- [ ] Oczekiwana droga przez stal ma pojawiać się bez ręcznego wpisywania stali
+- [x] Oczekiwana droga przez stal ma pojawiać się bez ręcznego wpisywania stali
   jako wymaganego materiału przejściowego. Takie wymuszenie nie naprawia heurystyki.
-- [ ] Zachować trasy przez produkty uboczne i opisać ich rolę. Nie oznaczać ich
+- [x] Zachować trasy przez produkty uboczne i opisać ich rolę. Nie oznaczać ich
   jako błędnych tylko dlatego, że są mniej intuicyjne.
-- [ ] Pokazywać, które gałęzie produktu wyjaśnia wynik, jakie inne składniki są
+- [x] Pokazywać, które gałęzie produktu wyjaśnia wynik, jakie inne składniki są
   potrzebne oraz gdzie wyszukiwanie lub wiedza się kończy.
-- [ ] Zachować znaczenie istniejących trybów i filtrów. Jeśli preferencja
+- [x] Zachować znaczenie istniejących trybów i filtrów. Jeśli preferencja
   materiałowa wymaga osobnego trybu, nazwać go jawnie zamiast zmieniać po cichu
   definicję najkrótszej ścieżki.
-- [ ] Udostępnić tę samą logikę przez GUI, HTTP, CLI i MCP. Zaktualizować opisy
+- [x] Udostępnić tę samą logikę przez GUI, HTTP, CLI i MCP. Zaktualizować opisy
   oraz przewodnik dla agentów, łącznie z przyczynami wyboru i ograniczeniami wyniku.
 
 **Wynik:** droga przez stal jest odnajdywana i odpowiednio prezentowana,
@@ -147,33 +169,33 @@ a powiązanie przez wodór nie udaje wyjaśnienia stalowej części urządzenia.
 
 ### 6. Pokrycie maszyn i warunków
 
-- [ ] Porównać odpowiednie rodziny i receptury z rejestrami działającej gry oraz
+- [x] Porównać odpowiednie rodziny i receptury z rejestrami działającej gry oraz
   NEI. Oddzielić brak eksportu od błędu dopasowania, filtra, etykiety i wyszukiwania.
-- [ ] Zweryfikować EBF oraz podstawowe maszyny na ścieżkach z zestawu przykładów,
+- [x] Zweryfikować EBF oraz podstawowe maszyny na ścieżkach z zestawu przykładów,
   w tym ilości, alternatywy składników, napięcie i wymagania ciepła.
-- [ ] Poprawić potwierdzone luki potrzebne do tych przypadków i pokazać porównanie
+- [x] Poprawić potwierdzone luki potrzebne do tych przypadków i pokazać porównanie
   przed i po. Sama obecność rodziny albo zgodność liczby rekordów nie wystarcza.
-- [ ] Jeśli potrzebny jest nowy dump, kontrolować wersje paczki i konfigurację.
+- [x] Jeśli potrzebny jest nowy dump, kontrolować wersje paczki i konfigurację.
   Wyników z różnych wersji GTNH nie traktować jako porównania samego algorytmu.
 
 **Wynik:** potwierdzone pokrycie istotnych rodzin albo konkretna lista luk z dowodami.
 
 ### 7. Czytelne informacje o dostępności materiałów
 
-- [ ] Usunąć rutynowy badge „Captured producer” z podpowiedzi wyszukiwania.
+- [x] Usunąć rutynowy badge „Captured producer” z podpowiedzi wyszukiwania.
   Obecnie oznacza co najmniej jedną zapisaną, interpretowalną recepturę z tym
   materiałem na wyjściu. Nie sprawdza, czy da się zdobyć wszystkie jej składniki
   i spełnić warunki, więc nie jest dowodem dostępności materiału w grze.
-- [ ] W szczegółach zachować tę informację pod zrozumiałą nazwą, np. „Receptury
+- [x] W szczegółach zachować tę informację pod zrozumiałą nazwą, np. „Receptury
   produkcji w dumpie”, wraz z liczbą i przykładami receptur oraz ich warunkami.
-- [ ] W autocomplete wyróżniać informacje, które wpływają na wybór materiału,
+- [x] W autocomplete wyróżniać informacje, które wpływają na wybór materiału,
   np. wariant zastępowany przez unifikację, niejasne receptury lub brak znanej
   drogi pozyskania. Rutynowe pozytywne informacje nie powinny zajmować osobnego
   wiersza przy każdym wyniku.
-- [ ] Rozróżniać obecność receptury, znane źródło i pełną drogę pozyskania.
+- [x] Rozróżniać obecność receptury, znane źródło i pełną drogę pozyskania.
   Braku dowodów w niepełnym dumpie nie przedstawiać jako pewnej niemożliwości
   zdobycia itemu. Wyjaśnić ostrzeżenia i umożliwić sprawdzenie ich podstawy.
-- [ ] Sprawdzić podpowiedzi na GT Iron Dust i wariancie IC2. Ujednolicić znaczenie
+- [x] Sprawdzić podpowiedzi na GT Iron Dust i wariancie IC2. Ujednolicić znaczenie
   statusów w GUI i dokumentacji MCP, zachowując dane o dowodach dla agentów.
 
 **Wynik:** lista wyników jest czytelniejsza, a oznaczenia pomagają wybrać właściwy
@@ -181,27 +203,27 @@ materiał i nie sugerują dostępności, której analiza nie potwierdziła.
 
 ### 8. Surowce pierwotne i pochodzenie ze świata gry
 
-- [ ] Rozdzielić fakt „ma źródło w świecie gry” od roli „surowiec podstawowy
+- [x] Rozdzielić fakt „ma źródło w świecie gry” od roli „surowiec podstawowy
   w tym planie”. Obecne profile podstawowych surowców są deklaracją granicy
   planowania, a nie potwierdzeniem pochodzenia albo dostępności w grze.
-- [ ] Oznaczać bezpośrednie źródła na podstawie eksportowanych definicji,
+- [x] Oznaczać bezpośrednie źródła na podstawie eksportowanych definicji,
   np. generacji złóż, dropów lub pozyskania płynów. Pokazywać rodzaj źródła,
   wymiary i warunki oraz dowody. Receptura recyklingu nie odbiera tego oznaczenia.
-- [ ] Oddzielić generowany blok rudy od itemu otrzymywanego podczas wydobycia.
+- [x] Oddzielić generowany blok rudy od itemu otrzymywanego podczas wydobycia.
   Sama obecność bloku w oregenie nie dowodzi, że gracz dostaje ten blok albo
   konkretny crushed ore. Zachować rozróżnienie potwierdzonego dropu i kandydata
   wywnioskowanego z reguły wydobycia.
-- [ ] Zbadać osobne oznaczenie „produkt wstępnego przetwarzania surowca”,
+- [x] Zbadać osobne oznaczenie „produkt wstępnego przetwarzania surowca”,
   np. crushed ore. Wnioskować z rodzaju procesu i udokumentowanego pochodzenia,
   z ograniczonym zakresem kroków. Nie rozszerzać tagu automatycznie na każdy
   osiągalny produkt. Wyniki heurystyczne muszą mieć wyjaśnienie i poziom pewności.
-- [ ] Nie definiować pierwotności jako braku receptur ani braku cykli.
+- [x] Nie definiować pierwotności jako braku receptur ani braku cykli.
   Odnawialność traktować osobno. Istnienie cyklu nie dowodzi odnawialności,
   bo obieg może wymagać zużywanych składników i zapasu rozruchowego.
-- [ ] Korzystać z tych oznaczeń w wyszukiwaniu i jako podpowiedzi przy tworzeniu
+- [x] Korzystać z tych oznaczeń w wyszukiwaniu i jako podpowiedzi przy tworzeniu
   profilu Target from basics. Użytkownik zatwierdza granicę planowania.
   Nie przerywać automatycznie rozwijania receptur na każdym oznaczonym materiale.
-- [ ] Sprawdzić iron ore, jego rzeczywisty produkt wydobycia, crushed ore,
+- [x] Sprawdzić iron ore, jego rzeczywisty produkt wydobycia, crushed ore,
   Iron Dust i niekanoniczny wariant IC2. Obecność w rejestrze lub recepturach
   nie zastępuje dowodów aktywnego źródła w danej konfiguracji paczki.
 
@@ -210,31 +232,31 @@ drogi recyklingu. Granica planera pozostaje jawnym wyborem użytkownika.
 
 ### 9. Inspekcja bez utraty planszy i czytelne szczegóły
 
-- [ ] Naprawić utratę stanu Trace przy przejściu do Library i powrocie.
+- [x] Naprawić utratę stanu Trace przy przejściu do Library i powrocie.
   Zachować wynik, filtry, pozycje kafelków, kamerę i wyróżnioną ścieżkę.
   Inspekcja nie powinna uruchamiać nowego wyszukiwania ani resetować planszy.
-- [ ] Kliknięcie materiału lub receptury ma otwierać szczegóły przy planszy.
+- [x] Kliknięcie materiału lub receptury ma otwierać szczegóły przy planszy.
   Dociągać rekord brakujący w lokalnym wyniku zamiast przenosić użytkownika
   do Library. W obecnym kodzie lokalny materiał otwiera panel, ale brak lokalnego
   rekordu i przycisk „Inspect in library” wywołują zmianę widoku.
-- [ ] Oddzielić „Pokaż szczegóły”, „Otwórz w Library” i „Użyj w nowym zapytaniu”.
+- [x] Oddzielić „Pokaż szczegóły”, „Otwórz w Library” i „Użyj w nowym zapytaniu”.
   Nazwa przycisku ma opisywać skutek. Jawne przejście do Library ma zapewniać
   powrót do zachowanej planszy. Nie rozszerzać tego zadania na zapis sesji po restarcie.
-- [ ] Umieścić nagłówek i zamknięcie panelu poza przewijaną treścią, tak żeby
+- [x] Umieścić nagłówek i zamknięcie panelu poza przewijaną treścią, tak żeby
   „Close” pozostawał widoczny przy długich rekordach i w wąskim widoku.
   Zapewnić obsługę klawiaturą i powrót fokusu po zamknięciu.
-- [ ] Domyślnie pokazywać nazwę, ilość, jednostkę, niepewną szansę w procentach
+- [x] Domyślnie pokazywać nazwę, ilość, jednostkę, niepewną szansę w procentach
   i istotne warunki. Ukryć rutynowe 100%, surowe numerator/denominator oraz
   wewnętrzne identyfikatory slotów. Nie usuwać informacji potrzebnych do
   zrozumienia zużycia, narzędzi, alternatyw i warunków wykonania.
-- [ ] Przenieść fragmenty „Output fields” i podobne JSON-y z pojedynczych
+- [x] Przenieść fragmenty „Output fields” i podobne JSON-y z pojedynczych
   składników do wyraźnego widoku danych technicznych, domyślnie ukrytego.
   Zachować pełny rekord i możliwość jego skopiowania dla developera.
-- [ ] Przejść najważniejszy przepływ: wyszukanie → graf → szczegóły składnika
+- [x] Przejść najważniejszy przepływ: wyszukanie → graf → szczegóły składnika
   → receptury produkcji → powrót do grafu → zamknięcie panelu. Poprawić konkretne
   niejasne etykiety, skutki akcji i powody blokady przycisków w tym przepływie.
   Nie zamieniać tego zadania w pełne przeprojektowanie wszystkich ekranów.
-- [ ] Sprawdzić utrzymanie stanu po inspekcji i zmianie zakładki, brak skoków
+- [x] Sprawdzić utrzymanie stanu po inspekcji i zmianie zakładki, brak skoków
   nawigacji, widoczność zamknięcia podczas scrolla i zgodność danych technicznych
   z czytelnymi ilościami oraz procentami.
 
@@ -244,18 +266,22 @@ szczegóły są dostępne na żądanie.
 
 ### 10. Domknięcie rozpoczętego GUI i końcowa weryfikacja
 
-- [ ] Dokończyć bieżące zmiany scrolla i eksportu planszy w osobnym commicie.
-  Kod przechodzi 51 testów GUI. Rzeczywisty PNG 4514 × 3992 px i SVG z 14 kafelkami,
-  17 połączeniami i 17 podpisami zostały już sprawdzone.
-- [ ] Potwierdzić końcowy scroll nad tłem i kafelkami oraz zoom Ctrl+scroll.
-- [ ] Sprawdzić zapis przez widoczny link pobierania. CUA nie potwierdził
-  zdarzenia pobrania, choć renderer zwrócił poprawne pliki. Nie przypisywać
-  ograniczenia narzędzia aplikacji bez dowodu.
-- [ ] Zweryfikować aktualny silnik na przykładach natywnych i odpowiednich
+- [x] Dokończyć bieżące zmiany scrolla i eksportu planszy w osobnym commicie.
+  Końcowy kod przechodzi 63 testy GUI. Wcześniejszy PNG miał 4514 × 3992 px.
+  Końcowy PNG ma 3976 × 7902 px, a SVG zawiera 16 kafelków, 17 połączeń
+  i 17 podpisów. Pełny Python ma 162 testy, a eksporter 30.
+- [x] Potwierdzić końcowy scroll nad tłem i kafelkami. Zoom Ctrl+scroll ma
+  regresję GUI. Natywnie sprawdzono kontrolki zoomu, a CUA nie dostarczyło
+  osobnego dowodu dla przytrzymanego Ctrl podczas wheel.
+- [x] Sprawdzić zapis przez widoczny link pobierania. CUA nie potwierdził
+  zdarzenia pobrania, choć renderer i linki zwróciły poprawne pliki. Wynik tej
+  próby pozostaje niejednoznaczny. Fizyczny zapis w przeglądarce nie jest
+  zweryfikowany, a wygenerowane pliki zachowano lokalnie.
+- [x] Zweryfikować aktualny silnik na przykładach natywnych i odpowiednich
   testach po zmianach. Sprawdzić zgodność wyników między interfejsami.
-- [ ] Przygotować jeden zbiorczy przegląd, poprawić potwierdzone problemy
+- [x] Przygotować jeden zbiorczy przegląd, poprawić potwierdzone problemy
   w zakresie i wykonać skupiony przegląd poprawek.
-- [ ] Zakończyć raportem: wyniki pomiarów, poprawione zachowania, decyzja o wyspach,
+- [x] Zakończyć raportem: wyniki pomiarów, poprawione zachowania, decyzja o wyspach,
   potwierdzone luki i ograniczenia. Nie ogłaszać pełnego pokrycia całej gry.
 
 ## Warunek ukończenia
@@ -302,3 +328,24 @@ szczegóły są dostępne na żądanie.
 - Bazowy scroll sprawdzony w rzeczywistej przeglądarce po wcześniejszej poprawce:
   nad tłem i kafelkiem zmienia się pozycja strony, a kamera grafu pozostaje stała.
   Dowody: `exports/graph-ux-proof-20261014/wheel-proof.json`.
+
+## Zamknięcie zakresu
+
+- Nowy snapshot: `779ea030-ae9c-40ea-8854-99a176f7cc42`. Bazowy dump pozostaje
+  niezmieniony. Oba porównania z NEI mają 78 389 dopasowań i zero różnic
+  w obsługiwanym zakresie, z zachowanymi 15 błędami przechwytywania.
+- Wyspy SCC oraz sam potencjał odległości od źródeł nie weszły do produkcyjnej
+  heurystyki. Wynik eksperymentów i odrzucone kierunki są zapisane, bez
+  przypisywania im dowodu wykonalności AND.
+- Przygotowany indeks, tryb materiałowy, oznaczenia pochodzenia oraz poprawki
+  GUI działają. MCP ma jawny compact/full i kompletny przewodnik 25 narzędzi.
+- Bieżące połączenie MCP tej rozmowy nadal wskazuje stary snapshot. Zapisana
+  konfiguracja i nowy klient SDK wskazują nowy. Nie utożsamiamy tych stanów.
+- Potencjał źródłowy, nierozwiązane zachowanie narzędzi craftingu, niepełne
+  rodziny i konfiguracje oraz niepotwierdzone natywne pobieranie przez CUA
+  pozostają ograniczeniami opisanymi w WORK_RESULTS.md.
+- Otwarte pytanie o dokładną gotową maszynę użytkownika pozostaje opcjonalnym
+  rozszerzeniem benchmarków. Casing, hull, double plate i Volcanus sprawdzono.
+- Końcowy Volcanus na świeżym snapshotcie zwrócił sześć ścieżek w 0,437 s,
+  w tym stal → tungstensteel → Robot Arm IV. Reprezentuje 8/15 gałęzi,
+  z limitem 20 000 kolejkowanych stanów. Ta granica pozostaje jawna.
