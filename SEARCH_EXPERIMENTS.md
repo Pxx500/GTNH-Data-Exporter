@@ -498,3 +498,43 @@ unnecessary query work, not the number of search states or semantic ambiguity.
 The main already-loaded service is not claimed to contain this update.
 Reproducible profiles, baseline, paired measurements and production verification
 are in `exports/search-research-20261014/current-profile/`.
+
+## Target-conditioned family tie guidance rejected
+
+The follow-on use-profile experiment orders equal-score, equal-hop successor
+choices by similarity to actual target ingredient candidates. It changes no
+match, lower bound, native identity or core search cap. Native target producers
+are withheld from profile construction. Guidance uses no saved route, display
+name or form label.
+
+All eight cases return the same paths, route, represented target-slot set and
+full native recipe payloads. All 346 returned steps across sixteen runs pass
+native verification. Double plate LV adds four admissions, two pops and 39
+predecessor rows for the same result. Median query time rises 82%, and peak
+working set rises 58.0–68.6 MiB. Profile collection reaches its separate
+100,000-unit cap in seven cases. Preparation reads 12.12 MB and decodes 372,592
+identity entries, beyond the existing query work.
+
+This rejects the one tested tie-order policy without tuning. The positive form
+retrieval proxy does not translate into better chains under this intervention.
+The frozen baseline is the `dc10ec2` function, before the separate on-demand
+token optimization. No production profile score is introduced. Evidence is in
+`exports/search-research-20261014/use-guided-search/`.
+
+## Returned-path count is separate from scan budgets
+
+The current unrestricted Volcanus benchmark requests eight paths, returns
+eight, represents ten of fifteen target ingredient jobs and reports
+`path_limit`. Requesting sixteen returns twelve paths, represents all fifteen
+jobs and reports no limit reason. The process, state and predecessor limits
+remain 10,000, 20,000 and 100,000 respectively. Actual work still increases:
+examined processes 1,942 to 2,343, admissions 1,331 to 2,118, pops 781 to 1,195,
+and predecessor work 11,033 to 11,483. Indicative query times are 0.499 and
+0.667 seconds. This is output-cap diagnosis, not a faster algorithm.
+
+The LV control returns the same three paths covering all five jobs at either
+requested count, with equal work and state counters. All twenty-six returned
+paths preserve verified native transitions and complete recipe context.
+Canonical DB and sidecar metadata remain unchanged. GUI defaults and API limits
+are not silently changed. Reproduction and complete results are in
+`exports/search-research-20261014/current-profile/output-limit-summary.json`.

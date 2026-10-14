@@ -408,10 +408,15 @@ etap. Bieżące pomiary i decyzje są w SEARCH_EXPERIMENTS.md.
   lepiej niż kontrola stopnia grafu: 75,76% wobec 30,30% w 33 przypadkach.
   To wynik pośredni. Nie potwierdza jakości tras ani zastosowań 17 komponentów
   bez niezależnych etykiet. Koszty przygotowania i odczytów pozostają jawne.
-- [ ] Sprawdzić jeden wariant kierowania wyszukiwaniem na podstawie profili
+- [x] Sprawdzić jeden wariant kierowania wyszukiwaniem na podstawie profili
   zastosowań składników celu. Porównać te same osiem przypadków i limity,
   zachować wszystkie natywne kroki i policzyć przygotowanie. Nie promować
   samego podobieństwa form, jeśli nie poprawia jakości konkretnych tras.
+  Wszystkie osiem przypadków zachowuje te same ścieżki. Mediana czasu rośnie
+  o 82%, a pamięć o 58–69 MiB. Odrzucono badane sortowanie remisów bez tuningu.
+- [x] Oddzielić brak gałęzi wynikający z limitu zwracanych tras od budżetu
+  skanowania. Volcanus przy 16 wynikach zwraca 12 tras i pokrywa 15/15 gałęzi,
+  zachowując limity skanowania. Rzeczywista praca rośnie, co raportujemy osobno.
 - [x] Sprawdzić profil kosztów bieżącego zapytania i usunąć zbędną pracę.
   Odczyt informacji materiałowych na żądanie zastępuje dekodowanie niemal
   119 tysięcy rekordów odczytem 239–2096. Osiem przypadków zachowuje wszystkie
