@@ -193,7 +193,7 @@ class BalanceTests(unittest.TestCase):
             (facts(element("Fe"), Fraction(1, 144)), {"Fe": Fraction(1, 144)}),
             (facts(water, Fraction(1, 1000), "formula_units"), {"H": Fraction(1, 500), "O": Fraction(1, 1000)}),
         )
-        for version in ("5.09.54.221", "5.09.54.223"):
+        for version in ("5.09.54.221", "5.09.54.223", "5.09.54.225"):
             for declaration, expected in cases:
                 with self.subTest(version=version, basis=declaration["accounting"]["basis"], expected=expected):
                     native = deepcopy(declaration)
@@ -205,12 +205,13 @@ class BalanceTests(unittest.TestCase):
                     self.assertEqual(native["chemistry_purity"], "not_certified")
 
     def test_unknown_native_versions_and_units_remain_unsupported(self):
-        for version in (None, "5.09.54.220", "5.09.54.222", "5.09.54.224", "5.09.54.223-dev", "6.0"):
+        for version in (None, "5.09.54.220", "5.09.54.222", "5.09.54.224", "5.09.54.226",
+                        "5.09.54.223-dev", "5.09.54.225-dev", "6.0"):
             with self.subTest(version=version):
                 native = facts(element("Fe"))
                 native["native_version"] = version
                 self.assertEqual(inspect_chemistry(native)["status"], "unsupported")
-        for version in ("5.09.54.221", "5.09.54.223"):
+        for version in ("5.09.54.221", "5.09.54.223", "5.09.54.225"):
             with self.subTest(version=version, unit="144"):
                 native = facts(element("Fe"))
                 native["native_version"] = version

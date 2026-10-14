@@ -5,7 +5,7 @@ from collections import defaultdict
 from collections import deque
 from math import lcm
 
-_NATIVE_ACCOUNTING_VERSIONS = ("5.09.54.221", "5.09.54.223")
+_NATIVE_ACCOUNTING_VERSIONS = ("5.09.54.221", "5.09.54.223", "5.09.54.225")
 
 
 def _native_integer(value):

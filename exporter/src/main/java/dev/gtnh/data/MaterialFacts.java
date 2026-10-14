@@ -35,7 +35,7 @@ import net.minecraftforge.oredict.OreDictionary;
 final class MaterialFacts {
     private static final String PROFILE_VERSION = "5.09.54.221";
     private static final Set<String> ACCOUNTING_NATIVE_VERSIONS = new HashSet<>(Arrays.asList(
-        PROFILE_VERSION, "5.09.54.223"));
+        PROFILE_VERSION, "5.09.54.223", "5.09.54.225"));
     private static final String FLUID_SOURCE = "Materials.getGtMaterialFromFluid + Materials.getAll public phase identity union";
     private static final int NATIVE_DECLARATION_DEPTH = 32;
     private static final int NATIVE_DECLARATION_NODES = 1024;

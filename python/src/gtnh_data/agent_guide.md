@@ -266,8 +266,8 @@ and container returns. An empty or absent hint list is not proof that an input
 cannot function as a tool. These are output explanations, not search filters
 or penalties, and they preserve the selected recipe witnesses.
 
-The native quantity profile explicitly supports GT `5.09.54.221` and
-`5.09.54.223`, with the same `.221` interpretation profile. Read the actual
+The native quantity profile explicitly supports GT `5.09.54.221`,
+`5.09.54.223` and `5.09.54.225`, with the same `.221` interpretation profile. Read the actual
 snapshot and resource accounting status. A supported runtime version alone
 does not resolve persisted unknown facts, GT++ declarations, fluid-phase
 ambiguity or unsupported quantity bases. Use `inspect_chemistry` for the

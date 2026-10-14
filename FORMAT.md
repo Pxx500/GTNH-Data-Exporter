@@ -113,7 +113,7 @@ This links the fluid object, not stack-specific NBT behavior. Tagged resource
 identities and native recipe predicates remain separate.
 
 The unchanged native GT quantity profile is identified by `5.09.54.221` and
-explicitly supports runtime versions `5.09.54.221` and `5.09.54.223`.
+explicitly supports runtime versions `5.09.54.221`, `5.09.54.223` and `5.09.54.225`.
 The relevant native source implementations and runtime classes were compared
 before extending this exact allowlist. `profile_version` identifies the
 interpretation, while `native_version` records the actual captured runtime.

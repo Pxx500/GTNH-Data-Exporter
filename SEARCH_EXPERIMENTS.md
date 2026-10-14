@@ -578,3 +578,71 @@ The actual capture continues after a Context Mode timeout and its retained
 logs confirm successful exit. Only one capture is launched. No active dataset
 or service is switched. Evidence is in
 `exports/search-research-20261014/native-use-identities/`.
+
+## Exact `.225` accounting and combined native data
+
+The fixed accounting matrix finds all fifteen source files and twenty-two
+actual runtime classes byte-identical across `.221`, `.223` and `.225`. The
+verified `.225` release is commit `548a62b655b6d4864f276cd028fbb81f75eea999`, and
+the installed JAR hash is
+`5bd8e63070cf1f70785111e5329c58dcc3afaef38c413755958c633bae0b2337`.
+The two existing version allowlists now include exactly `.225`, keeping profile
+`.221` and every quantity, phase, identity and candidate-consensus gate intact.
+Future and development versions remain unsupported. GT++ chemical accounting
+is not added.
+
+Consumer regressions fail first in the intended three `.225` quantity cases,
+then all twenty-two balance tests pass. All 173 Python tests and thirty-two
+exporter tests pass. The producer's private allowlist has real-capture acceptance
+rather than an invented Java unit initialization seam. Audit skip and advisory
+limits remain explicit in the evidence report.
+
+Fresh snapshot `b2b17000-0da9-4f37-98ec-e33caeb04e57` has 4,693 producer-eligible
+resources and 4,695 complete consumer results. All 4,695 previously complete
+identities from both `.221` and `.223` match with equal vectors and bases.
+The 5,163 resources carrying native source references retain all 6,541 entries.
+The six catalog/template controls remain chemically unsupported, as intended.
+Root separately checks fresh public Iron Dust, Water and Hydrogen vectors,
+the six reference records and all four protected index hashes.
+
+The pipeline takes 168.371 seconds. Compressed streams total 14,585,947 bytes,
+and the new index is 1,120,657,408 bytes. Prior unresolved `.225` data remains
+unchanged and chemically unsupported after the reader extension. No data is
+retro-certified. This creates a coherent separate capture with new source
+facts and supported native chemistry, without switching the active snapshot
+or refreshing existing GUI/MCP processes. Evidence is in
+`exports/search-research-20261014/accounting-225-feasibility/`.
+
+## Separable semantic potential reduces work but loses a branch
+
+The bounded A* pilot establishes an admissible and consistent potential for
+the existing internal queue cost. Resource-to-match arcs carry the selected
+input's no-source-overlap point, and process-to-resource arcs carry the
+minimum native output-position penalty. Continuity and recovery cost zero
+in this lower bound. The final target edge is handled separately. Actual g
+remains authoritative for dominance, and the hop reference is unchanged.
+The bound does not apply to the separately recomputed final path_score.
+It relaxes AND and waypoint requirements rather than proving their feasibility.
+
+Concrete work drops substantially. Unrestricted Volcanus admissions fall from
+1,331 to 946, pops from 781 to 549 and predecessor work from 11,033 to 9,852.
+LV admissions fall from 3,257 to 750, pops from 2,673 to 640 and predecessor
+work from 12,931 to 7,273. None of eight cases gains paths or represented slots.
+Unrestricted Volcanus exchanges the computer-cube slot `(p204431,7)` for circuit
+slot `(p25071,4)`. It loses the Tungstensteel plate to IV hull to computer-cube
+story. Distinct resource-sequence stories fall from five to four.
+
+Four complete potentials require 1,847,674 arc scans and 955,849 preparation
+heap admissions. Common preparation reads 118,717 material rows, 276,408
+output rows and 253,875 tier rows. Eight-query time including preparation
+rises from 5.376 to 7.568 seconds. Whole-process peak working set rises from
+110.6 to 175.9 MiB. All 342 returned steps, 3,695,326 potential arc checks
+and returned-prefix bound checks pass. No unfinished potential guides search.
+
+Reject this default policy for the current coverage and relevance objective.
+The work reduction is positive evidence, not a production speedup or better
+semantic map. A faster branch can consume a result slot before a useful
+construction branch under the same returned-path limit. Future allocation
+research should distinguish branch relevance from queue efficiency, rather
+than retuning this potential after seeing the failed control. Evidence is in
+`exports/search-research-20261014/semantic-potential/`.

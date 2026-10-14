@@ -417,6 +417,14 @@ etap. Bieżące pomiary i decyzje są w SEARCH_EXPERIMENTS.md.
 - [x] Oddzielić brak gałęzi wynikający z limitu zwracanych tras od budżetu
   skanowania. Volcanus przy 16 wynikach zwraca 12 tras i pokrywa 15/15 gałęzi,
   zachowując limity skanowania. Rzeczywista praca rośnie, co raportujemy osobno.
+- [x] Sprawdzić dolne oszacowanie pozostałego kosztu dla wewnętrznej kolejki.
+  Użyć tylko rozdzielnych, istniejących kosztów, zachować rzeczywisty koszt
+  przy porównywaniu stanów i końcowe sortowanie. Dowód dotyczy kosztu kolejki,
+  który różni się od końcowej oceny trasy. Policzyć pełne przygotowanie i
+  porównać osiem przypadków przy dotychczasowych limitach.
+  Oszacowanie jest poprawne dla kolejki i zmniejsza pracę, ale traci jedną
+  gałąź Computer Cube przy tym samym limicie wyników. Całość ośmiu zapytań
+  z przygotowaniem jest wolniejsza. Nie promujemy tego wariantu do produkcji.
 - [x] Sprawdzić profil kosztów bieżącego zapytania i usunąć zbędną pracę.
   Odczyt informacji materiałowych na żądanie zastępuje dekodowanie niemal
   119 tysięcy rekordów odczytem 239–2096. Osiem przypadków zachowuje wszystkie
@@ -432,6 +440,17 @@ etap. Bieżące pomiary i decyzje są w SEARCH_EXPERIMENTS.md.
   tożsamości i wszystkie wcześniejsze pola surowców. Nie powstały nowe itemy
   wyłącznie z katalogu. Przechodzą 32 testy Javy, a chronione bazy mają te same
   hashe. Te dane nie nadają jeszcze automatycznie ról semantycznych.
+- [x] Sprawdzić dokładny profil ilości `.225` i po dowodach zgodności wykonać
+  jeden osobny eksport z nowymi odwołaniami oraz obsługiwanymi bilansami.
+  Zachować starsze wersje i nierozwiązane dumpy bez zmian. Nie przełączać
+  aktywnej bazy ani nie rozszerzać obsługi na niezweryfikowane wersje.
+  Wszystkie 15 plików źródłowych i 22 klasy są identyczne. Świeży dump ma
+  4695 zgodnych wektorów wobec obu wcześniejszych wspieranych wersji oraz
+  zachowuje 6541 odwołań źródłowych. Przechodzi 173 testów Pythona i 32 Javy.
+- [ ] Dodać wykluczanie przechwyconych grup wariantów w Trace, GUI i MCP.
+  Rozwiązać dosłownych członków raz w Dataset, zachować pełne receptury i
+  ograniczenia ścieżki. Nie utożsamiać grup ore i unified ani grupy nuggetIron
+  z formą wszystkich nuggetów. Nie publikować nowego GUI do starego backendu.
 - [x] Sprawdzić wybieranie wyjść regionu na podstawie rzeczywistych gałęzi
   celu i przygotowanych odległości. Policzyć przygotowanie, konkretne kroki,
   walidację i pracę zapytania. Odrzucić rozwiązanie, jeśli wyjścia pozostaną
