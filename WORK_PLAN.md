@@ -559,7 +559,7 @@ etap. Bieżące pomiary i decyzje są w SEARCH_EXPERIMENTS.md.
   obwód znika z klas 7/9 do 6/9, choć formalne pokrycie nadal wynosi 10/15.
   Potwierdzono 43 wywołania matchera i 3906 kandydatów. Ilości 1/2 nie są
   łączone. Równość zbiorów dla exact/unified dotyczy tylko tego snapshota.
-- [ ] Sprawdzić, jak dopuścić różne drogi wcześniejszego przetwarzania
+- [x] Sprawdzić, jak dopuścić różne drogi wcześniejszego przetwarzania
   tego samego półproduktu bez zwiększania limitów wyników ani pracy.
   Wykorzystać istniejące kursory i planowanie gałęzi. Zachować istotną drogę
   przez stal oraz gałęzie obwodu, casingu i pozostałe kontrole.
@@ -567,6 +567,30 @@ etap. Bieżące pomiary i decyzje są w SEARCH_EXPERIMENTS.md.
   Przy powtórzonym prefiksie pozwala na jedną dalszą ukończoną drogę.
   Grupowanie ogranicza do identycznych deklaracji slotów. Limity i ocena
   pozostają bez zmian. Dominacja stanów może już wcześniej odrzucić alternatywę.
+  Jedna próba zwraca sześć zamiast ośmiu dróg wafla, nadal pokrywając 5/5
+  klas wymagań. Nowy prefiks zmienia tylko producenta tej samej sekwencji
+  materiałów. Droga chemiczna nadal nie występuje. Praca rośnie o 917 jednostek.
+  Osiem kontroli zachowuje ścieżki. Nie wdrożono zmiany ani dalszego strojenia.
+- [x] Ustalić dokładny klucz dominacji stanów oraz warunek odrzucania
+  alternatyw. Sprawdzić, czy rozróżnia koszt, liczbę kroków i historię
+  dalszej ścieżki. Najpierw analiza kodu i dwóch zapisanych świadków.
+  Nie nazywać potencjalnego odrzucenia udowodnionym bez konkretnego zdarzenia.
+  Klucz obejmuje zasób i spełnione wymagania. Historię zasobów jako zbiór
+  dodaje tylko przy wymaganych materiałach. Historia receptur nie jest w kluczu.
+  Zachowuje niedominowane pary koszt/liczba kroków, ale z równych tylko pierwszą.
+  Dwa zapisane warianty formowania Solar Grade mają równy stan. Analiza kodu
+  i zwrócony świadek potwierdzają zlanie konkretnego wariantu, nie wszystkich
+  chemicznych prefiksów. Nie wykonano nowego zapytania ani zmiany silnika.
+- [ ] Sprawdzić jedną próbę podziału wyników według odrębnych wymagań celu.
+  Dać jeszcze niepokrytej klasie wymagania szansę przed powtórzeniem tej samej
+  klasy przez inną recepturę końcową. Zachować osobne kolejki i historie.
+  Policzyć grupowanie i planowanie. Nie zwiększać limitów ani puli kandydatów.
+  Dziewięć ustalonych przypadków musi zachować gałęzie obwodu, casingu i stali.
+- [ ] Sprawdzić kontrakt alternatywnych dróg i minimalny ogólny przykład
+  odrzucenia przez dominację historii. Oddzielić brak wariantu od błędnej trasy.
+- [ ] Porównać reguły zachowywania alternatyw z dwiema pracami źródłowymi
+  o najkrótszych prostych ścieżkach. Oddzielić graf przejść od pełnych wymagań
+  AND/OR receptur. Bez nowego prototypu przed konkretną diagnozą.
 - [x] Sprawdzić literaturę o landmarkach i planach zrelaksowanych pod kątem
   kierowania przez gałęzie składników celu. Odróżnić osiągalność pojedynczej
   ścieżki od spełnienia wszystkich wejść receptury i policzyć przygotowanie.

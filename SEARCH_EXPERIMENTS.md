@@ -1116,3 +1116,34 @@ dominance may already remove the useful alternative. Formal endpoint coverage
 and distinct requirement coverage must therefore remain separate. No production
 benefit has been established. Design evidence is in
 `exports/search-research-20261014/upstream-route-diversity/`.
+
+The single class-local completion pilot fails the useful-story criterion.
+Wafer returns six paths instead of eight and keeps all five requirement classes.
+The only new exact prefix substitutes p173920 for p171292 while preserving the
+same complete resource sequence and later process chain. It is a producer variant,
+not a new upstream processing story. The predeclared chemical chain remains
+absent. Admissions change from 6215 to 6218, pops from 4530 to 4533 and examined
+processes stay at 5759. Charged work rises from 24096 to 25013, including grouping
+and continuation. Eight controls preserve their paths, coverage and state counts
+with extra bookkeeping charged. No tuning or production change follows.
+Frozen functions, raw results and the final report remain in
+`upstream-route-diversity/pilot/`. The next question concerns the exact earlier
+dominance rule. Its role in the chemical-chain omission is not yet proven.
+
+The focused source answer establishes the precise limitation. Each job keeps
+Pareto cost/depth labels at a resource, with a resource-set history only when
+explicit intermediate requirements exist. PID history is absent from the key.
+Equal labels keep only the first suffix. The saved chemical and technical
+forming suffixes both reach Solar Grade at cost 3 and depth 2 with the same
+resource history. Stable ordering and the returned technical witness establish
+collapse of the exact alternate forming suffix. This is a source-level proof,
+not an instrumented prune event. A chemical upstream prefix can still attach
+to the surviving forming recipe, so its complete omission remains unexplained
+by this collision alone. Evidence is in the pilot's `DOMINANCE.md`.
+
+The next single private pilot changes only scheduling between exact requirement
+classes, with independent endpoint queues and unchanged dominance, scores and
+caps. It must charge grouping and retain native recipe contexts. A separate
+source-only contract check and two-paper primary-source comparison examine the
+general alternative-path limitation. Tool-category work stays deferred following
+the user's instruction. None of these studies changes production or active data.
