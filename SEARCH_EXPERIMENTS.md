@@ -1171,3 +1171,117 @@ another label. The inverse condition removes stored labels. Bookkeeping and
 comparisons share the existing cap. Scores, job clearing and scheduler remain
 unchanged. This is not K-alternative enumeration. Nine fixed controls and the
 reproduced toy determine whether the extra retained histories are affordable.
+
+The class scheduler is not promoted. Volcanus represents eight rather than
+seven strict requirements, with no lost classes or old upstream prefixes. Exact
+native inspection shows that its new prefix passes from Iron Dust through
+Molten Steel and a Single Use Hard Hammer into Double Hastelloy-N Plate.
+p230507 still needs two actual Hastelloy-N plates in separate AND slots.
+The added dependency spine does not establish manufacture of their material.
+Its formal assembler casing job is replaced by equivalent crafting coverage,
+while the complete assembler declaration remains returned unchanged.
+Aggregate charged work across nine separate requests rises 79184 to 111471.
+Dynamic grouping and scheduling account for 31837 units, with 450 extra
+native predecessor units. No fixed cap was increased. The prepared rebuild
+already has canonical slot effects and matcher memberships needed to derive
+classes offline, but that reuse would not itself resolve route meaning.
+Reports are in `requirement-class-scheduling/`.
+
+One synthesis pilot combines the exact frozen basis-aware discontinuity change
+with this exact class scheduler. The earlier basis change recovered silicon
+chemistry but lost Volcanus's circuit requirement to a repeated Computer Cube
+class. This interaction motivates one test, with both preparation costs charged.
+It changes neither weights nor dominance nor caps. It must retain the circuit,
+casing and steel construction controls and inspect actual new material routes,
+rather than accepting class-count growth alone. Evidence will remain private
+under `basis-and-class-scheduling/` until the bounded result is assessed.
+
+The history-safe bucket-scanning implementation is rejected at its fixed cap.
+It repairs the toy, but five native cases stop on work: wafer 8 to 2 paths,
+hull 7 to 5, LV hull 7 to 4, Volcanus 8 to 6 and LV Volcanus 3 to 0. Casing
+and plate controls retain their exact paths. No new native route appears.
+All returned native witnesses and cofeeds remain valid. Conservative label
+comparisons and potential subset-member reservations account for 62 to 84
+percent of the five exhausted budgets. They are logical reservations, not
+measured C-level probes or elapsed time. Exact blocked-set hash keys could
+avoid cross-history scans, but their native-case viability is untested.
+The predicate's continuation safety and this implementation's budget failure
+remain separate conclusions. Evidence is in `history-safe-dominance/`.
+
+The class-scheduler report's initial statement that Computer Cube was absent
+is corrected. Baseline and scheduler both cover its crafting slot, while the
+assembler variant is absent. The baseline's two missing strict classes are
+the consume-one and consume-two double-plate requirements. Raw measurements
+were correct. The earlier basis treatment duplicates the Cube endpoints and
+loses the circuit class, which remains the specific synthesis hypothesis.
+
+The combined pilot confirms that interaction. Four wafer endpoint variants
+recover Raw Silicon Dust to Trichlorosilane to Solar Grade Silicon Dust to
+Boule, then cutting. Native processes are p139174/p139349/p118805 plus the
+selected cutter. Full acid, hydrogen, circuit, gallium-arsenide and coolant
+requirements remain. This is a chemical prefix change, not only a forming
+variant swap. The exact predeclared PIDs differ. Its primary route still
+illustrates lubricant participation, so main-route ranking is not solved.
+Volcanus retains the circuit and original construction prefixes, with 8/9
+strict classes and 11/15 formal jobs. Its added plate branch still uses two
+actual plate cofeeds. Seven other cases preserve ordered paths and routes.
+
+Dynamic production readiness is rejected. LV hull admissions rise 912 to
+1971 and native predecessor work 4533 to 8900, without route improvement.
+LV Volcanus admissions rise 3257 to 4051. Total charged work is 437921 across
+nine separate requests versus 79184 baseline. Basis preparation contributes
+324163 units and class preparation/scheduling 31872. Removing those two costs
+leaves 81886 native predecessor units, about 3.4% more than baseline. No cap
+fails. All 205 returned native steps pass verification. Complete evidence
+is in `basis-and-class-scheduling/`.
+
+The offline candidate follows the existing owner's design. Prepared format 4
+stores resource material basis and exact interned requirement signatures with
+slot links. Pending matcher-row ranges and persisted matches are reused without
+another native matching pass. Class IDs and small material facts replace dynamic
+full-payload preparation during Trace. The scoring/explanation comparison is
+shared. Root review corrected an eager explanation preload to selected-resource
+lazy caching, protecting full presentation's large expanded variant lists.
+Twenty-five focused tests and 187 full Python tests pass after that fix.
+Copied-native acceptance and build-cost measurement remain pending. Active
+data and services are untouched. Design and acceptance artifacts stay under
+`prepared-semantic-hints/`.
+
+The user's additional terminal-artifact proposal is separate from this index
+candidate. Tinkers tools/parts and GT tools are requested as direct-target-only
+route categories. Full cofeeds remain inspectable. Additional group proposals
+must distinguish native category evidence from acquisition, chemical validity
+or physical noncontribution. No bulk ID file or name-based classifier is added.
+
+Copied-canonical acceptance passes all nine frozen combined requests. Ordered
+paths, full native recipes, quantities, matching, cofeeds and branch coverage
+agree. Only five wafer continuity/reason annotations intentionally change to
+partial under the shared evidence comparison. Their expected changes were
+independently derived before continuing the remaining cases. No held-out query
+was repeated merely to bypass the stop.
+
+The fresh rebuild takes 42.53 seconds and produces 133861376 bytes, versus
+97185792 in the protected old sidecar. Its fresh-process peak working set is
+293609472 bytes, including Python and SQLite. All 74159 native matcher calls
+have unique keys. Class assembly reuses their results, with 20084162 membership
+visits explicitly recorded as offline work. Nine queries charge 83818 units,
+including 1932 class lookup/scheduling units, rather than the dynamic pilot's
+437921. These counters are not a measured time speedup. Known native widening
+in LV hull and LV Volcanus remains, and coolant can still be the primary route.
+
+The nine-case batch uses source 06b95100731746c582f5f01ce637d88635e93e0a7cabcdf145a7d397c1650edb.
+The final observation-only correction separates represented resolved classes
+from represented unresolved singleton jobs. Existing public unknown fixtures
+prove that the previous mixed count could suggest 2/2 known coverage while only
+one known class was represented. Internal scheduling and the represented set
+remain unchanged. All nine native controls have no unresolved jobs. Twenty-five
+flow tests and 187 Python tests pass on final source
+3d9f56acad556049306aca25ded8427f7ab0081ed5b94e8e8b1c3e8904cc9628.
+One HTTP request and one actual fresh stdio MCP request against the copy pass
+on that final source, retaining chemistry, native records and partial annotations.
+Reports and gates are in `prepared-semantic-hints/acceptance/`. Original canonical,
+sidecar and copy hashes remain unchanged. No active service or data switch occurs.
+
+The user confirms that GT turbine rotors are direct-target-only too. The earlier
+recommendation to retain industrial turbines is not adopted. Other extra groups
+remain proposals, with all native recipe cofeeds visible and audits unaffected.

@@ -17,7 +17,9 @@ from contextlib import closing
 from functools import lru_cache
 from heapq import heappop, heappush
 
-ANALYSIS_VERSION = 3
+from .balance import quantity
+
+ANALYSIS_VERSION = 4
 
 _RECOVERY_FAMILIES = frozenset(('gregtech:gt.recipe.macerator', 'gregtech:gt.recipe.arcfurnace',
                                 'gregtech:gt.recipe.alloysmelter'))
@@ -52,6 +54,49 @@ def material_tokens(record):
     return names
 
 
+def material_basis(record):
+    association = (record.get('material_facts') or {}).get('association') or {}
+    return _declaration_basis((association.get('primary') or {}).get('material'))
+
+
+def _declaration_basis(node):
+    if not isinstance(node, dict):
+        return 'unknown'
+    element, components = node.get('element'), node.get('components') or []
+    if not element and not components:
+        return 'opaque'
+    if node.get('status') != 'complete':
+        return 'partial'
+    if isinstance(element, dict) and isinstance(element.get('id'), str) and element['id']:
+        return 'structured_complete'
+    if not isinstance(components, list) or not components:
+        return 'partial'
+    for component in components:
+        try:
+            coefficient = component['coefficient']
+            if isinstance(coefficient, bool) or int(coefficient) <= 0 or str(int(coefficient)) != str(coefficient):
+                return 'partial'
+        except (ValueError, TypeError, KeyError):
+            return 'partial'
+        if _declaration_basis(component.get('material')) != 'structured_complete':
+            return 'partial'
+    return 'structured_complete'
+
+
+def material_comparison(left, right):
+    left_tokens, left_basis = left
+    right_tokens, right_basis = right
+    if left_tokens & right_tokens:
+        return 0
+    if not left_tokens or not right_tokens:
+        return 1
+    # Declaration completeness is evidence scope, not purity or atom provenance.
+    if ((left_basis == 'structured_complete' and right_basis in ('opaque', 'partial'))
+            or (right_basis == 'structured_complete' and left_basis in ('opaque', 'partial'))):
+        return 1
+    return 4
+
+
 def match_key(choice):
     return json.dumps({'resource_id': choice.get('resource_id'), 'match': choice['match']}, sort_keys=True, separators=(',', ':'))
 
@@ -78,27 +123,35 @@ def rebuild(dataset):
     descriptor, temporary = tempfile.mkstemp(prefix=f'.{path.name}.', suffix='.tmp', dir=path.parent)
     os.close(descriptor)
     temporary = Path(temporary)
-    counts = {'inputs': 0, 'outputs': 0, 'resources': 0, 'processes': 0, 'unique_matches': 0, 'match_memberships': 0}
+    counts = {'inputs': 0, 'outputs': 0, 'resources': 0, 'processes': 0, 'unique_matches': 0, 'match_memberships': 0,
+              'material_basis': {}, 'requirement_slots': 0, 'unresolved_requirement_slots': 0,
+              'requirement_membership_visits': 0}
     try:
         with dataset._connect() as source, closing(sqlite3.connect(temporary)) as prepared, prepared:
             prepared.executescript('''
                 CREATE TABLE metadata(key TEXT PRIMARY KEY,value TEXT NOT NULL);
-                CREATE TABLE resources(id TEXT PRIMARY KEY,materials TEXT NOT NULL);
+                CREATE TABLE resources(id TEXT PRIMARY KEY,materials TEXT NOT NULL,material_basis TEXT NOT NULL);
                 CREATE TABLE processes(id TEXT PRIMARY KEY,representative TEXT NOT NULL,tier INTEGER,tier_status TEXT NOT NULL,eligible INTEGER NOT NULL);
                 CREATE TABLE matches(match_id INTEGER,resource_id TEXT,PRIMARY KEY(match_id,resource_id));
                 CREATE TABLE inputs(process_id TEXT,slot INTEGER,match_id INTEGER,PRIMARY KEY(process_id,slot,match_id));
+                CREATE TABLE requirement_classes(id INTEGER PRIMARY KEY,signature TEXT UNIQUE NOT NULL);
+                CREATE TABLE input_requirements(process_id TEXT,slot INTEGER,class_id INTEGER,status TEXT NOT NULL,PRIMARY KEY(process_id,slot));
                 CREATE TABLE outputs(process_id TEXT,resource_id TEXT,position INTEGER);
                 CREATE TABLE graph(name TEXT PRIMARY KEY,payload BLOB NOT NULL);
             ''')
             resources = []
             for row in source.execute("SELECT id,payload FROM records WHERE collection='resources' ORDER BY id"):
-                resources.append((row['id'], json.dumps(sorted(material_tokens(json.loads(row['payload']))))))
-            prepared.executemany('INSERT INTO resources VALUES(?,?)', resources)
+                record = json.loads(row['payload'])
+                basis = material_basis(record)
+                counts['material_basis'][basis] = counts['material_basis'].get(basis, 0) + 1
+                resources.append((row['id'], json.dumps(sorted(material_tokens(record))), basis))
+            prepared.executemany('INSERT INTO resources VALUES(?,?,?)', resources)
             counts['resources'] = len(resources)
             del resources
             matches, fingerprints = {}, {}
             unresolved_inputs, unresolved_outputs = set(), set()
             process_rows, input_rows, output_rows, match_rows = [], [], [], []
+            pending_matches = {}
 
             def flush():
                 prepared.executemany('INSERT INTO processes VALUES(?,?,?,?,?)', process_rows)
@@ -109,6 +162,42 @@ def rebuild(dataset):
                 input_rows.clear()
                 output_rows.clear()
                 match_rows.clear()
+                pending_matches.clear()
+
+            def requirement_class(slot):
+                effects = {}
+                for choice in slot['choices']:
+                    match = choice['match']
+                    if match['mode'] == 'native_unknown' or (match['mode'] in ('ore_dict', 'unified') and not match.get('group_id')):
+                        return None
+                    try:
+                        amount = quantity(choice['amount'])
+                        chance = quantity(choice.get('consumption_chance', slot.get('consumption_chance', 1)))
+                    except (ValueError, TypeError):
+                        return None
+                    if amount <= 0 or chance <= 0:
+                        continue
+                    mid = matches[match_key(choice)]
+                    if mid in pending_matches:
+                        first, last = pending_matches[mid]
+                        members = (match_rows[i][1] for i in range(first, last))
+                    else:
+                        members = (row[0] for row in prepared.execute('SELECT resource_id FROM matches WHERE match_id=?', (mid,)))
+                    sensitive = match.get('nbt_sensitive', match['mode'] not in ('ore_dict', 'unified'))
+                    effect = (amount.numerator, amount.denominator, chance.numerator, chance.denominator, bool(sensitive))
+                    found = False
+                    for rid in members:
+                        counts['requirement_membership_visits'] += 1
+                        effects.setdefault(rid, set()).add(effect)
+                        found = True
+                    if not found:
+                        return None
+                if not effects:
+                    return None
+                signature = json.dumps({'role': slot['role'], 'accepted_resource_effects': [
+                    [rid, sorted(effects[rid])] for rid in sorted(effects)]}, sort_keys=True, separators=(',', ':'))
+                prepared.execute('INSERT OR IGNORE INTO requirement_classes(signature) VALUES(?)', (signature,))
+                return prepared.execute('SELECT id FROM requirement_classes WHERE signature=?', (signature,)).fetchone()[0]
 
             for row in source.execute("SELECT id,payload FROM records WHERE collection='processes' ORDER BY id"):
                 record = json.loads(row['payload'])
@@ -142,11 +231,18 @@ def rebuild(dataset):
                                 mid = len(matches)
                                 matches[key] = mid
                                 ids = dataset._choice_resources(source, choice)
+                                first = len(match_rows)
                                 match_rows.extend((mid, rid) for rid in ids)
+                                pending_matches[mid] = first, len(match_rows)
                                 counts['match_memberships'] += len(ids)
                             slot_matches.add(matches[key])
                         input_rows.extend((record['id'], si, mid) for mid in sorted(slot_matches))
                         counts['inputs'] += len(slot_matches)
+                        class_id = requirement_class(slot)
+                        prepared.execute('INSERT INTO input_requirements VALUES(?,?,?,?)',
+                            (record['id'], si, class_id, 'complete' if class_id is not None else 'unresolved'))
+                        counts['requirement_slots'] += 1
+                        counts['unresolved_requirement_slots'] += int(class_id is None)
                     for oi, output in enumerate(record['outputs']):
                         if dataset._positive_output(output):
                             output_rows.append((record['id'], output['resource_id'], oi))
@@ -155,6 +251,7 @@ def rebuild(dataset):
                     flush()
             flush()
             counts['unique_matches'] = len(matches)
+            counts['requirement_classes'] = prepared.execute('SELECT COUNT(*) FROM requirement_classes').fetchone()[0]
             prepared.executescript('''
                 CREATE INDEX input_process ON inputs(process_id,slot);
                 CREATE INDEX output_resource ON outputs(resource_id,process_id);
@@ -271,8 +368,27 @@ def find_paths(dataset, canonical, start_id, target_id, max_depth, max_processes
                 'resource_fact_lookups': 0, 'resource_fact_cache_hits': 0,
                 'penalty_evaluations': 0, 'penalized_evaluations': 0}
     search['recovery_preference'] = recovery
+    classes = {'policy': 'snapshot_accepted_resource_effect_equivalence', 'prepared_slot_lookups': 0,
+               'prepared_slot_rows': 0, 'class_assignment_work': 0, 'known_classes': 0, 'unresolved_jobs': 0,
+               'target_jobs': 0, 'represented_classes': 0, 'represented_unresolved_jobs': 0, 'scheduler_job_decisions': 0,
+               'scheduled_turn_decisions': 0, 'completion_coverage_decisions': 0,
+               'unrepresented_class_rounds': 0, 'remaining_endpoint_rounds': 0, 'actual_job_turns': 0,
+               'completed_witnesses_admitted_or_reused': 0, 'charged_work': 0}
+    search['requirement_classes'] = classes
+    material_evidence = {'policy': 'native_declaration_basis', 'prepared_resource_lookups': 0,
+                         'comparisons': 0, 'uncertain_disjoint_comparisons': 0}
+    search['material_evidence'] = material_evidence
     families, resource_facts = {}, {}
     paths, reasons, branches = [], set(), []
+
+    def class_charge(counter, units=1):
+        if search['expansion_work'] + units > search['work_limit']:
+            reasons.add('search_work_limit')
+            return False
+        search['expansion_work'] += units
+        classes['charged_work'] += units
+        classes[counter] += units
+        return True
     if required & excluded or start_id in excluded or target_id in excluded:
         return route, paths, search, [], [], branches
     if start_id == target_id:
@@ -285,9 +401,13 @@ def find_paths(dataset, canonical, start_id, target_id, max_depth, max_processes
         distances, nodes, distance_work, reused = _source_distances(dataset, connection, start_id, tier_filter, excluded)
         search.update(distance_work=distance_work, distance_seconds=time.perf_counter() - before, distance_cache_hit=reused)
         @lru_cache(maxsize=None)
+        def material_hint_for(rid):
+            material_evidence['prepared_resource_lookups'] += 1
+            tokens, basis = connection.execute('SELECT materials,material_basis FROM resources WHERE id=?', (rid,)).fetchone()
+            return frozenset(json.loads(tokens)), basis
+
         def material_for(rid):
-            tokens = connection.execute('SELECT materials FROM resources WHERE id=?', (rid,)).fetchone()[0]
-            return frozenset(json.loads(tokens))
+            return material_hint_for(rid)[0]
 
         source_materials = material_for(start_id)
         examined, reverse, checked_tiers = set(), {}, set()
@@ -372,8 +492,11 @@ def find_paths(dataset, canonical, start_id, target_id, max_depth, max_processes
             return 0
 
         def penalty(source, dest, position, pid):
-            left, right = material_for(source), material_for(dest)
-            discontinuity = 0 if left & right else 4 if left and right else 1
+            left, right = material_hint_for(source), material_hint_for(dest)
+            discontinuity = material_comparison(left, right)
+            material_evidence['comparisons'] += 1
+            material_evidence['uncertain_disjoint_comparisons'] += int(
+                discontinuity == 1 and bool(left[0] and right[0]))
             return discontinuity + (2 if position else 0) + recovery_penalty(pid, source, dest)
 
         jobs = {}
@@ -389,6 +512,21 @@ def find_paths(dataset, canonical, start_id, target_id, max_depth, max_processes
             heappush(job['heap'], (score, 1 + distances[nodes[input_id]], (target_id, input_id), (pid,)))
             search['queued_states'] += 1
             search['peak_queue'] = max(search['peak_queue'], len(job['heap']))
+
+        known_classes, represented_classes = set(), set()
+        for key, job in jobs.items():
+            if not class_charge('prepared_slot_lookups'):
+                break
+            row = connection.execute('SELECT class_id,status FROM input_requirements WHERE process_id=? AND slot=?', key).fetchone()
+            if not class_charge('prepared_slot_rows') or not class_charge('class_assignment_work', 2):
+                break
+            if row is not None and row[1] == 'complete' and row[0] is not None:
+                job['class'] = ('prepared', row[0])
+                known_classes.add(row[0])
+            else:
+                job['class'] = ('unresolved', *key)
+                classes['unresolved_jobs'] += 1
+        classes.update(known_classes=len(known_classes), target_jobs=len(jobs))
 
         scope = max_depth
         reference_bounds = set()
@@ -520,20 +658,60 @@ def find_paths(dataset, canonical, start_id, target_id, max_depth, max_processes
 
         ordered = sorted(jobs.values(), key=lambda job: (
             not any(material_for(rid) & source_materials for rid in job['candidates']), job['pid'], job['slot']))
-        signatures, admitted = {}, set()
-        while any(job['heap'] for job in ordered) and len(paths) < max_paths:
+
+        def class_round():
+            selected, picked = [], set()
             for job in ordered:
+                if not class_charge('scheduler_job_decisions'):
+                    return [], True
+                cid = job['class']
+                if job['heap'] and cid not in represented_classes and cid not in picked:
+                    selected.append(job)
+                    picked.add(cid)
+            if selected:
+                classes['unrepresented_class_rounds'] += 1
+                return selected, True
+            classes['remaining_endpoint_rounds'] += 1
+            return ordered, False
+
+        def class_completed(path):
+            if not class_charge('completion_coverage_decisions', len(ordered)):
+                return False
+            pid, rid = path['process_ids'][-1], path['resource_ids'][-2]
+            for job in ordered:
+                if job['pid'] == pid and rid in job['candidates']:
+                    if job['class'] not in represented_classes:
+                        counter = 'represented_classes' if job['class'][0] == 'prepared' else 'represented_unresolved_jobs'
+                        classes[counter] += 1
+                    represented_classes.add(job['class'])
+            classes['completed_witnesses_admitted_or_reused'] += 1
+            return True
+
+        signatures, admitted = {}, set()
+        while (any(job['heap'] for job in ordered) and len(paths) < max_paths
+               and not reasons & {'search_process_limit', 'search_work_limit', 'search_state_limit'}):
+            selected, priority_round = class_round()
+            for job in selected:
+                if not class_charge('scheduled_turn_decisions'):
+                    break
+                if priority_round and job['class'] in represented_classes:
+                    continue
+                classes['actual_job_turns'] += 1
                 path = advance(job)
                 if path is None:
                     continue
                 signature = tuple(path['process_ids']), tuple(path['resource_ids'])
                 if signature in signatures:
+                    if not class_completed(path):
+                        break
                     job['paths'].append(signatures[signature])
                     clear_job(job)
                     continue
                 if len(admitted | set(path['process_ids'])) > max_processes:
                     reasons.add('path_process_limit')
                     continue
+                if not class_completed(path):
+                    break
                 job['paths'].append(path)
                 clear_job(job)
                 paths.append(path)
@@ -577,6 +755,9 @@ def find_paths(dataset, canonical, start_id, target_id, max_depth, max_processes
 def path_details(dataset, paths, resources, processes, branches):
     from .dataset import DatasetError
     details, categories, groups = [], {}, {}
+    @lru_cache(maxsize=None)
+    def material_hint_for(rid):
+        return material_tokens(resources[rid]), material_basis(resources[rid])
     with dataset._connect() as connection:
         def category_groups(rid):
             if rid not in categories:
@@ -618,9 +799,9 @@ def path_details(dataset, paths, resources, processes, branches):
                 continue
             missing, breaks, byproducts, input_hints = 0, 0, [], []
             for step, (source, dest, pid) in enumerate(zip(path['resource_ids'], path['resource_ids'][1:], path['process_ids'])):
-                left, right = material_tokens(resources[source]), material_tokens(resources[dest])
-                missing += int(not left or not right)
-                breaks += int(bool(left and right and not left & right))
+                comparison = material_comparison(material_hint_for(source), material_hint_for(dest))
+                missing += int(comparison == 1)
+                breaks += int(comparison == 4)
                 outputs = processes[pid]['outputs']
                 position = next(i for i, output in enumerate(outputs) if output['resource_id'] == dest)
                 if position:

@@ -49,6 +49,137 @@ def recovery_fixture(root, *, explicit=True):
 
 
 class FlowIndexTests(unittest.TestCase):
+    def test_material_requirement_effects_keep_amount_chance_nbt_and_unknown_slots_distinct(self):
+        cases = ('amount', 'chance', 'nbt', 'or_effect', 'unknown', 'empty_group', 'unknown_chance', 'normalized', 'duplicate_or')
+        for case in cases:
+            with self.subTest(case=case), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                rows = [material(id, 'Metal') for id in ('start', 'feed', 'other', 'target')]
+                rows[1].update(registry_name='test:shared', nbt={'type': 'int', 'value': 1})
+                rows.append(resource('variant', registry_name='test:shared', nbt={'type': 'int', 'value': 2}))
+                exact, alternate = choice('feed'), choice('feed')
+                exact['match']['nbt_sensitive'] = False
+                alternate['match']['nbt_sensitive'] = False
+                alternate_slot = slot(alternate)
+                if case == 'amount':
+                    alternate['amount'] = 2
+                elif case == 'chance':
+                    alternate_slot['consumption_chance'] = {'numerator': 1, 'denominator': 2}
+                elif case == 'nbt':
+                    alternate['match']['nbt_sensitive'] = True
+                elif case == 'or_effect':
+                    extra = choice('feed', amount=2)
+                    extra['match']['nbt_sensitive'] = False
+                    alternate_slot['choices'].append(extra)
+                elif case == 'unknown':
+                    alternate_slot['choices'].append(choice(None, 'native_unknown'))
+                elif case == 'empty_group':
+                    alternate_slot['choices'].append(choice(None, 'ore_dict', group='ore:empty'))
+                elif case == 'unknown_chance':
+                    alternate['consumption_chance'] = None
+                elif case == 'normalized':
+                    alternate_slot['consumption_chance'] = {'numerator': 1, 'denominator': 2}
+                    alternate['consumption_chance'] = {'numerator': 2, 'denominator': 2}
+                elif case == 'duplicate_or':
+                    alternate_slot['choices'].append(dict(alternate))
+                recipes = [process('feed-maker', [slot(choice('start'))], ['feed']),
+                    process('other-maker', [slot(choice('start'))], ['other']),
+                    process('a', [slot(exact)], ['target'], conditions={'variant': 'a'}),
+                    process('b', [alternate_slot], ['target'], conditions={'variant': 'b'}),
+                    process('c', [slot(choice('other'))], ['target'])]
+                group = {'id': 'ore:empty', 'kind': 'ore_dict', 'name': 'empty', 'members': [],
+                    'provenance': {'owner': 'fixture'}}
+                dataset = Dataset.import_snapshot(snapshot(root / 'capture', resources=rows, processes=recipes,
+                    groups=[group]), root / 'index.sqlite')
+                result = dataset.trace_processes(start_id='start', target_id='target', path_selection='material', max_paths=2)
+                equal = case in ('normalized', 'duplicate_or')
+                self.assertEqual({path['process_ids'][-1] for path in result['paths']}, {'a', 'c' if equal else 'b'})
+                metric = result['search']['requirement_classes']
+                unresolved = case in ('unknown', 'empty_group', 'unknown_chance')
+                self.assertEqual(metric['unresolved_jobs'], int(unresolved))
+                self.assertEqual(metric['known_classes'], 2 if equal or unresolved else 3)
+                self.assertEqual(metric['represented_classes'], 1 if unresolved else 2)
+                self.assertEqual(metric['represented_unresolved_jobs'], int(unresolved))
+                if not equal:
+                    self.assertEqual(next(row for row in result['processes'] if row['id'] == 'b'), recipes[3])
+
+    def test_material_classes_prioritize_distinct_requirements_without_merging_endpoint_contexts(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            rows = [material(id, 'Metal') for id in ('start', 'feed', 'other', 'target')]
+            rows += [resource('external'), resource('presence')]
+            exact = choice('feed')
+            exact['match']['nbt_sensitive'] = False
+            grouped = choice('feed', 'unified', group='unified:feed')
+            recipes = [process('feed-maker', [slot(choice('start'))], ['feed']),
+                process('other-maker', [slot(choice('start'))], ['other']),
+                process('a', [slot(exact), slot(choice('external', amount=4)),
+                    slot(choice('presence'), role='presence')], ['target'], conditions={'variant': 'a'}),
+                process('b', [slot(grouped), slot(choice('external', amount=4)),
+                    slot(choice('presence'), role='presence')], ['target'], conditions={'variant': 'b'}),
+                process('c', [slot(choice('other'))], ['target'])]
+            group = {'id': 'unified:feed', 'kind': 'unified', 'name': 'feed', 'members': ['feed'],
+                'provenance': {'owner': 'fixture'}}
+            dataset = Dataset.import_snapshot(snapshot(root / 'capture', resources=rows, processes=recipes,
+                groups=[group]), root / 'index.sqlite')
+            result = dataset.trace_processes(start_id='start', target_id='target', path_selection='material', max_paths=2)
+            self.assertEqual([path['process_ids'] for path in result['paths']], [['feed-maker', 'a'], ['other-maker', 'c']])
+            branches = {(row['target_process_id'], row['slot_index']): row for row in result['branch_coverage']}
+            self.assertEqual(branches['b', 0]['status'], 'not_discovered')
+            all_contexts = dataset.trace_processes(start_id='start', target_id='target', path_selection='material', max_paths=3)
+            self.assertEqual({path['process_ids'][-1] for path in all_contexts['paths']}, {'a', 'b', 'c'})
+            returned = {row['id']: row for row in all_contexts['processes']}
+            for recipe in recipes:
+                self.assertEqual(returned[recipe['id']], recipe)
+            self.assertEqual(result['search']['requirement_classes']['known_classes'], 2)
+
+    def test_requirement_classes_reuse_matcher_memberships_across_preparation_batches(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            rows = [material(id, 'Metal') for id in ('start', 'feed', 'other', 'target')]
+            recipes = [process('a-endpoint', [slot(choice('feed'))], ['target']),
+                process('z-equivalent', [slot(choice('feed'))], ['target'], conditions={'variant': 'z'}),
+                process('zz-distinct', [slot(choice('other'))], ['target']),
+                process('make-feed', [slot(choice('start'))], ['feed']),
+                process('make-other', [slot(choice('start'))], ['other'])]
+            recipes += [process(f'batch-{i:04}', [slot(choice('start'))], ['feed'], executable=False,
+                conditions={'variant': i}) for i in range(2000)]
+            dataset = Dataset.import_snapshot(snapshot(root / 'capture', resources=rows, processes=recipes), root / 'index.sqlite')
+            result = dataset.trace_processes(start_id='start', target_id='target', path_selection='material', max_paths=2)
+            self.assertEqual({path['process_ids'][-1] for path in result['paths']}, {'a-endpoint', 'zz-distinct'})
+            self.assertEqual(result['search']['requirement_classes']['known_classes'], 2)
+
+    def test_material_uncertainty_prefers_direct_processing_and_explains_partial_evidence(self):
+        declarations = [
+            {'name': 'Grade', 'status': 'unresolved', 'element': None, 'components': []},
+            {'name': 'Grade', 'status': 'complete', 'components': [
+                {'coefficient': 'unknown', 'material': {'name': 'Other', 'status': 'complete', 'element': {'id': 'O'}}}]},
+            {'name': 'Grade', 'status': 'complete', 'components': [
+                {'coefficient': '1', 'material': {'name': 'Other', 'status': 'unresolved', 'components': []}}]},
+        ]
+        for declaration in declarations:
+            with self.subTest(declaration=declaration), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                start = material('start', 'Silicon')
+                start['material_facts']['association']['primary']['material'].update(
+                    status='complete', element={'id': 'Si'})
+                grade = material('grade', 'Grade')
+                grade['material_facts']['association']['primary']['material'] = declaration
+                rows = [start, grade, material('target', 'Grade'), resource('unknown'), resource('feed'), resource('circuit')]
+                recipes = [process('direct', [slot(choice('start')), slot(choice('feed', amount=3)),
+                    slot(choice('circuit'), role='presence')], ['grade']),
+                    process('detour-one', [slot(choice('start'))], ['unknown']),
+                    process('detour-two', [slot(choice('unknown'))], ['grade']),
+                    process('finish', [slot(choice('grade'))], ['target'])]
+                dataset = Dataset.import_snapshot(snapshot(root / 'capture', resources=rows, processes=recipes), root / 'index.sqlite')
+                result = dataset.trace_processes(start_id='start', target_id='target', path_selection='material',
+                    max_paths=1, view='compact')
+                self.assertEqual(result['paths'][0]['process_ids'], ['direct', 'finish'])
+                self.assertEqual(result['path_details'][0]['material_continuity'], 'partial')
+                returned = {row['id']: row for row in result['processes']}
+                self.assertEqual(returned['direct'], recipes[0])
+                self.assertEqual(returned['finish'], recipes[-1])
+
     def test_native_tool_matching_hint_covers_nbt_variant_without_literal_group_membership(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -444,13 +575,16 @@ class FlowIndexTests(unittest.TestCase):
             self.assertEqual(before, dataset.path.read_bytes())
             self.assertEqual(prepared['snapshot_id'], dataset.snapshot_id)
             self.assertEqual(dataset.flow_index_status()['status'], 'ready')
+            self.assertEqual(prepared['analysis_version'], 4)
             path = Path(prepared['database'])
             with closing(sqlite3.connect(path)) as connection, connection:
-                connection.execute("UPDATE metadata SET value='0' WHERE key='analysis_version'")
+                connection.execute("UPDATE metadata SET value='3' WHERE key='analysis_version'")
             self.assertEqual(dataset.flow_index_status()['status'], 'incompatible')
             with self.assertRaisesRegex(DatasetError, 'rebuild'):
                 dataset.trace_processes(start_id='start', target_id='target', path_selection='material')
             dataset.rebuild_flow_index()
+            self.assertEqual(dataset.trace_processes(start_id='start', target_id='target', path_selection='material')['paths'],
+                [{'resource_ids': ['start', 'target'], 'process_ids': ['make']}])
             with closing(sqlite3.connect(path)) as connection, connection:
                 connection.execute("UPDATE metadata SET value=? WHERE key='manifest'", (json.dumps({'snapshot_id': 'other'}),))
             with self.assertRaisesRegex(DatasetError, 'rebuild'):

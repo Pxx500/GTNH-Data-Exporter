@@ -581,11 +581,17 @@ etap. Bieżące pomiary i decyzje są w SEARCH_EXPERIMENTS.md.
   Dwa zapisane warianty formowania Solar Grade mają równy stan. Analiza kodu
   i zwrócony świadek potwierdzają zlanie konkretnego wariantu, nie wszystkich
   chemicznych prefiksów. Nie wykonano nowego zapytania ani zmiany silnika.
-- [ ] Sprawdzić jedną próbę podziału wyników według odrębnych wymagań celu.
+- [x] Sprawdzić jedną próbę podziału wyników według odrębnych wymagań celu.
   Dać jeszcze niepokrytej klasie wymagania szansę przed powtórzeniem tej samej
   klasy przez inną recepturę końcową. Zachować osobne kolejki i historie.
   Policzyć grupowanie i planowanie. Nie zwiększać limitów ani puli kandydatów.
   Dziewięć ustalonych przypadków musi zachować gałęzie obwodu, casingu i stali.
+  Volcanus ma 8/9 zamiast 7/9 klas, ale nowa droga wchodzi przez młotek,
+  a nadal wymaga dwóch gotowych płyt Hastelloy-N. Nie dowodzi produkcji płyt.
+  Nie zgubiono klas ani starych prefiksów. Łączna praca dziewięciu oddzielnych
+  zapytań rośnie 79184 do 111471. Grupowanie na żywo nie trafia do produkcji.
+  Obecny rebuild ma dane do przygotowania klas offline. To nie rozwiązuje
+  samo w sobie jakości konstrukcyjnej nowych dróg.
 - [x] Sprawdzić kontrakt alternatywnych dróg i minimalny ogólny przykład
   odrzucenia przez dominację historii. Oddzielić brak wariantu od błędnej trasy.
   Sześć zasobów i pięć receptur odtwarza zgubienie lepiej ocenianej drogi.
@@ -599,10 +605,54 @@ etap. Bieżące pomiary i decyzje są w SEARCH_EXPERIMENTS.md.
   gwarancji dla naszego wyszukiwania prostych ścieżek. Pracy Yena nie udało się
   pobrać po 403 i zablokowanych przeglądarkach. Drugi tekst pozostaje nieczytany.
   Przydatny punkt odniesienia to odrębne historie i zachowana kolejka alternatyw.
-- [ ] Sprawdzić jedną prywatną próbę dominacji uwzględniającej dozwolone
+- [x] Sprawdzić jedną prywatną próbę dominacji uwzględniającej dozwolone
   kontynuacje. Tańszy stan może odrzucić drugi tylko przy nie większej liczbie
   kroków i podzbiorze jego zablokowanych zasobów oraz receptur. Policzyć koszt
   historii i porównań. Zachować obecne limity oraz dziewięć ustalonych kontroli.
+  Predykat naprawia mały przykład. Implementacja skanująca kubełki historii
+  dobija limit pracy w pięciu przypadkach i gubi drogi. Nie odzyskuje żadnej
+  nowej natywnej trasy. Zachowane rekordy są poprawne. Nie wdrożono zmiany.
+  Koszt rezerwacji porównań jest odrębny od czasu i przyjęć do kolejki.
+  Wynik nie dowodzi niemożliwości szybszego indeksowania historii.
+- [x] Sprawdzić jedną połączoną próbę ostrożnego porównania podstaw danych
+  materiałowych i planowania odrębnych wymagań celu. Wcześniejsza pierwsza
+  zmiana odzyskiwała chemię krzemu, ale gubiła obwód Volcanusa na rzecz
+  powtórzonej klasy Computer Cube. Druga może zapobiec tej konkretnej utracie.
+  Policzyć oba koszty przygotowania. Bez zmiany wag, limitów ani historii.
+  Odzyskano czteroetapowy prefiks chemiczny czterech wariantów wafla i zachowano
+  obwód oraz konstrukcyjne prefiksy Volcanusa. Pierwsza droga wafla nadal jest
+  gałęzią chłodziwa. Nie podniesiono limitów. Pozostałe siedem kontroli zachowuje
+  uporządkowane drogi. Metadane na żywo kosztują za dużo. LV hull nadal przyjmuje
+  1971 zamiast 912 stanów bez lepszego wyniku. Samo rozwijanie poprzedników
+  rośnie łącznie o około 3,4%. Wariant dynamiczny nie trafia do produkcji.
+- [x] Przygotować te same podstawy materiałowe i dokładne klasy wymagań
+  offline w obecnym właścicielu indeksu. Bez drugiego magazynu semantycznego.
+  Format 4 wymaga jawnej zwykłej odbudowy. Oryginalne rekordy pozostają pełne.
+  Implementacja przechodzi 25 testów indeksu i 187 testów Pythona. Wyjaśnienia
+  korzystają z tej samej oceny danych co ranking i leniwie czytają tylko zasoby
+  wybranych ścieżek. Dziewięć zapytań zachowuje drogi i pełne rekordy próby
+  połączonej. Pięć wyjaśnień wafla poprawnie przechodzi na niepełne dane.
+  Odbudowa zajmuje 42,53 sekundy, indeks 133861376 bajtów. Matcher ma 74159
+  unikalnych wywołań bez powtórzeń. Praca dziewięciu zapytań spada z 437921
+  jednostek prototypu do 83818, z czego 1932 to planowanie klas. To nie dowód
+  przyspieszenia czasu. HTTP i świeży stdio MCP przechodzą na kopii po końcowej
+  poprawce liczników. Rozpoznane klasy i niepewne zadania są liczone osobno.
+  Aktywne pliki, konfiguracje i usługi nie są przełączane.
+- [x] Zaproponować grupy artefaktów wyłączanych z pośrednich kroków chaina.
+  Użytkownik wskazał narzędzia i części Tinkersa oraz narzędzia GregTecha.
+  Wytwarzanie pozostaje dostępne przy bezpośrednio wybranym celu. Wymagane
+  składniki pełnych receptur pozostają widoczne. Najpierw dowody kategorii
+  i krótka lista grup, bez hurtowej listy itemów ani klasyfikacji po nazwach.
+  Dodatkowe grupy i niejednoznaczne przemysłowe warianty wymagają osobnej oceny.
+  Sprawdzono natywne rejestracje ToolCore/IToolPart oraz metadane GT i osobne
+  rejestry Detrav/Toolbox. TGregworks części wchodzą w IToolPart. Rejestr GT
+  obejmuje też rotory turbin, a ToolCore Tinkersa amunicję. Nie zawężono
+  polecenia użytkownika do narzędzi ręcznych bez zaznaczenia tej propozycji.
+  Dodatkowe kandydaty to jednorazowe przyrządy, formy/szablony i zbroje gracza.
+  GGfab produkuje 64 młotki z 432 jednostek stopionej stali, więc nie są
+  rzadkim wyposażeniem. Flagi nie są jeszcze wdrożone. Brak hurtowej listy ID.
+  Użytkownik potwierdził, że rotory turbin też mają być tylko bezpośrednim celem.
+  Nie wprowadzamy dla nich rekomendowanego wcześniej wyjątku.
 - [x] Sprawdzić literaturę o landmarkach i planach zrelaksowanych pod kątem
   kierowania przez gałęzie składników celu. Odróżnić osiągalność pojedynczej
   ścieżki od spełnienia wszystkich wejść receptury i policzyć przygotowanie.

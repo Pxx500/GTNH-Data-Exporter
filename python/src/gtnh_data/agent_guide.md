@@ -45,6 +45,24 @@ transitions remain valid alternatives. The GUI defaults to this policy. Agent,
 CLI and HTTP calls retain `diverse` as the default, so request `material`
 explicitly when that is the intended question.
 
+Prepared analysis version 4 gives unrepresented target requirement classes a
+turn before equivalent endpoint jobs. Class equality uses the complete
+snapshot-specific accepted resource sets and their declared amount, consumption
+chance and NBT effects. Original endpoint recipes, AND slots and cofeeds remain
+separate. Inspect `search.requirement_classes` for class coverage and charged
+scheduling work.
+`known_classes` and `represented_classes` count resolved classes.
+`unresolved_jobs` and `represented_unresolved_jobs` are separate counts.
+An unresolved job is not a proven equivalent requirement.
+
+Version 4 also distinguishes structured native material declarations from
+opaque or partial ones. A disjoint name set across these evidence bases receives
+an uncertainty hint rather than a stronger discontinuity hint. Scoring and
+`path_details.material_continuity` use the same comparison.
+`structured_complete` describes declaration structure, not purity, chemical
+validity or source-atom contribution. Display formulas are not parsed. Inspect
+`search.material_evidence` for prepared lookups and comparisons.
+
 Material mode gives lower priority to captured recovery recipes that dismantle
 an explicitly composed component, or turn a crafted form back into dust of the
 same primary material. This is a soft preference. Required recovery paths and
@@ -64,7 +82,11 @@ is unknown. If its status is `missing` or `incompatible`, use
 imported database and may take longer than a lookup. Do not rebuild before
 every trace. New imports prepare this data automatically. A rebuild needs
 the imported dump, not a running game. An incompatible index is not silently
-used as if it belonged to the current snapshot or analysis version.
+used as if it belonged to the current snapshot or analysis version. These
+additions require `analysis_version: 4` from `flow_index_status`. A process
+reporting version 3 still has older code loaded. Reload the MCP process after
+upgrading, then explicitly rebuild if status is incompatible.
+Rebuilding derived data does not reload running code.
 
 Material search uses partial successor expansion. Each admitted cursor entry
 is one concrete child path and counts against `queued_states`. Its next sibling
