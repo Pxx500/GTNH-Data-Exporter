@@ -3,13 +3,20 @@ package dev.gtnh.data;
 import static dev.gtnh.data.Jsons.object;
 
 import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import cpw.mods.fml.relauncher.ReflectionHelper;
+import gregtech.api.items.GTGenericItem;
+import gregtech.api.items.MetaBaseItem;
 import gregtech.api.util.GTShapedRecipe;
 import gregtech.api.util.GTShapelessRecipe;
+import ic2.api.item.IElectricItem;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
+import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.crafting.CraftingManager;
 import net.minecraft.item.crafting.IRecipe;
@@ -28,6 +35,42 @@ final class CraftingCapture {
 
     CraftingCapture(NativeCapture capture) { this.capture = capture; }
 
+    /** Resolves only declarations whose native output transformations are proven no-ops. */
+    static boolean hasStaticOutput(IRecipe recipe) {
+        if (recipe.getClass() != GTShapedRecipe.class || ((GTShapedRecipe) recipe).mKeepingNBT) return false;
+        ItemStack output = recipe.getRecipeOutput();
+        if (output == null || output.stackSize <= 0 || output.hasTagCompound()) return false;
+        if (ReflectionHelper.getPrivateValue(GTShapedRecipe.class, (GTShapedRecipe) recipe,
+            "mEnchantmentsAdded") != null) return false;
+        Item item = output.getItem();
+        if (item instanceof IElectricItem electric && electric.getTier(output) < Integer.MAX_VALUE) return false;
+        if (!(item instanceof GTGenericItem)) return true;
+        try {
+            Class<?> updateOwner = item.getClass().getMethod("isItemStackUsable", ItemStack.class).getDeclaringClass();
+            if (updateOwner == GTGenericItem.class) return true;
+            return updateOwner == MetaBaseItem.class && item instanceof MetaBaseItem base
+                && base.mapEachBehavior(output, behavior -> Boolean.TRUE).isEmpty();
+        } catch (NoSuchMethodException unknownUpdate) {
+            return false;
+        }
+    }
+
+    static JsonObject outputConditions(IRecipe recipe) {
+        boolean certain = hasStaticOutput(recipe);
+        JsonObject conditions = object("dynamic_output", certain ? "resolved_static" : "unresolved",
+            "output_transformations", certain
+                ? object("status", "static", "native_item_update", "verified_no_op",
+                    "electric_charge_transfer", "not_applicable", "configured_enchantments", "none")
+                : object("status", "uninterpreted", "native_item_update", "unresolved",
+                    "electric_charge_transfer", "unresolved", "configured_enchantments", "unresolved"));
+        if (certain) {
+            conditions.addProperty("recipe_voltage_applicability", "not_applicable_crafting_grid");
+            conditions.addProperty("tool_accounting", "container_damage_and_breakage_unresolved");
+            conditions.addProperty("input_accounting", "declared_consumption_without_container_return_credit");
+        }
+        return conditions;
+    }
+
     void capture() throws IOException {
         List<IRecipe> recipes = CraftingManager.getInstance().getRecipeList();
         long count = 0;
@@ -39,6 +82,7 @@ final class CraftingCapture {
             JsonObject conditions = object("native_class", recipe.getClass().getName(), "container_returns", "native_unknown");
             boolean known = true;
             boolean gtTemplate = false;
+            boolean staticGtOutput = false;
             boolean nativeMatchingUnknown = false;
             if (recipe.getClass() == ShapedRecipes.class) {
                 ShapedRecipes shaped = (ShapedRecipes) recipe;
@@ -69,12 +113,13 @@ final class CraftingCapture {
             }
             else { known = false; conditions.addProperty("dynamic_inputs", "unresolved"); }
             if (gtTemplate) {
-                known = false;
+                JsonObject outputConditions = outputConditions(recipe);
+                staticGtOutput = "resolved_static".equals(outputConditions.get("dynamic_output").getAsString());
+                known = staticGtOutput;
                 conditions.addProperty("declared_inputs", "captured");
-                conditions.addProperty("dynamic_output", "unresolved");
-                conditions.add("output_transformations", object("status", "uninterpreted",
-                    "native_item_update", "unresolved", "electric_charge_transfer", "unresolved",
-                    "configured_enchantments", "unresolved"));
+                for (Map.Entry<String, JsonElement> field : outputConditions.entrySet()) {
+                    conditions.add(field.getKey(), field.getValue());
+                }
                 if (nativeMatchingUnknown) {
                     conditions.addProperty("dynamic_inputs", "unresolved");
                     conditions.addProperty("native_input_correlation", "uninterpreted");
@@ -116,8 +161,8 @@ final class CraftingCapture {
             ItemStack output = recipe.getRecipeOutput();
             if (output != null) {
                 JsonObject record = object("resource_id", capture.item(output), "amount", output.stackSize,
-                    "chance", gtTemplate ? null : object("numerator", 1, "denominator", 1));
-                if (gtTemplate) record.addProperty("native_template", true);
+                    "chance", gtTemplate && !staticGtOutput ? null : object("numerator", 1, "denominator", 1));
+                if (gtTemplate && !staticGtOutput) record.addProperty("native_template", true);
                 outputs.add(record);
             }
             else { known = false; conditions.addProperty("dynamic_output", "unresolved"); }
@@ -126,9 +171,9 @@ final class CraftingCapture {
             count++;
         }
         capture.coverage("minecraft.crafting", "partial", count,
-            "All IRecipe records catalogued. Native vanilla/Forge recipes interpreted, exact GT declared inputs captured, dynamic GT matching/output and other subclasses unresolved");
+            "All IRecipe records catalogued. Vanilla/Forge and verified static exact GT shaped outputs interpreted. Dynamic GT matching/output, container accounting and other subclasses unresolved");
         capture.coverage("minecraft.crafting.gt_shaped_declared", "partial", gtShaped,
-            "Exact GTShapedRecipe inherited declared slots captured. Keeping-NBT correlation and runtime output transformations are not evaluated");
+            "Exact GTShapedRecipe declared slots captured. Non-NBT, non-electric outputs without configured enchantments or native update behaviors are static. Container and tool accounting remains unresolved");
         capture.coverage("minecraft.crafting.gt_shapeless_declared", "partial", gtShapeless,
             "Exact GTShapelessRecipe inherited declared slots captured. Private inventory validator, NBT behavior and runtime output transformations remain unresolved");
     }
