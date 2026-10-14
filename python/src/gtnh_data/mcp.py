@@ -20,8 +20,12 @@ GUIDANCE = (
     'and analyze_statistics for bounded candidate findings. Inspect coverage, exclusions, '
     'limits, uncertainty and startup. A verified witness is not global optimization or '
     'machine execution proof. Profiles permit external feeds, not inventory. Write profile '
-    'sidecars only when changing user assumptions is intended. Trace/recycling/loop tools '
-    'do not accept profile scopes. None and empty start_stock have different meanings. '
+    'sidecars only when changing user assumptions is intended. Use path_selection=material '
+    'on trace after flow_index_status reports ready. rebuild_flow_index writes derived search '
+    'data, not recipe facts. Trace/recycling/loop tools do not accept profile scopes. '
+    'None and empty start_stock have different meanings. '
+    'Trace defaults to view=compact: complete selected recipes and declared choices with '
+    'explicit counts for omitted matching variants. Use view=full for expanded candidates. '
     'Expected yield is not guaranteed stock. Data appears once in structuredContent.'
 )
 
@@ -48,6 +52,8 @@ NETWORK = {"target_amount": AMOUNT, "profile_id": OPTIONAL_STRING, "yield_mode":
            "max_columns": {"type": "integer", "minimum": 1, "maximum": 512, "default": 128}, "max_rows": {"type": "integer", "minimum": 1, "maximum": 4096, "default": 512},
            "start_stock": {"type": ["object", "null"]}, "selections": {"type": ["object", "null"]}, **TIERS}
 OPERATIONS = {
+    "flow_index_status": ('Read prepared material-flow index readiness, snapshot binding and analysis version. A missing or incompatible index requires an explicit rebuild before material route selection. This does not change captured data', _schema()),
+    "rebuild_flow_index": ('Prepare material-flow search data offline for this snapshot. Writes a replaceable derived sidecar, leaving captured resources and recipes unchanged. Run when readiness reports missing or incompatible, not before every query. Preparation may take longer than a lookup', _schema()),
     "analyze_statistics": ('Describe scoped catalog distributions and comparable captured-recipe cost spreads. Findings are candidates, not bugs. max_records scans resources/groups before recipes. max_findings does not cap distributions. Read overview/search limits and inspect selected process IDs', _schema({"profile_id": OPTIONAL_STRING, "scope": SCOPE, "max_records": {"type": "integer", "minimum": 1, "maximum": 2000000, "default": 600000}, "max_findings": {"type": "integer", "minimum": 1, "maximum": 500, "default": 50}, "max_signature_buckets": {"type": "integer", "minimum": 1, "maximum": 200000, "default": 50000}, "timeout_seconds": {"type": "number", "exclusiveMinimum": 0, "maximum": 60, "default": 15}})),
     "list_boundary_profiles": ('Read existing snapshot-bound base-resource and exclusion profiles before planning or editing user assumptions', _schema()),
     "get_boundary_profile": ('Read one saved profile, external-feed assumptions, scope and revision. Reuse its revision for intentional updates or deletion', _schema({"profile_id": STRING}, ('profile_id',))),
@@ -78,9 +84,9 @@ OPERATIONS = {
     "find_sources": ('Find configured acquisition sources by resource/environment with small pages. These are definitions, not surveyed deposits. Rule candidates are not fixed independent yields', _schema({"resource_id": OPTIONAL_STRING, "environment_id": OPTIONAL_STRING, **PAGING})),
     "get_source": ('Read a source and follow parameters.generated_source_id directly to its generator. Keep conditions, environment links, resource semantics and provenance', _schema({"id": STRING}, ("id",))),
     "find_environments": ('Find registered generation environments with q and a small limit. Null dimension/provider mappings remain unresolved. Registration is not proof of a loaded or reachable world', _schema({"q": STRING, **PAGING})),
-    "trace_processes": ('Find bounded consume dependency paths from A to B, not complete inventory or yield plans. Diverse spreads ingredient/material spines, shortest means steps not EU. Keep all side inputs. Inspect route, paths, branches, leaves and limits. Uses its own material/tier filters, not profile scope', _schema({"start_id": STRING, "target_id": STRING, "max_depth": {"type": "integer", "minimum": 1, "maximum": 64, "default": 12}, "max_processes": {"type": "integer", "minimum": 1, "maximum": 5000, "default": 300},
+    "trace_processes": ('Find bounded consume dependency paths from A to B, not complete inventory or yield plans. Diverse spreads ingredient branches, shortest means steps not EU, material prioritizes native material continuity using a prepared flow index. Keep all side inputs. Compact view retains complete selected recipes and declared choices, with omitted candidate counts in presentation. Full view expands matching variants. Inspect path_details, route, paths, branches, leaves, presentation and limits. Uses its own material/tier filters, not profile scope', _schema({"start_id": STRING, "target_id": STRING, "max_depth": {"type": "integer", "minimum": 1, "maximum": 64, "default": 12}, "max_processes": {"type": "integer", "minimum": 1, "maximum": 5000, "default": 300},
                             "max_paths": {"type": "integer", "minimum": 1, "maximum": 100, "default": 8}, "max_extra_steps": {"type": "integer", "minimum": 0, "maximum": 64, "default": 6},
-                            "path_selection": {"enum": ["diverse", "shortest"], "default": "diverse"},
+                            "path_selection": {"enum": ["diverse", "shortest", "material"], "default": "diverse"}, "view": {"enum": ["compact", "full"], "default": "compact"},
                             "required_resource_ids": {"type": "array", "items": STRING}, "excluded_resource_ids": {"type": "array", "items": STRING}, **TIERS}, ("start_id", "target_id"))),
 }
 
@@ -101,15 +107,18 @@ def create_server(dataset: Dataset) -> Server:
     async def list_tools(context, params):
         return types.ListToolsResult(tools=[
             types.Tool(name=name, description=description, input_schema=schema,
-                       annotations=types.ToolAnnotations(read_only_hint=name not in ('save_boundary_profile', 'delete_boundary_profile'), destructive_hint=name == 'delete_boundary_profile', open_world_hint=False))
+                       annotations=types.ToolAnnotations(read_only_hint=name not in ('save_boundary_profile', 'delete_boundary_profile', 'rebuild_flow_index'), destructive_hint=name == 'delete_boundary_profile', open_world_hint=False))
             for name, (description, schema) in OPERATIONS.items()
         ])
 
     async def call_tool(context, params):
         if params.name not in OPERATIONS:
             return types.CallToolResult(is_error=True, content=[types.TextContent(type="text", text="Unknown dataset operation")])
+        arguments = dict(params.arguments or {})
+        if params.name == 'trace_processes':
+            arguments.setdefault('view', 'compact')
         try:
-            result = await anyio.to_thread.run_sync(partial(getattr(dataset, params.name), **(params.arguments or {})))
+            result = await anyio.to_thread.run_sync(partial(getattr(dataset, params.name), **arguments))
         except (DatasetError, TypeError) as error:
             return types.CallToolResult(is_error=True, content=[types.TextContent(type="text", text=_json({"error": str(error)}))])
         summary = f"{params.name}: snapshot {dataset.snapshot_id}. Data is in structuredContent."

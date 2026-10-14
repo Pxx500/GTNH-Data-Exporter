@@ -6,13 +6,18 @@ import json
 import sys
 from pathlib import Path
 
-from .dataset import Dataset, DatasetError, _json
+from .dataset import Dataset, DatasetError
+
+
+def _json(value):
+    """ASCII JSON preserves Unicode values on consoles with limited encodings."""
+    return json.dumps(value, ensure_ascii=True, separators=(",", ":"), sort_keys=True, allow_nan=False)
 
 
 def parser():
     root = argparse.ArgumentParser(prog="gtnh-data", description="Query one canonical GTNH snapshot offline")
     commands = root.add_subparsers(dest="command", required=True)
-    for name in ("import", "status", "resources", "processes", "groups", "sources", "environments", "trace", "recycle", "chemistry", "loops", "boundary-profiles", "save-boundary-profile", "delete-boundary-profile", "resource-groups", "scope-catalog", "plan-to-bases", "audit-energy", "statistics", "acquisition", "serve", "mcp"):
+    for name in ("import", "status", "flow-index", "rebuild-flow-index", "resources", "processes", "groups", "sources", "environments", "trace", "recycle", "chemistry", "loops", "boundary-profiles", "save-boundary-profile", "delete-boundary-profile", "resource-groups", "scope-catalog", "plan-to-bases", "audit-energy", "statistics", "acquisition", "serve", "mcp"):
         command = commands.add_parser(name)
         command.add_argument("--database", required=True, type=Path)
         if name == "import":
@@ -73,7 +78,8 @@ def parser():
             command.add_argument("--max-processes", type=int, default=300)
             command.add_argument("--max-paths", type=int, default=8)
             command.add_argument("--max-extra-steps", type=int, default=6)
-            command.add_argument("--path-selection", choices=("diverse", "shortest"), default="diverse", help="Spread routes across target ingredients or prefer fewest steps")
+            command.add_argument("--path-selection", choices=("diverse", "shortest", "material"), default="diverse", help="Spread target ingredients, prefer fewest steps, or prioritize native material flow using the prepared index")
+            command.add_argument("--view", choices=("full", "compact"), default="full", help="Keep every expanded match or return path anchors and declared choices with omission counts")
             command.add_argument("--required-resource-id", action="append", dest="required_resource_ids", default=[])
             command.add_argument("--excluded-resource-id", action="append", dest="excluded_resource_ids", default=[])
             command.add_argument("--min-tier", type=int)
@@ -134,7 +140,7 @@ def main(argv=None):
             else:
                 if command in ("resources", "processes", "sources"):
                     arguments.pop("id", None)
-                operation = {"status": "status", "resources": "find_resources", "processes": "find_processes", "groups": "get_group",
+                operation = {"status": "status", "flow-index": "flow_index_status", "rebuild-flow-index": "rebuild_flow_index", "resources": "find_resources", "processes": "find_processes", "groups": "get_group",
                              "sources": "find_sources", "environments": "find_environments", "trace": "trace_processes",
                              "chemistry": "inspect_chemistry", "acquisition": "inspect_acquisition", "loops": "find_loops", "resource-groups": "find_resource_groups", "scope-catalog": "get_scope_catalog"}[command]
             result = getattr(dataset, operation)(**arguments)

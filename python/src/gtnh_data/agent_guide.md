@@ -2,7 +2,7 @@
 
 Use the connected snapshot to answer a specific question. Start with a small
 lookup, select exact identities, then choose the analysis that proves what the
-user asked. This server has 23 tools. It shares one Dataset owner with the GUI
+user asked. This server has 25 tools. It shares one Dataset owner with the GUI
 and CLI. Tool schemas are the authority for current arguments and bounds.
 
 Read this guide once through the MCP resource
@@ -18,7 +18,8 @@ Read this guide once through the MCP resource
 | Which recipes make or use this resource? | `find_processes`, then `get_process` for selected IDs | Captured declarations, full AND input slots, OR choices, outputs, conditions and provenance. Input lookup reports unresolved matching |
 | What does a group accept? | `get_group` | Captured group membership. Exact matching still depends on the choice's mode, wildcard metadata and NBT sensitivity |
 | How can the item enter the system? | `inspect_acquisition`, `find_sources`, `get_source`, `find_environments` | Bounded structural evidence and configured sources, including generator links and dimension context. Missing evidence is not absolute unobtainability |
-| Can A contribute to B through known recipes? | `trace_processes` | Complete bounded consume dependency paths. Every full recipe is retained, but a path does not supply all its side inputs or prove quantities |
+| Can A contribute to B through known recipes? | `trace_processes` | Bounded consume dependency paths with complete selected recipes. A path does not supply all its side inputs or prove quantities |
+| Is material-flow search prepared for this snapshot? | `flow_index_status`, optionally `rebuild_flow_index` | Read derived-index readiness or explicitly rebuild its sidecar offline. Preparation changes search data, not captured recipe facts |
 | What returns a chosen main-path byproduct? | `plan_recycling` | Bounded C-to-D alternatives, exact net recovery and external inputs, tied to a chosen main path |
 | What are all required external inputs for a target? | `plan_to_bases` | Whole-recipe balanced plans under an explicit saved base-resource profile, with net imports and separate startup requirements |
 | Is a regenerative network cheaper than this recipe? | `audit_energy` | Exact verified bounded network witnesses that net-consume the primary feed, compared at equal target quantity using nominal recipe EU |
@@ -30,6 +31,51 @@ Read this guide once through the MCP resource
 There is no exposed generic SQL tool or separate `plan_network` MCP tool.
 Use `plan_to_bases` or `audit_energy` for balanced network analysis. Do not
 build another client-side solver by stitching trace spines together.
+
+## Prefer a material route when the question is about a construction chain
+
+Use `path_selection="material"` to prioritize continuity suggested by native
+material facts. This mode helps investigate the material contribution to a
+target, such as iron through steel into a casing. It does not prove that all
+other ingredients are supplied, conserve chemical accounting by itself, or
+optimize yield or energy. Inspect `path_details`, target input branches and
+the full recipes. Material mode selects one representative spine per target
+ingredient branch. It does not enumerate every upstream variant. Byproduct
+transitions remain valid alternatives. The GUI defaults to this policy. Agent,
+CLI and HTTP calls retain `diverse` as the default, so request `material`
+explicitly when that is the intended question.
+
+`path_selection="diverse"` spreads routes across target ingredient branches.
+`path_selection="shortest"` prefers fewer steps. Neither means lower EU or
+better ore utilization. Choose the policy explicitly when comparing results.
+
+Material search needs a prepared index. Call `flow_index_status` if readiness
+is unknown. If its status is `missing` or `incompatible`, use
+`rebuild_flow_index` once. It writes replaceable derived data next to the
+imported database and may take longer than a lookup. Do not rebuild before
+every trace. New imports prepare this data automatically. A rebuild needs
+the imported dump, not a running game. An incompatible index is not silently
+used as if it belonged to the current snapshot or analysis version.
+
+Voltage bounds restrict captured recipe voltage requirements. Verified static
+GT shaped crafting-grid declarations can report tier status `not_applicable`
+with a null tier. They need no machine voltage and pass those bounds. This is
+an explicit native marker checked against its declaration context. Null EU by
+itself does not imply that status, free energy or resolved tool returns. Other
+unknown tiers continue to follow `unknown_tier_policy`.
+
+## Interpret resource origin separately from planning boundaries
+
+A producer in the dump is evidence of a recipe, not proof that its entire
+input chain is obtainable. A world source describes origin even if recycling
+recipes also exist. Keep generated ore blocks separate from actual mining
+drops and rule candidates. Conditions and dimension definitions matter.
+
+Initial-processing classifications are bounded heuristics with evidence,
+not a claim that every downstream product is a basic resource. Renewable
+status cannot be inferred merely from a cycle. A suggested basic resource
+does not change a profile. The profile's selected basics remain explicit
+external-feed assumptions, regardless of origin evidence.
 
 ## Keep calls small and preserve identity
 
@@ -52,11 +98,26 @@ parameter. Keep a compact working summary and retain IDs for detail calls.
 Do not repeat the full manifest, every discovered resource, all group members
 or the whole statistics payload in a final answer.
 
+MCP traces default to `view="compact"`. This retains every selected recipe in
+full, all declared input choices and outputs, endpoints and actual path
+resources. It omits expanded matching variants from resource, edge and leaf
+lists. Read `presentation.omitted_counts`, aggregate omitted leaf evidence and
+`grouped_match_refs` before interpreting boundaries. Those references describe
+the native matching predicate and the scope of the reported candidate counts.
+A matching group is not a set of extra required inputs.
+
+Use `view="full"` when expanded OR, wildcard or NBT-insensitive candidates
+matter. `get_group` retrieves literal captured members, which may differ from
+the fully expanded predicate. Full cycle references remain unchanged in compact
+results and may refer to unembedded candidate IDs. Fetch selected identities
+with `get_resource` when needed. Compact view reduces presentation, not search
+or uncertainty. Dataset, HTTP and CLI traces retain `full` as their default.
+
 ## Executable request examples
 
 Each JSON block is a `tools/call` params object. The MCP client supplies the
 JSON-RPC envelope. **All `r...` and `p...` IDs below are examples bound only to
-snapshot `2830da9f-c040-4233-a778-036e4b27f3eb`.** Resolve names first in any other
+snapshot `779ea030-ae9c-40ea-8854-99a176f7cc42`.** Resolve names first in any other
 snapshot. Profile IDs are user configuration, not captured recipe IDs.
 
 ### Resolve names, then inspect

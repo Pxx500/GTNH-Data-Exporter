@@ -12,7 +12,8 @@ import sqlite3
 import tempfile
 import threading
 import unicodedata
-from collections import deque
+from collections import Counter, OrderedDict, deque
+from copy import deepcopy
 from contextlib import contextmanager
 from functools import lru_cache
 from fractions import Fraction
@@ -65,6 +66,8 @@ class Dataset:
         self._search_vocabulary = None
         self._unification_preferences = None
         self._search_lock = threading.Lock()
+        self._acquisition_cache = OrderedDict()
+        self._acquisition_lock = threading.Lock()
         if not self.path.is_file():
             raise DatasetError(f"No imported dataset at {self.path}")
         with self._connect() as connection:
@@ -132,7 +135,22 @@ class Dataset:
         finally:
             connection.close()
             temporary.unlink(missing_ok=True)
-        return cls(database)
+        dataset = cls(database)
+        dataset.rebuild_flow_index()
+        return dataset
+
+    def flow_index_status(self):
+        """Inspect the derived flow index without changing the canonical snapshot."""
+        from .flow_index import status
+        return status(self)
+
+    def rebuild_flow_index(self):
+        """Atomically rebuild the versioned flow sidecar from this snapshot."""
+        from .flow_index import rebuild
+        try:
+            return rebuild(self)
+        except (OSError, sqlite3.Error) as exc:
+            raise DatasetError(f'Cannot rebuild flow index: {exc}') from exc
 
     @staticmethod
     def _invalid_constant(value):
@@ -548,9 +566,27 @@ class Dataset:
 
     def _acquisition_page(self, connection, page):
         from .acquisition import summarize_acquisition
-        analysis = summarize_acquisition(connection, [r['id'] for r in page['items']], snapshot_id=self.snapshot_id)
+        ids = [item['id'] for item in page['items']]
+        facts = {}
+        with self._acquisition_lock:
+            for id in ids:
+                if id in self._acquisition_cache:
+                    self._acquisition_cache.move_to_end(id)
+                    facts[id] = self._acquisition_cache[id]
+        missing = [id for id in ids if id not in facts]
+        if missing:
+            analysis = summarize_acquisition(connection, missing, snapshot_id=self.snapshot_id)
+            facts.update(analysis['resources'])
+            with self._acquisition_lock:
+                for id in missing:
+                    fact = facts[id]
+                    if not fact['provenance']['initial_processing']['limit_reasons']:
+                        self._acquisition_cache[id] = fact
+                        self._acquisition_cache.move_to_end(id)
+                while len(self._acquisition_cache) > 1024:
+                    self._acquisition_cache.popitem(last=False)
         for item in page['items']:
-            item['acquisition_analysis'] = analysis['resources'][item['id']]
+            item['acquisition_analysis'] = deepcopy(facts[item['id']])
         return page
 
     def _profile_scope(self, scope, profile_id):
@@ -1024,7 +1060,8 @@ class Dataset:
         ids = [r['id'] for r in discovery['resources']]
         known = set()
         with self._connect() as connection:
-            summary = summarize_acquisition(connection, [resource_id], snapshot_id=self.snapshot_id)
+            summary = summarize_acquisition(connection, [resource_id], snapshot_id=self.snapshot_id,
+                include_source_details=True)
             for offset in range(0, len(ids), 500):
                 batch = ids[offset:offset + 500]
                 rows = connection.execute("SELECT DISTINCT payload FROM records WHERE collection='sources' AND id IN (SELECT source_id FROM source_outputs WHERE resource_id IN (" + ','.join('?' for _ in batch) + '))', batch)
@@ -1153,7 +1190,8 @@ class Dataset:
     def _unresolved_input_clause():
         return """(
             json_extract(payload,'$.conditions.dynamic_inputs')='unresolved' OR
-            id IN (SELECT process_id FROM inputs WHERE mode='native_unknown' OR (mode='unified' AND group_id IS NULL))
+            EXISTS (SELECT 1 FROM inputs WHERE inputs.process_id=records.id
+                    AND (mode='native_unknown' OR (mode='unified' AND group_id IS NULL)))
         )"""
 
     def find_processes(self, *, input_id=None, output_id=None, family=None, offset=0, limit=50):
@@ -1212,6 +1250,16 @@ class Dataset:
         voltage = record.get('eu_per_tick')
         result = {'process_id': record['id'], 'status': 'unknown', 'tier': None, 'name': None,
                   'scope': 'recipe_voltage_not_machine_capability'}
+        conditions = record['conditions']
+        if (conditions.get('recipe_voltage_applicability') == 'not_applicable_crafting_grid'
+                and record['family'] == 'minecraft:crafting'
+                and record['provenance'].get('owner') == 'CraftingManager'
+                and conditions.get('native_class') == 'gregtech.api.util.GTShapedRecipe'
+                and conditions.get('dynamic_output') == 'resolved_static'
+                and record['executable'] is True and voltage is None):
+            result.update(status='not_applicable', scope='crafting_grid_not_recipe_voltage',
+                          reason='Verified static GT shaped crafting-grid recipe has no machine voltage requirement')
+            return result
         native_owner = record['provenance'].get('owner') in ('GTRecipe', 'RecipeAssemblyLine.sAssemblylineRecipes')
         captured_source = record['conditions'].get('recipe_voltage_tier_source') == 'GTUtility.getTier(mEUt)'
         if (not record['family'].startswith('gregtech:') or not (native_owner or captured_source)
@@ -1244,7 +1292,10 @@ class Dataset:
     def _tier_allowed(self, record, filters):
         if not filters['active']:
             return True
-        tier = self._recipe_tier(record)['tier']
+        declaration = self._recipe_tier(record)
+        if declaration['status'] == 'not_applicable':
+            return True
+        tier = declaration['tier']
         if tier is None:
             return filters['unknown_tier_policy'] == 'include'
         return ((filters['min_tier'] is None or tier >= filters['min_tier'])
@@ -1428,6 +1479,10 @@ class Dataset:
 
     def _find_paths(self, connection, start_id, target_id, max_depth, max_processes, max_paths,
                     required, excluded, max_extra_steps, tier_filter, path_selection):
+        if path_selection == 'material':
+            from .flow_index import find_paths
+            return find_paths(self, connection, start_id, target_id, max_depth, max_processes, max_paths,
+                              required, excluded, max_extra_steps, tier_filter)
         if path_selection == 'shortest':
             return (*self._find_paths_shortest(connection, start_id, target_id, max_depth, max_processes,
                 max_paths, required, excluded, max_extra_steps, tier_filter), [])
@@ -1751,10 +1806,12 @@ class Dataset:
 
     def trace_processes(self, *, start_id, target_id, max_depth=12, max_processes=300, max_paths=8,
                         required_resource_ids=None, excluded_resource_ids=None, max_extra_steps=6,
-                        min_tier=None, max_tier=None, unknown_tier_policy='exclude', path_selection='diverse'):
+                        min_tier=None, max_tier=None, unknown_tier_policy='exclude', path_selection='diverse', view='full'):
         tier_filter = self._tier_filter(min_tier, max_tier, unknown_tier_policy)
-        if path_selection not in ('diverse', 'shortest'):
-            raise DatasetError('path_selection must be diverse or shortest')
+        if view not in ('full', 'compact'):
+            raise DatasetError('view must be full or compact')
+        if path_selection not in ('diverse', 'shortest', 'material'):
+            raise DatasetError('path_selection must be diverse, shortest or material')
         if isinstance(max_depth, bool) or not isinstance(max_depth, int) or not 1 <= max_depth <= 64:
             raise DatasetError("max_depth must be between 1 and 64")
         if isinstance(max_processes, bool) or not isinstance(max_processes, int) or not 1 <= max_processes <= 5000:
@@ -1813,12 +1870,13 @@ class Dataset:
                 admit(id)
 
             coverage = [json.loads(row[0]) for row in connection.execute("SELECT payload FROM records WHERE collection='coverage' ORDER BY id")]
-            unsupported_count = connection.execute("SELECT COUNT(*) FROM records WHERE collection='processes' AND " + self._unresolved_input_clause()).fetchone()[0]
+            prepared_counts = search.get('prepared_index', {}).get('counts')
+            unsupported_count = prepared_counts['unresolved_inputs'] if prepared_counts is not None else connection.execute("SELECT COUNT(*) FROM records WHERE collection='processes' AND " + self._unresolved_input_clause()).fetchone()[0]
             if unsupported_count:
                 coverage.append({"id": "dataset:unresolved-matching", "domain": "trace.matching", "status": "partial",
                                  "records": unsupported_count, "reason": "Unsupported ingredient predicates can leave undiscovered routes in this snapshot",
                                  "provenance": {"owner": "Dataset"}})
-            unresolved_output_count = connection.execute("SELECT COUNT(*) FROM records WHERE collection='processes' AND "
+            unresolved_output_count = prepared_counts['unresolved_outputs'] if prepared_counts is not None else connection.execute("SELECT COUNT(*) FROM records WHERE collection='processes' AND "
                                                         "json_extract(payload,'$.conditions.dynamic_output')='unresolved'").fetchone()[0]
             if unresolved_output_count:
                 coverage.append({"id": "dataset:unresolved-outputs", "domain": "trace.outputs", "status": "partial",
@@ -1898,12 +1956,66 @@ class Dataset:
                 elif resource_id in unresolved_outputs | unresolved_boundaries and leaf["status"] == "unresolved":
                     leaf["reason"] = "Producer inputs, matching or outputs are unresolved"
                 leaves.append(leaf)
-            return {"snapshot_id": self.snapshot_id, "start_id": start_id, "target_id": target_id,
+            from .flow_index import path_details
+            details = path_details(self, paths, resources, processes, branches) if path_selection == 'material' else []
+            result = {"snapshot_id": self.snapshot_id, "start_id": start_id, "target_id": target_id,
                     "resources": [resources[id] for id in sorted(resources)], "processes": [processes[id] for id in sorted(processes)],
                       "edges": edges_list, "leaves": leaves, "cycles": cycles, "truncated": bool(limit_reasons), "coverage": coverage,
                       "route": route, "paths": paths, "search": search, "limit_reasons": sorted(limit_reasons), "duplicate_process_records": duplicates,
                       'tier_filter': tier_filter, 'recipe_tiers': [self._recipe_tier(processes[id]) for id in sorted(processes)],
-                      'path_selection': path_selection, 'branch_coverage': branches}
+                      'path_selection': path_selection, 'branch_coverage': branches, 'path_details': details}
+            return self._compact_trace(result, connection) if view == 'compact' else result
+
+    def _compact_trace(self, result, connection):
+        """Summarize expanded candidate records while keeping recipe authority intact."""
+        retained = {result['start_id'], result['target_id']}
+        retained.update(id for path in result['paths'] for id in path['resource_ids'])
+        for process in result['processes']:
+            retained.update(choice['resource_id'] for slot in process['inputs'] for choice in slot['choices']
+                            if choice.get('resource_id') is not None)
+            retained.update(output['resource_id'] for output in process['outputs'])
+        candidates = {}
+        for edge in result['edges']:
+            if edge['source'].startswith('resource:') and edge['target'].startswith('process:'):
+                key = edge['target'][8:], edge['slot_index'], edge['choice_index']
+                candidates.setdefault(key, set()).add(edge['source'][9:])
+        grouped = []
+        for process in result['processes']:
+            for si, slot in enumerate(process['inputs']):
+                for ci, choice in enumerate(slot['choices']):
+                    members = candidates.get((process['id'], si, ci), set())
+                    omitted = members - retained
+                    if omitted:
+                        grouped.append({'process_id': process['id'], 'slot_index': si, 'choice_index': ci,
+                                        'mode': choice['match']['mode'], 'group_id': choice['match'].get('group_id'),
+                                        'candidate_count': len(members), 'embedded_candidate_count': len(members & retained),
+                                        'omitted_candidate_count': len(omitted), 'basis': 'expanded_matching_candidates',
+                                        'count_scope': 'resolved_members_in_full_trace_input_edges'})
+        resources = [row for row in result['resources'] if row['id'] in retained]
+        missing_anchors = retained - {row['id'] for row in result['resources']}
+        resources.extend(self._record(connection, 'resources', id) for id in sorted(missing_anchors))
+        resources.sort(key=lambda row: row['id'])
+        edges = [row for row in result['edges'] if all(not node.startswith('resource:') or node[9:] in retained
+                 for node in (row['source'], row['target']))]
+        leaves = [row for row in result['leaves'] if row['resource_id'] in retained]
+        omitted_leaves = [row for row in result['leaves'] if row['resource_id'] not in retained]
+        full_counts = {key: len(result[key]) for key in ('resources', 'edges', 'leaves')}
+        returned_counts = {'resources': len(resources), 'edges': len(edges), 'leaves': len(leaves)}
+        cyclic_resources = {node[9:] for component in result['cycles'] for node in component if node.startswith('resource:')}
+        presentation = {'view': 'compact', 'scope': 'dependency_spines_with_declared_choices_and_external_inputs',
+                        'full_counts': full_counts, 'returned_counts': returned_counts,
+                        'omitted_counts': {key: full_counts[key] - returned_counts[key] +
+                                           (len(missing_anchors) if key == 'resources' else 0) for key in full_counts},
+                        'added_declared_anchor_resource_count': len(missing_anchors),
+                        'omitted_leaf_status_counts': dict(Counter(row['status'] for row in omitted_leaves)),
+                        'omitted_leaf_reason_counts': dict(Counter(row['reason'] for row in omitted_leaves if 'reason' in row)),
+                        'omitted_leaf_source_ids': sorted({id for row in omitted_leaves for id in row['sources']}),
+                        'grouped_match_refs': grouped,
+                        'cycle_reference_scope': 'full_node_ids_may_reference_unembedded_candidate_records',
+                        'unembedded_cycle_resource_count': len(cyclic_resources - retained),
+                        'notice': 'Expanded candidate members are omitted from presentation. No selected recipe records are omitted. '
+                                  'This remains a dependency spine with external input requirements.'}
+        return dict(result, resources=resources, edges=edges, leaves=leaves, presentation=presentation)
 
     def _choice_resources(self, connection, choice):
         match = choice["match"]

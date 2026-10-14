@@ -1,6 +1,7 @@
 import asyncio
 import json
 import os
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -19,11 +20,49 @@ from .artifacts import choice, process, resource, slot, snapshot
 
 def network_semantics(result):
     copied = json.loads(json.dumps(result))
-    copied.get('search', {}).pop('elapsed_seconds', None)
+    for field in ('elapsed_seconds', 'distance_work', 'distance_seconds', 'distance_cache_hit'):
+        copied.get('search', {}).pop(field, None)
     return copied
 
 
 class TransportTests(unittest.TestCase):
+    def test_cli_json_preserves_unicode_on_cp1250_stdout_and_stderr(self):
+        display_name = '\ue00e GT Iron Dust'
+        recipe = process('make', [slot(choice('start'))], ['target'], family='gregtech:assembler')
+        recipe['provenance']['owner'] = 'GTRecipe'
+        database = self.root / 'unicode.sqlite'
+        dataset = Dataset.import_snapshot(snapshot(self.root / 'unicode-capture',
+            resources=[dict(resource('start'), display_name=display_name), resource('target')], processes=[recipe]), database)
+        environment = dict(os.environ, PYTHONIOENCODING='cp1250',
+                           PYTHONPATH=str(Path(__file__).resolve().parents[1] / 'src'))
+
+        def run(*arguments):
+            return subprocess.run([sys.executable, '-m', 'gtnh_data', *arguments, '--database', str(database)],
+                                  env=environment, capture_output=True, timeout=15)
+
+        traced = run('trace', '--start-id', 'start', '--target-id', 'target', '--max-tier', '1',
+                     '--path-selection', 'material', '--view', 'compact')
+        self.assertEqual(traced.returncode, 0, traced.stderr.decode('cp1250', errors='replace'))
+        self.assertTrue(traced.stdout.isascii())
+        answer = json.loads(traced.stdout)
+        self.assertEqual(next(row for row in answer['resources'] if row['id'] == 'start')['display_name'], display_name)
+        self.assertEqual(answer['paths'][0]['resource_ids'], ['start', 'target'])
+        request = self.root / 'unicode-request.json'
+        request.write_text(json.dumps({'name': display_name, 'base_resource_ids': ['start']}, ensure_ascii=False), encoding='utf-8')
+        saved = run('save-boundary-profile', 'unicode', '--request-file', str(request))
+        self.assertEqual(saved.returncode, 0, saved.stderr.decode('cp1250', errors='replace'))
+        self.assertTrue(saved.stdout.isascii())
+        self.assertEqual(json.loads(saved.stdout), dataset.get_boundary_profile('unicode'))
+        listed = run('boundary-profiles', 'unicode')
+        self.assertEqual(listed.returncode, 0, listed.stderr.decode('cp1250', errors='replace'))
+        self.assertTrue(listed.stdout.isascii())
+        self.assertEqual(json.loads(listed.stdout), dataset.get_boundary_profile('unicode'))
+        missing = run('resources', 'missing\ue00e')
+        self.assertEqual(missing.returncode, 2)
+        self.assertEqual(missing.stdout, b'')
+        self.assertTrue(missing.stderr.isascii())
+        self.assertEqual(json.loads(missing.stderr), {'error': 'Unknown resources ID: missing\ue00e'})
+
     def setUp(self):
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
@@ -43,6 +82,28 @@ class TransportTests(unittest.TestCase):
                                                                   process('detour-first', [slot(choice('a'))], ['middle']),
                                                                   process('detour-finish', [slot(choice('middle'))], ['b'])],
                                                        sources=[self.generation_source, self.mining_source]), self.database)
+
+    def test_prepared_flow_index_is_inspectable_and_rebuildable_without_changing_capture(self):
+        captured_before = self.database.read_bytes()
+        with TestClient(create_app(self.dataset)) as client:
+            answer = client.get('/api/flow-index')
+            self.assertEqual(answer.status_code, 200)
+            self.assertEqual(answer.json(), self.dataset.flow_index_status())
+            rebuilt = client.post('/api/flow-index/rebuild')
+            self.assertEqual(rebuilt.status_code, 200)
+            self.assertEqual(rebuilt.json()['snapshot_id'], self.dataset.snapshot_id)
+            self.assertEqual(client.get('/api/flow-index').json()['status'], 'ready')
+        output = StringIO()
+        with redirect_stdout(output):
+            code = main(['flow-index', '--database', str(self.database)])
+        self.assertEqual(code, 0)
+        self.assertEqual(json.loads(output.getvalue()), self.dataset.flow_index_status())
+        output = StringIO()
+        with redirect_stdout(output):
+            code = main(['rebuild-flow-index', '--database', str(self.database)])
+        self.assertEqual(code, 0)
+        self.assertEqual(json.loads(output.getvalue())['snapshot_id'], self.dataset.snapshot_id)
+        self.assertEqual(self.database.read_bytes(), captured_before)
 
     def test_source_parent_links_are_followable_with_exact_records_and_errors(self):
         expected = {"snapshot_id": self.dataset.snapshot_id, "item": self.mining_source}
@@ -74,6 +135,13 @@ class TransportTests(unittest.TestCase):
             result = main(["sources", "missing", "--database", str(self.database)])
         self.assertEqual(result, 2)
         self.assertEqual(json.loads(error_output.getvalue()), {"error": "Unknown sources ID: missing"})
+
+    def test_resource_acquisition_results_are_independent_across_repeated_searches(self):
+        first = self.dataset.find_resources(q='Iron', limit=8)
+        expected = json.loads(json.dumps(first))
+        first['items'][0]['acquisition_analysis']['acquisition']['status'] = 'caller_edit'
+        first['items'][0]['acquisition_analysis']['provenance']['world_source']['evidence'].clear()
+        self.assertEqual(self.dataset.find_resources(q='Iron', limit=8), expected)
 
     def test_boundary_profiles_http_and_cli_share_snapshot_bound_owner(self):
         with TestClient(create_app(self.dataset)) as client:
@@ -203,18 +271,60 @@ class TransportTests(unittest.TestCase):
             self.assertEqual(response.status_code, 400)
 
     def test_http_and_cli_share_explicit_path_selection_and_defaults(self):
-        for selection in ('diverse', 'shortest'):
+        for selection in ('diverse', 'shortest', 'material'):
             with self.subTest(selection=selection):
                 arguments = dict(start_id='a', target_id='b', path_selection=selection)
                 expected = self.dataset.trace_processes(**arguments)
                 with TestClient(create_app(self.dataset)) as client:
-                    self.assertEqual(client.get('/api/trace', params=arguments).json(), expected)
+                    self.assertEqual(network_semantics(client.get('/api/trace', params=arguments).json()), network_semantics(expected))
                 output = StringIO()
                 with redirect_stdout(output):
                     result = main(['trace', '--database', str(self.database), '--start-id', 'a', '--target-id', 'b',
                                    '--path-selection', selection])
                 self.assertEqual(result, 0)
-                self.assertEqual(json.loads(output.getvalue()), expected)
+                self.assertEqual(network_semantics(json.loads(output.getvalue())), network_semantics(expected))
+
+    def test_official_mcp_material_trace_and_preparation_share_owner_and_annotations(self):
+        async def exercise():
+            parameters = StdioServerParameters(command=sys.executable,
+                args=['-m', 'gtnh_data', 'mcp', '--database', str(self.database)], env=dict(os.environ))
+            async with stdio_client(parameters) as (read_stream, write_stream):
+                async with ClientSession(read_stream, write_stream, read_timeout_seconds=15) as session:
+                    await session.initialize()
+                    tools = {tool.name: tool for tool in (await session.list_tools()).tools}
+                    self.assertTrue(tools['flow_index_status'].annotations.read_only_hint)
+                    self.assertFalse(tools['rebuild_flow_index'].annotations.read_only_hint)
+                    self.assertFalse(tools['rebuild_flow_index'].annotations.destructive_hint)
+                    rebuilt = await session.call_tool('rebuild_flow_index', {})
+                    self.assertFalse(rebuilt.is_error, rebuilt.content)
+                    self.assertEqual(rebuilt.structured_content['snapshot_id'], self.dataset.snapshot_id)
+                    status = await session.call_tool('flow_index_status', {})
+                    self.assertFalse(status.is_error, status.content)
+                    self.assertEqual(status.structured_content, self.dataset.flow_index_status())
+                    arguments = {'start_id': 'a', 'target_id': 'b', 'path_selection': 'material'}
+                    answer = await session.call_tool('trace_processes', arguments)
+                    self.assertFalse(answer.is_error, answer.content)
+                    self.assertEqual(network_semantics(answer.structured_content), network_semantics(self.dataset.trace_processes(**arguments, view='compact')))
+        asyncio.run(exercise())
+
+    def test_official_mcp_trace_defaults_to_compact_but_full_view_remains_available(self):
+        arguments = {'start_id': 'a', 'target_id': 'b'}
+        full = self.dataset.trace_processes(**arguments)
+        async def exercise():
+            parameters = StdioServerParameters(command=sys.executable,
+                args=['-m', 'gtnh_data', 'mcp', '--database', str(self.database)], env=dict(os.environ))
+            async with stdio_client(parameters) as (read_stream, write_stream):
+                async with ClientSession(read_stream, write_stream, read_timeout_seconds=15) as session:
+                    await session.initialize()
+                    compact = await session.call_tool('trace_processes', arguments)
+                    self.assertFalse(compact.is_error, compact.content)
+                    self.assertEqual(compact.structured_content['presentation']['view'], 'compact')
+                    for key in ('processes', 'paths', 'route', 'branch_coverage', 'cycles', 'limit_reasons'):
+                        self.assertEqual(compact.structured_content[key], full[key])
+                    expanded = await session.call_tool('trace_processes', dict(arguments, view='full'))
+                    self.assertFalse(expanded.is_error, expanded.content)
+                    self.assertEqual(network_semantics(expanded.structured_content), network_semantics(full))
+        asyncio.run(exercise())
 
     def test_http_and_cli_forward_recipe_voltage_filters_without_inferring_machine_tiers(self):
         arguments = dict(start_id='a', target_id='b', min_tier=0, max_tier=3, unknown_tier_policy='exclude')
@@ -297,7 +407,7 @@ class TransportTests(unittest.TestCase):
                     await session.initialize()
                     tools = await session.list_tools()
                     trace_schema = next(tool.input_schema for tool in tools.tools if tool.name == 'trace_processes')
-                    self.assertEqual(trace_schema['properties']['path_selection'], {'enum': ['diverse', 'shortest'], 'default': 'diverse'})
+                    self.assertEqual(trace_schema['properties']['path_selection'], {'enum': ['diverse', 'shortest', 'material'], 'default': 'diverse'})
                     self.assertEqual(trace_schema['properties']['max_extra_steps']['default'], 6)
                     loop_schema = next(tool.input_schema for tool in tools.tools if tool.name == 'find_loops')
                     for parameter, maximum in [('max_depth', 20), ('max_processes', 1000), ('max_states', 50000)]:
@@ -322,21 +432,21 @@ class TransportTests(unittest.TestCase):
                     self.assertEqual(result.structured_content, self.dataset.find_resources(q="iron pltae", limit=8))
                     self.assertEqual([item["id"] for item in result.structured_content["items"]], ["a"])
                     result = await session.call_tool("trace_processes", {"start_id": "a", "target_id": "b"})
-                    self.assertEqual(result.structured_content, self.dataset.trace_processes(start_id="a", target_id="b"))
+                    self.assertEqual(result.structured_content, self.dataset.trace_processes(start_id="a", target_id="b", view='compact'))
                     for selection in ('diverse', 'shortest'):
                         selection_arguments = {'start_id': 'a', 'target_id': 'b', 'path_selection': selection}
                         result = await session.call_tool('trace_processes', selection_arguments)
                         self.assertFalse(result.is_error)
-                        self.assertEqual(result.structured_content, self.dataset.trace_processes(**selection_arguments))
+                        self.assertEqual(result.structured_content, self.dataset.trace_processes(**selection_arguments, view='compact'))
                     arguments = {'start_id': 'a', 'target_id': 'b', 'required_resource_ids': ['a', 'middle'],
                                  'excluded_resource_ids': ['excluded'], 'max_paths': 2, 'max_extra_steps': 0}
                     result = await session.call_tool('trace_processes', arguments)
                     self.assertFalse(result.is_error)
-                    self.assertEqual(result.structured_content, self.dataset.trace_processes(**arguments))
+                    self.assertEqual(result.structured_content, self.dataset.trace_processes(**arguments, view='compact'))
                     tier_arguments = dict(start_id='a', target_id='b', min_tier=0, max_tier=3, unknown_tier_policy='exclude')
                     result = await session.call_tool('trace_processes', tier_arguments)
                     self.assertFalse(result.is_error)
-                    self.assertEqual(result.structured_content, self.dataset.trace_processes(**tier_arguments))
+                    self.assertEqual(result.structured_content, self.dataset.trace_processes(**tier_arguments, view='compact'))
                     recycling = dict(main_path={'resource_ids':['a','b'],'process_ids':['convert']}, byproduct_id='b', return_id='a', main_runs=2, yield_mode='expected')
                     result = await session.call_tool('plan_recycling', recycling)
                     self.assertFalse(result.is_error)
