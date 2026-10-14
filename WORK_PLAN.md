@@ -1,7 +1,8 @@
 # Plan pracy: przygotowanie danych i lepsze wyszukiwanie receptur
 
 **Data:** 2026-10-14  
-**Status:** zakres implementacji ukończony. Wyniki i ograniczenia zapisano w WORK_RESULTS.md.
+**Status:** pierwotny zakres implementacji ukończony. Wyniki zapisano w WORK_RESULTS.md.
+Dalsze zatwierdzone badania i poprawki są śledzone poniżej oraz w SEARCH_EXPERIMENTS.md.
 
 ## Cel
 
@@ -508,6 +509,35 @@ etap. Bieżące pomiary i decyzje są w SEARCH_EXPERIMENTS.md.
   receptury Temporal comb. Żadna z nich nie trafia do oceny w ośmiu zapisanych
   zapytaniach. Nie wykonano pozornej zmiany ani nie uogólniono tego wyniku
   na wszystkie receptury Centrifuge. Przygotowanie kosztuje osobno 23 ms.
+- [x] Zmierzyć powtarzanie identycznej oceny przejścia w obrębie zapytania.
+  Najpierw policzyć dokładne argumenty i pozostały koszt po istniejących cache.
+  Sprawdzić standardowe lru tylko przy istotnym koszcie. Oddzielić logiczne
+  wywołania od faktycznych obliczeń. Zachować oceny, kolejność i kompletność
+  wyników oraz limity pracy. Negatywny wynik kończy próbę bez nowego cache.
+  86% wywołań dla casingu powtarza argumenty, ale pozostaje tylko około 5 ms
+  oszczędności w profilu. Suma median ośmiu zapytań pogarsza się o 0,6%.
+  Wszystkie wyniki i limity pozostają zgodne. Nie dodajemy kolejnego cache.
+- [x] Sprawdzić jeden przykład spoza żelaza: Silicon Dust do zwykłego waferu.
+  Najpierw odtworzyć konkretną drogę z natywnych receptur, potem wykonać jedno
+  zapytanie z dotychczasowymi limitami. Zachować wszystkie współskładniki
+  i wymagania poziomu receptury. Niejednoznaczny cel kończy próbę bez rozszerzania.
+  Potwierdzono drogę czterech procesów przez Trichlorosilane i Solar Grade
+  Silicon. Wynik pokazuje zamiast niej siedem kroków przez Dark Steel i młotek.
+  Pokrywa wszystkie osiem formalnych gałęzi, ale ten wskaźnik nie opisuje
+  użyteczności wybranej historii. Zachowano poprawność natywnych przejść.
+- [x] Ustalić konkretną przyczynę wyboru młotka w przykładzie Silicon Wafer.
+  Najpierw rozłożyć ocenę dwóch zapisanych świadków i zebrać natywne dane
+  materiałów oraz współskładników. Oddzielić legalność od preferencji.
+  Nie zwiększać limitów ani nie wykluczać wszystkich narzędzi lub recyklingu.
+  Tokeny oparte na natywnych składnikach i nieprzezroczystych nazwach są
+  spłaszczone bez podstawy porównania. Jeden eksperyment zachowuje wagi,
+  odzyskuje cztery bezpośrednie drogi dla wafla, ale gubi gałąź obwodu
+  Volcanusa i prawie podwaja pracę LV Hull. Odrzucono go bez dalszego strojenia.
+- [ ] Sprawdzić, czy deklaracja dopasowania konkretnego wejścia z młotkiem
+  pozwala opisać jego kategorię narzędzia w starszym snapshotcie. Zweryfikować
+  pięć kotwic jednego slotu, jedną natywną grupę i rzeczywisty kontrakt Forge.
+  Oddzielić dowód kategorii dopasowania od dosłownego członkostwa, natywnego
+  odczytu Ore IDs i faktycznego zużycia. Bez zmiany oceny przed tym dowodem.
 - [x] Sprawdzić literaturę o landmarkach i planach zrelaksowanych pod kątem
   kierowania przez gałęzie składników celu. Odróżnić osiągalność pojedynczej
   ścieżki od spełnienia wszystkich wejść receptury i policzyć przygotowanie.

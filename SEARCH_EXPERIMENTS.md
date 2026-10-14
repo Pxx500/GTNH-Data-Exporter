@@ -964,3 +964,90 @@ No treatment is fabricated when there is no reachable effect. This result gives
 no benefit for that exact roster in these queries. It does not establish that
 output-position preference is harmless throughout the dataset.
 Evidence is in `exports/search-research-20261014/output-order-semantics/centrifuge/pilot/`.
+
+## Repeated scores are mostly protected by the existing fact caches
+
+A private probe counts exact query-local penalty arguments: selected source,
+destination, native output position and process. Casing makes 10298 logical
+calls with 1441 unique argument sets and 8857 repeats, about 86%. These repeats
+do not imply equivalent repeated database work. Existing material, family and
+resource-role caches already protect the expensive reads and JSON decoding.
+
+One standard-library query-local LRU treatment preserves all eight frozen outputs,
+their route ordering, branch sets, full native recipes, cofeeds and charged work.
+Three alternating pairs per case do not show a useful total-query improvement.
+The sum of case median times changes from 6.109 to 6.144 seconds, about 0.6% slower.
+Casing improves about 6%, but other cases vary from small gains to a 4.8% loss.
+Its separately profiled penalty shrinks from 65.1 to 59.7 ms while first-time
+family and resource-fact work stays unchanged. Profiled primitive savings do not
+establish a total-query speedup. The Casing-only Python allocation peak changes
+from 43366501 to 43367169 bytes. This is neither RSS nor a dataset-wide memory bound.
+
+The treatment is rejected without tuning or another production cache. Preparation,
+logical calls, physical evaluations, cache hits and changed internal diagnostic
+counts remain separate in the saved evidence. No scoring rule, ranking, search
+cap, native store or service changes follow. Evidence is in
+`exports/search-research-20261014/score-reuse/`.
+
+## A held-out silicon route exposes an incomparable-label preference
+
+One plain-wafer target is resolved through exact .221 source catalog declarations,
+not its display name. Raw Silicon Dust is r6488 and plain Wafer is r30750. Before
+search, four complete native recipes establish Raw Silicon Dust to Trichlorosilane,
+Solar Grade Silicon Dust, plain boule and wafer. Their cofeeds, batches, circuit
+presence, voltage classes and EBF coil heat remain explicit. This is a dependency
+witness, not an inventory or normalized production plan.
+
+A single unchanged-default material query takes 0.856 seconds. It returns eight
+paths covering all eight target ingredient jobs, examines 5759 processes and
+charges 24096 expansion-work units. The only reported limit is path_limit.
+The four-step witness is absent. All four boule branches instead use seven
+steps through Dark Steel and a hammer. Crafting p233032 consumes that selected
+hammer alongside Centrifuged Solar Grade Silicon Ore. That ore already has a
+native SiliconSolarGrade association. The source participates through the tool
+dependency, while the separate ore cofeed remains visible. These captured paths
+are valid dependencies. Neither contribution of source atoms nor illegality is
+established. Full branch representation does not capture this narrative weakness.
+
+Static score breakdown explains the preference without another search. Current
+flat labels treat Trichlorosilane to SiliconSolarGrade as disjoint at cost four,
+while the unassociated hammer bridge costs one. Native output position adds two
+on the chemical route. Four-step and seven-step witnesses have returned sorting
+scores eight and four. Both fit the same depth bound. One representative clears
+each target job, so this is more than simple exhaustion of the result count.
+
+The labels have different evidence bases. Native Trichlorosilane declares actual
+Hydrogen, Silicon and Chlorine components with element-backed children. Native
+Materials.SiliconSG declares the display formula Si* but no element or components.
+Its captured composition remains unresolved. The current flattened descriptor
+drops that distinction. Disjoint text across these bases is not a statement of
+chemical disjointness. No formula parser, purity rule or native grade alias follows.
+
+Independent exact lookups preserve ten complete process records and 31 resources,
+with every declared reference resolved. The selected hammer's typed NBT is Dark
+Steel primary and Wood secondary. There is no Solar Grade handle. Native .221
+source excerpts corroborate the component and formula distinction. Original
+request, before-search witness, complete result and immutable store fingerprints
+remain saved in `exports/search-research-20261014/material-heldout/`.
+One basis-aware private treatment retains weights and caps. It keeps exact shared
+labels as descriptive hints, and compares a complete native declaration tree
+against opaque or partial evidence as unknown rather than strongly disjoint.
+Completeness here describes captured structure, not chemical purity or certified
+atom flow. Status, coefficient and truncation uncertainty remain explicit.
+
+The treatment runs once on the new wafer request and each of the eight frozen
+controls. Four direct chemical boule spines appear. Wafer coverage remains 8/8,
+admissions fall from 6215 to 4211 and charged work from 24096 to 20761. Seven
+control path sets stay identical. However Volcanus loses its only represented
+LuV-circuit branch for another Computer Cube branch. Its aggregate 10/15 hides
+that loss. LV Hull work rises from 4533 to 8900 and admissions from 912 to 1971,
+with unchanged results. This fails the predeclared coverage and cost criteria.
+
+Per-query native metadata work is 187 to 1688 reads, 0.135 to 2.078 MB parsed,
+1.28 to 19.10 ms parsing and classification, and 7.59 to 69.70 ms SQL in these
+single samples. All complete native/cofeed matcher checks pass. Original stores
+and production code remain unchanged. No formula parsing, weight tuning, second
+treatment or default change follows. The positive held-out result is evidence
+of the local cause, not grounds to promote a globally worse heuristic. Final
+evidence is in `material-heldout/diagnosis/BASIS_PILOT_REPORT.md` and its nine
+case artifacts.
