@@ -111,10 +111,12 @@ def create_app(dataset: Dataset, ui_dist: str | Path | None = None) -> FastAPI:
     @app.get("/api/trace")
     def trace(start_id: str, target_id: str, max_depth: int = 12, max_processes: int = 300, max_paths: int = 8,
               max_extra_steps: int = 6, path_selection: str = 'diverse', required_resource_id: list[str] = Query(default=[]), excluded_resource_id: list[str] = Query(default=[]),
+              excluded_group_id: list[str] = Query(default=[]),
               min_tier: int | None = None, max_tier: int | None = None, unknown_tier_policy: str = 'exclude', view: str = 'full'):
         return dataset.trace_processes(start_id=start_id, target_id=target_id, max_depth=max_depth, max_processes=max_processes,
                                        max_paths=max_paths, max_extra_steps=max_extra_steps, path_selection=path_selection,
                                        required_resource_ids=required_resource_id, excluded_resource_ids=excluded_resource_id,
+                                       excluded_group_ids=excluded_group_id,
                                        min_tier=min_tier, max_tier=max_tier, unknown_tier_policy=unknown_tier_policy, view=view)
 
     @app.post('/api/recycling-plan')

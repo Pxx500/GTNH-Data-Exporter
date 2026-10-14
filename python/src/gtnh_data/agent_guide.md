@@ -182,6 +182,25 @@ complete crafting plans. `shortest` means fewest dependency steps, not minimum
 materials or EU. `required_resource_ids` and `excluded_resource_ids` constrain
 actual path resources. Presence tools and coproducts are not path steps.
 
+Use `excluded_group_ids` to avoid a captured group without listing its aliases.
+Discover exact group IDs through `find_resource_groups` with a small name query.
+Each group is resolved to its literal captured members once in Dataset. Results
+report `group_exclusions` with the group ID, name, kind and member count, without
+dumping every excluded identity. It applies to every path-selection policy.
+
+```json
+{"name":"trace_processes","arguments":{"start_id":"r4010","target_id":"r24189","path_selection":"material","view":"compact","max_paths":4,"excluded_group_ids":["ore:nuggetIron"]}}
+```
+
+In the named canonical snapshot, this group has five members, including an
+Iron Oreberry. The separate `unified:r12261` group has three. They are not
+interchangeable, and neither means all Nuggets across materials. This exclusion
+does not expand a wildcard or NBT-insensitive recipe predicate to other members.
+It constrains resources on the path, including endpoints if selected. Full
+recipe cofeeds, OR alternatives and outputs remain present even if some belong
+to an excluded group. Use planning scope for a whole-network exclusion instead.
+Unknown groups or malformed ID arrays are errors, not ignored filters.
+
 ### Analyze a selected byproduct
 
 This snapshot's `p46285` chemical bath consumes Water and Sodium Dust and

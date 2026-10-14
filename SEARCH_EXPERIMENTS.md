@@ -646,3 +646,42 @@ construction branch under the same returned-path limit. Future allocation
 research should distinguish branch relevance from queue efficiency, rather
 than retuning this potential after seeing the failed control. Evidence is in
 `exports/search-research-20261014/semantic-potential/`.
+
+## Captured group exclusions and compact GUI results
+
+Trace now accepts optional excluded_group_ids through Dataset and MCP, repeated
+excluded_group_id over HTTP, and repeatable --exclude-group through CLI.
+The existing membership table remains authoritative. Each group is validated
+and resolved once to literal members, then unioned with exact resource exclusions
+for all three search policies. Recipes and their cofeeds are preserved in full.
+Wildcard and NBT predicate expansion are separate from literal group membership.
+
+Canonical native evidence demonstrates the gap. Excluding the GT nugget alone
+still permits a MagicBees nugget to Iron Ingot through the Alloy Smelter.
+Excluding ore:nuggetIron blocks the five captured members. unified:r12261 is a
+distinct three-member group. Neither identifies all Nugget forms. Compact
+group_exclusions summaries provide names, kinds and counts without an ID dump.
+
+The GUI uses a removable captured-group picker with path-only help. Real browser
+QA selects the GT Crushed Iron Ore and Double Iron Plate identities, then the
+five-member group. The applied summary is visible and four paths still complete.
+A separate real HTTP check confirms that every returned path avoids group members.
+The temporary listener and browser tab are closed after verification.
+
+Browser QA also establishes a concrete payload issue: the GUI was relying on
+HTTP's full-view default. The native result expanded 1,724 resource variants.
+Explicit compact presentation returns 21 resources, with the same four paths,
+five represented jobs and ten complete selected recipes. It uses the existing
+presentation contract, preserving native choices and quantities. No additional
+mode or matching rule is introduced. The interaction assertion fails first
+without the view parameter, then passes.
+
+All 178 Python tests and 66 GUI tests pass. Typecheck and the isolated production
+build pass. Root reviews the complete backend/UI diff. The served main ui/dist
+hash stays unchanged. The new bundle is built only into the excluded QA directory
+because the main already-loaded backend lacks the new parameter. It is not
+claimed deployed on port 8000 or on existing MCP connections. Old API callers
+retain their current argument semantics. Optional result metadata preserves
+supported earlier trace responses in the UI, without a capability fallback.
+Evidence, raw requests, browser proof and the candidate bundle are in
+`exports/search-research-20261014/group-filter-ux/`.

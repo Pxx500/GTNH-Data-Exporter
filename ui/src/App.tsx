@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import type { Environment, Page, Process, Resource, Single, Source, Status, Trace } from './api'
+import type { Environment, Group, Page, Process, Resource, Single, Source, Status, Trace } from './api'
 import { query, useRequest } from './api'
 import { ActionHint, Badge, CoverageList, JsonData, ProcessDetail, RequestState, SourceDetail, ResourceRef } from './Details'
 import { TraceView } from './TraceView'
@@ -83,6 +83,22 @@ function IntermediateFilter({label, ids, onChange}: {label:string;ids:string[];o
   const disabledReason=!draft?'Select a search result before adding this material.':resolved!==draft?'Wait for the selected material to load.':undefined
   return <fieldset className="intermediate-filter"><legend>{label} materials</legend><ResourcePicker key={revision} label={`${label} intermediate`} selectedId={draft} onSelect={setDraft} onResolve={setResolved}/><ActionHint reason={disabledReason} ready="Ready to add this material."/><button type="button" disabled={!!disabledReason} onClick={()=>{if(!ids.includes(draft))onChange([...ids,draft]);setDraft('');setResolved('');setRevision(value=>value+1)}}>Add {label.toLowerCase()} material</button><ul className="filter-tags">{ids.map(id=><li key={id}><ResourceRef id={id}/><button type="button" aria-label={`Remove ${label.toLowerCase()} material ${id}`} onClick={()=>onChange(ids.filter(value=>value!==id))}>×</button></li>)}</ul></fieldset>
 }
+function ExcludedGroupFilter({ids,onChange}:{ids:string[];onChange:(ids:string[])=>void}) {
+  const [text,setText]=useState('')
+  const [search,setSearch]=useState<string|null>(null)
+  const groups=useRequest<Page<Group & {member_count:number}>>(search===null?null:query('resource-groups',{q:search,limit:20}))
+  const toggle=(id:string)=>onChange(ids.includes(id)?ids.filter(value=>value!==id):[...ids,id])
+  return <fieldset className="intermediate-filter"><legend>Excluded groups on paths</legend><p className="help">Exclude members of selected captured groups from paths. Other recipe inputs remain visible.</p>
+    <div className="input-action"><label>Search captured groups<input value={text} placeholder="e.g. nuggetIron" onChange={event=>setText(event.target.value)}/></label><button type="button" onClick={()=>setSearch(text.trim())}>Find groups</button></div><RequestState {...groups} retry={groups.reload}/>
+    {groups.data && <><p className="help">{groups.data.items.length} of {groups.data.total.toLocaleString()} matching groups shown.</p><ul className="scope-options">{groups.data.items.map(group=><li key={group.id}><label title={group.id}><input type="checkbox" checked={ids.includes(group.id)} onChange={()=>toggle(group.id)}/>{group.name} <span>{group.member_count.toLocaleString()} members · {group.kind}</span></label></li>)}</ul></>}
+    {ids.length>0 && <ul className="filter-tags">{ids.map(id=><SelectedTraceGroup key={id} id={id} remove={()=>toggle(id)}/>)}</ul>}
+  </fieldset>
+}
+function SelectedTraceGroup({id,remove}:{id:string;remove:()=>void}) {
+  const group=useRequest<Single<Group>>(query(`groups/${encodeURIComponent(id)}`))
+  return <li title={id}>{group.data ? <span>{group.data.item.name} · {group.data.item.members.length.toLocaleString()} members · {group.data.item.kind}</span>:id}<button type="button" onClick={remove} aria-label={`Remove group ${id}`}>Remove</button><RequestState {...group} retry={group.reload}/></li>
+}
+
 function TraceWorkspace({startId,targetId,setStartId,setTargetId,onSelect}: {startId:string;targetId:string;setStartId:(id:string)=>void;setTargetId:(id:string)=>void;onSelect:(id:string)=>void}) {
   const [resolvedStart,setResolvedStart]=useState('')
   const [resolvedTarget,setResolvedTarget]=useState('')
@@ -96,10 +112,11 @@ function TraceWorkspace({startId,targetId,setStartId,setTargetId,onSelect}: {sta
   const [unknownTierPolicy,setUnknownTierPolicy]=useState('exclude')
   const [required,setRequired]=useState<string[]>([])
   const [excluded,setExcluded]=useState<string[]>([])
+  const [excludedGroups,setExcludedGroups]=useState<string[]>([])
   const [url,setUrl]=useState<string|null>(null)
   const trace=useRequest<Trace>(url)
   const ready=!!startId && !!targetId && resolvedStart===startId && resolvedTarget===targetId
-  const currentUrl=query('trace',{start_id:startId,target_id:targetId,max_depth:depth,max_processes:maxProcesses,max_paths:maxPaths,max_extra_steps:extraSteps,path_selection:pathSelection,required_resource_id:required,excluded_resource_id:excluded,min_tier:minTier,max_tier:maxTier,unknown_tier_policy:unknownTierPolicy})
+  const currentUrl=query('trace',{start_id:startId,target_id:targetId,max_depth:depth,max_processes:maxProcesses,max_paths:maxPaths,max_extra_steps:extraSteps,path_selection:pathSelection,required_resource_id:required,excluded_resource_id:excluded,excluded_group_id:excludedGroups,min_tier:minTier,max_tier:maxTier,unknown_tier_policy:unknownTierPolicy,view:'compact'})
   const current=url===currentUrl
   const disabledReason=trace.loading && current?'Searching paths. Wait for this request to finish.':!startId && !targetId?'Select a supplied start and a target from the search results.':!startId?'Select a supplied start from the search results.':!targetId?'Select a target from the search results.':!ready?'Wait for both selected resources to load.':undefined
   return <section className="trace-workspace"><div className="panel-heading"><div><h2>Explore concrete production paths</h2><p>Find ways to turn one supplied resource into another. For example, select Iron Dust and Double Iron Plate, then compare recipe paths.</p></div></div><form onSubmit={event=>{event.preventDefault();if(!ready)return;if(current)trace.reload();else setUrl(currentUrl)}}>
@@ -107,6 +124,7 @@ function TraceWorkspace({startId,targetId,setStartId,setTargetId,onSelect}: {sta
     <div className="tier-controls"><label>Minimum recipe voltage tier<input type="number" min="0" max="15" value={minTier} placeholder="Any" onChange={event=>setMinTier(event.target.value)}/></label><label>Maximum recipe voltage tier<input type="number" min="0" max="15" value={maxTier} placeholder="Any" onChange={event=>setMaxTier(event.target.value)}/></label><label>Unknown recipe voltage<select value={unknownTierPolicy} onChange={event=>setUnknownTierPolicy(event.target.value)}><option value="exclude">Exclude when filtering tiers</option><option value="include">Include unresolved tiers</option></select></label></div>
     <p className="help">Main material flow prioritizes native material continuity and a representative path for each target ingredient branch using captured hints. It does not enumerate every recipe variant. Side inputs still need external supplies. Diverse routes spread results across ingredients leading to the target, including longer alternatives. Additional steps limit detours beyond the shortest qualifying path. Material filters apply to path intermediates, not tools, presence requirements or co-products. Tier bounds use recipe voltage, not full machine capability.</p></details>
     <p className="help">Optional material filters: require or exclude a concrete intermediate. Search and select it, then click Add to commit the filter.</p><div className="intermediate-filters"><IntermediateFilter label="Required" ids={required} onChange={setRequired}/><IntermediateFilter label="Excluded" ids={excluded} onChange={setExcluded}/></div>
+    <ExcludedGroupFilter ids={excludedGroups} onChange={setExcludedGroups}/>
     <ActionHint id="trace-action-hint" reason={disabledReason} ready="Ready to find paths between the selected resources."/><div className="trace-submit"><button aria-describedby="trace-action-hint" className="primary" disabled={!!disabledReason}>Trace dependencies</button></div>
   </form>
   {current && <RequestState {...trace} retry={trace.reload}/>}

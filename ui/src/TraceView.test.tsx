@@ -66,6 +66,26 @@ test('material path explanations identify their target ingredient branch and hon
   expect(within(paths).getByText(/Other recipe inputs still need external supplies/)).toBeVisible()
   expect(within(paths).getByText(/Native output order is a hint/)).toBeVisible()
   expect(within(paths).queryByText('Crafting tool category:')).not.toBeInTheDocument()
+  expect(screen.queryByText(/Excluded groups on paths:/)).not.toBeInTheDocument()
+})
+
+test('applied group exclusions retain their native kinds and counts without resetting graph inspection',async()=>{
+  const ore={group_id:'ore:nuggetIron',name:'nuggetIron',kind:'ore_dict',member_count:5}
+  const unified={group_id:'unified:nuggetIron',name:'nuggetIron',kind:'unified',member_count:3}
+  const {rerender}=render(<TraceView trace={{...trace,group_exclusions:[ore,unified]}} onSelect={vi.fn()}/>)
+  const note=screen.getByText(/Excluded groups on paths:/)
+  expect(note).toHaveTextContent('nuggetIron (ore_dict, 5 members), nuggetIron (unified, 3 members)')
+  expect(note).toHaveAttribute('title','Exclusions use literal captured members on paths. Other recipe inputs remain visible.')
+  fireEvent.change(screen.getByLabelText('Highlight path'),{target:{value:'0'}})
+  const tile=await screen.findByRole('article',{name:'Recipe Alloy Smelter'})
+  fireEvent.click(within(tile).getByRole('button',{name:'Process Alloy Smelter'}))
+  expect(within(screen.getByRole('complementary')).getByText('Required presence')).toBeInTheDocument()
+  rerender(<TraceView trace={{...trace,group_exclusions:[ore]}} onSelect={vi.fn()}/>)
+  expect(screen.getByText(/Excluded groups on paths:/)).toHaveTextContent('nuggetIron (ore_dict, 5 members)')
+  expect(screen.getByText(/Excluded groups on paths:/)).not.toHaveTextContent('unified')
+  expect(screen.getByLabelText('Highlight path')).toHaveValue('0')
+  expect(screen.getByRole('article',{name:'Recipe Alloy Smelter'})).toBe(tile)
+  expect(within(screen.getByRole('complementary')).getByText('Required presence')).toBeInTheDocument()
 })
 
 test('category hints name only the selected path input and preserve local inspection and graph state',async()=>{

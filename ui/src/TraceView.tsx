@@ -76,6 +76,7 @@ export function TraceView({trace,onSelect,onUseStart,onUseTarget,tierOptions}: {
       {route.status === 'same_resource' && <p className="help">Zero production steps are required to identify the same resource. This does not establish its availability or quantity.</p>}
       <div className="route-endpoints"><span>Supplied start</span><ResourceRef id={trace.start_id} resources={resourceById} onSelect={selectResource}/><span>Target</span><ResourceRef id={trace.target_id} resources={resourceById} onSelect={selectResource}/></div>
       <p className="route-search-summary">Search examined {trace.search.examined_processes.toLocaleString()} processes · Server search limit {trace.search.limit.toLocaleString()} · {trace.search.truncated ? 'Search truncated' : 'Search finished within its bound'}</p>
+      {!!trace.group_exclusions?.length && <p className="help" title="Exclusions use literal captured members on paths. Other recipe inputs remain visible.">Excluded groups on paths: {trace.group_exclusions.map(group=>`${group.name} (${group.kind}, ${group.member_count.toLocaleString()} members)`).join(', ')}.</p>}
     </section>
     {(trace.truncated || trace.limit_reasons.length > 0 || trace.search.truncated) && <div className="notice warning" role="status">
       <strong>Bounded trace has omitted work</strong><p>Returned paths are candidates within this search. Raise the relevant Advanced bound or narrow your endpoints and filters to explore more. Additional recipe requirements still need supplies.</p>

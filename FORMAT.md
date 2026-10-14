@@ -449,6 +449,22 @@ database model or matcher.
 cycles, truncated, coverage, route, paths, search, limit_reasons,
 duplicate_process_records, path_selection, branch_coverage}`
 
+`trace_processes` also accepts optional `excluded_group_ids`. Dataset validates
+the snapshot's groups, resolves each group's literal captured members once and
+unions them with exact excluded resource IDs for every path-selection policy.
+This does not expand native wildcard or NBT matching. It constrains path
+resources, including endpoints, while full recipe cofeeds and OR choices remain
+intact. Required groups and generic form classification are not inferred.
+Unknown groups and malformed arrays are errors.
+
+Results include `group_exclusions`, a sorted array of
+`{group_id, name, kind, member_count}`. It is empty when no group is excluded.
+The result does not dump the full expanded exclusion set. OreDictionary and
+unification group IDs retain their distinct meanings. HTTP uses repeated
+`excluded_group_id` query parameters. CLI uses repeatable `--exclude-group`.
+The GUI requests compact presentation explicitly, retaining full selected
+recipes with bounded matching-variant presentation.
+
 `path_selection` is `diverse` by default, or `shortest`. Diverse selection
 spreads emitted dependency paths across consumed input-slot branches at the
 target. Those branches represent different AND requirements, not complete

@@ -10,6 +10,68 @@ const status = {snapshot_id:'test-snapshot',manifest:{created_at:'2026-10-11',ca
 function response(value: unknown, code=200) { return new Response(JSON.stringify(value), {status:code,headers:{'Content-Type':'application/json'}}) }
 function page(items: unknown[]) {return {snapshot_id:'test-snapshot',items,total:items.length,limit:30,offset:0}}
 
+test('trace excludes selected captured groups by exact namespace while retaining resource filters and inspection',async()=>{
+  const target={...resource,id:'result-id',display_name:'Test output'}
+  const side={...resource,id:'side-input',display_name:'Side mold'}
+  const groups=[{id:'ore:nuggetIron',name:'nuggetIron',kind:'ore_dict',members:['a','b','c','d','e'],member_count:5},{id:'unified:nuggetIron',name:'nuggetIron',kind:'unified',members:['a','b','c'],member_count:3}]
+  const recipe={...process,inputs:[{role:'consume',choices:[{resource_id:resource.id,amount:1,match:{mode:'exact'}}]},{role:'presence',choices:[{resource_id:side.id,amount:1,match:{mode:'exact'}}]}],outputs:[{resource_id:target.id,amount:1,chance:{numerator:1,denominator:1}}]}
+  const traceCalls:URL[]=[]
+  vi.stubGlobal('fetch',vi.fn(async(input:string)=>{
+    const url=new URL(input,'http://localhost')
+    if(url.pathname==='/api/status')return response(status)
+    if(url.pathname==='/api/environments')return response(page([]))
+    if(url.pathname==='/api/resources')return response(page(url.searchParams.get('q')==='Test output'?[target]:url.searchParams.get('q')==='Side mold'?[side]:[resource]))
+    if(url.pathname.startsWith('/api/resources/'))return response({snapshot_id:'test-snapshot',item:[resource,target,side].find(item=>decodeURIComponent(url.pathname).endsWith(item.id))})
+    if(url.pathname==='/api/resource-groups')return response(page(groups))
+    if(url.pathname.startsWith('/api/groups/'))return response({snapshot_id:'test-snapshot',item:groups.find(group=>decodeURIComponent(url.pathname).endsWith(group.id))})
+    if(url.pathname==='/api/trace'){
+      traceCalls.push(url)
+      return response({branch_coverage:[],path_selection:'material',snapshot_id:'test-snapshot',start_id:resource.id,target_id:target.id,resources:[resource,target,side],processes:[recipe],edges:[],leaves:[],cycles:[],truncated:false,coverage:[],route:{status:'found',strategy:'shortest_known_dependency_path',resource_ids:[resource.id,target.id],process_ids:[recipe.id]},paths:[{resource_ids:[resource.id,target.id],process_ids:[recipe.id]}],search:{examined_processes:1,limit:1000,truncated:false},limit_reasons:[],group_exclusions:groups.filter(group=>url.searchParams.getAll('excluded_group_id').includes(group.id)).map(group=>({group_id:group.id,name:group.name,kind:group.kind,member_count:group.member_count}))})
+    }
+    throw new Error(`Unexpected route ${url.pathname}`)
+  }))
+  render(<App/>)
+  await screen.findByText('Pack: Synthetic contract fixture')
+  fireEvent.click(screen.getByRole('button',{name:'Trace'}))
+  fireEvent.focus(screen.getByLabelText('Supplied start resource'));fireEvent.change(screen.getByLabelText('Supplied start resource'),{target:{value:'Test mold'}})
+  fireEvent.click(await screen.findByRole('option',{name:/Test mold/}))
+  fireEvent.focus(screen.getByLabelText('Target resource'));fireEvent.change(screen.getByLabelText('Target resource'),{target:{value:'Test output'}})
+  fireEvent.click(await screen.findByRole('option',{name:/Test output/}))
+  fireEvent.focus(screen.getByLabelText('Excluded intermediate'));fireEvent.change(screen.getByLabelText('Excluded intermediate'),{target:{value:'Side mold'}})
+  fireEvent.click(await screen.findByRole('option',{name:/Side mold/}))
+  fireEvent.click(screen.getByRole('button',{name:'Add excluded material'}))
+  fireEvent.change(screen.getByLabelText('Search captured groups'),{target:{value:'nuggetIron'}})
+  fireEvent.click(screen.getByRole('button',{name:'Find groups'}))
+  const ore=await screen.findByRole('checkbox',{name:/nuggetIron.*5 members.*ore_dict/})
+  const unified=screen.getByRole('checkbox',{name:/nuggetIron.*3 members.*unified/})
+  fireEvent.click(ore)
+  expect(unified).not.toBeChecked()
+  fireEvent.click(unified)
+  fireEvent.click(screen.getByRole('button',{name:'Trace dependencies'}))
+  await screen.findByRole('article',{name:'Recipe Mold cast'})
+  expect(traceCalls[0].searchParams.getAll('excluded_group_id')).toEqual(groups.map(group=>group.id))
+  expect(traceCalls[0].searchParams.getAll('excluded_resource_id')).toEqual(['side-input'])
+  expect(traceCalls[0].searchParams.get('view')).toBe('compact')
+  fireEvent.click(screen.getByRole('button',{name:'Process Mold cast'}))
+  expect(within(screen.getByRole('complementary')).getByText('Required presence')).toBeInTheDocument()
+  fireEvent.change(screen.getByLabelText('Highlight path'),{target:{value:'0'}})
+  const tile=screen.getByRole('article',{name:'Recipe Mold cast'})
+  fireEvent.click(screen.getByRole('button',{name:'Library'}))
+  fireEvent.click(screen.getByRole('button',{name:'Trace'}))
+  expect(ore).toBeChecked()
+  expect(unified).toBeChecked()
+  expect(screen.getByLabelText('Highlight path')).toHaveValue('0')
+  expect(screen.getByRole('article',{name:'Recipe Mold cast'})).toBe(tile)
+  expect(within(screen.getByRole('complementary')).getByText('Required presence')).toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button',{name:'Remove group ore:nuggetIron'}))
+  expect(ore).not.toBeChecked()
+  expect(unified).toBeChecked()
+  fireEvent.click(screen.getByRole('button',{name:'Trace dependencies'}))
+  await waitFor(()=>expect(traceCalls).toHaveLength(2))
+  expect(traceCalls[1].searchParams.getAll('excluded_group_id')).toEqual(['unified:nuggetIron'])
+  expect(traceCalls[1].searchParams.getAll('excluded_resource_id')).toEqual(['side-input'])
+})
+
 test('analysis exposes distinct energy benchmark and target-from-basics modes with explicit profile semantics',async()=>{
   vi.stubGlobal('fetch',vi.fn(async(input:string)=>{
     const url=new URL(input,'http://localhost')

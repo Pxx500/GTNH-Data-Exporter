@@ -82,6 +82,7 @@ def parser():
             command.add_argument("--view", choices=("full", "compact"), default="full", help="Keep every expanded match or return path anchors and declared choices with omission counts")
             command.add_argument("--required-resource-id", action="append", dest="required_resource_ids", default=[])
             command.add_argument("--excluded-resource-id", action="append", dest="excluded_resource_ids", default=[])
+            command.add_argument("--exclude-group", action="append", dest="excluded_group_ids", default=[])
             command.add_argument("--min-tier", type=int)
             command.add_argument("--max-tier", type=int)
             command.add_argument("--unknown-tier-policy", choices=("exclude", "include"), default="exclude")

@@ -9,10 +9,79 @@ from .artifacts import choice, process, resource, slot, snapshot
 
 
 class DatasetTests(unittest.TestCase):
+    def test_trace_group_exclusions_block_alias_spines_and_keep_native_cofeeds(self):
+        groups = [
+            {'id': 'ore:nuggetIron', 'kind': 'ore_dict', 'name': 'nuggetIron',
+             'members': ['gt', 'bee', 'berry'], 'provenance': {}},
+            {'id': 'unified:gt', 'kind': 'unified', 'name': 'gt', 'members': ['gt', 'bee'], 'provenance': {}},
+        ]
+        recipes = [process('nuggets', [slot(choice('start'))], ['gt', 'bee', 'berry']),
+                   process('smelt', [slot(choice('gt', 'unified', group='unified:gt')),
+                                     slot(choice('mold'), role='presence')], ['target']),
+                   process('clean', [slot(choice('start'))], ['outside']),
+                   process('finish', [slot(choice('outside')), slot(choice('gt')),
+                                      slot(choice('mold'), role='presence')], ['target'])]
+        dataset = Dataset.import_snapshot(snapshot(self.root / 'group-exclusion', groups=groups, processes=recipes,
+            resources=[resource(id) for id in ('start', 'gt', 'bee', 'berry', 'outside', 'mold', 'target')]),
+            self.root / 'groups.sqlite')
+        for policy in ('shortest', 'diverse', 'material'):
+            with self.subTest(policy=policy):
+                baseline = dataset.trace_processes(start_id='start', target_id='target', path_selection=policy)
+                self.assertTrue(any(set(path['resource_ids']) & {'gt', 'bee'} for path in baseline['paths']))
+                full = dataset.trace_processes(start_id='start', target_id='target', path_selection=policy,
+                    excluded_group_ids=['ore:nuggetIron', 'ore:nuggetIron'])
+                self.assertEqual([path['resource_ids'] for path in full['paths']], [['start', 'outside', 'target']])
+                self.assertEqual(full['group_exclusions'], [{'group_id': 'ore:nuggetIron', 'name': 'nuggetIron',
+                                                            'kind': 'ore_dict', 'member_count': 3}])
+                self.assertEqual(next(p for p in full['processes'] if p['id'] == 'finish'), recipes[-1])
+                compact = dataset.trace_processes(start_id='start', target_id='target', path_selection=policy,
+                    excluded_group_ids=['ore:nuggetIron'], view='compact')
+                for field in ('paths', 'processes', 'group_exclusions'):
+                    self.assertEqual(compact[field], full[field])
+                union = dataset.trace_processes(start_id='start', target_id='target', path_selection=policy,
+                    excluded_group_ids=['ore:nuggetIron'], excluded_resource_ids=['outside'])
+                self.assertEqual(union['paths'], [])
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
+
+    def test_trace_group_exclusions_use_literal_typed_members_without_predicate_expansion(self):
+        byte_tag = {'type': 'compound', 'value': {'mode': {'type': 'byte', 'value': 1}}}
+        int_tag = {'type': 'compound', 'value': {'mode': {'type': 'int', 'value': 1}}}
+        resources = [resource('start'), resource('target'),
+                     dict(resource('byte', nbt=byte_tag), registry_name='test:tagged', metadata=7),
+                     dict(resource('int', nbt=int_tag), registry_name='test:tagged', metadata=7),
+                     dict(resource('wild'), registry_name='test:variant', metadata=32767),
+                     dict(resource('concrete'), registry_name='test:variant', metadata=2)]
+        group = {'id': 'ore:literal', 'kind': 'ore_dict', 'name': 'literal', 'members': ['byte', 'wild'], 'provenance': {}}
+        recipes = [process('variants', [slot(choice('start'))], ['byte', 'int', 'wild', 'concrete']),
+                   process('finish', [slot(choice('byte'), choice('wild', 'wildcard'))], ['target'])]
+        recipes[-1]['inputs'][0]['choices'][0]['match']['nbt_sensitive'] = False
+        dataset = Dataset.import_snapshot(snapshot(self.root / 'literal-group', resources=resources,
+            groups=[group], processes=recipes), self.root / 'literal.sqlite')
+        for policy in ('shortest', 'diverse', 'material'):
+            with self.subTest(policy=policy):
+                for selected in ('int', 'concrete'):
+                    result = dataset.trace_processes(start_id='start', target_id='target', path_selection=policy,
+                        excluded_group_ids=['ore:literal'], required_resource_ids=[selected])
+                    self.assertEqual([p['resource_ids'] for p in result['paths']], [['start', selected, 'target']])
+                    self.assertEqual(next(p for p in result['processes'] if p['id'] == 'finish'), recipes[-1])
+                    self.assertEqual(result['group_exclusions'][0]['member_count'], 2)
+                exact_union = dataset.trace_processes(start_id='start', target_id='target', path_selection=policy,
+                    excluded_group_ids=['ore:literal'], excluded_resource_ids=['int'])
+                self.assertEqual([p['resource_ids'] for p in exact_union['paths']], [['start', 'concrete', 'target']])
+
+    def test_trace_group_exclusions_validate_ids_and_keep_empty_calls_unchanged(self):
+        dataset = Dataset.import_snapshot(snapshot(self.root / 'validation', resources=[resource('a'), resource('b')],
+            processes=[process('make', [slot(choice('a'))], ['b'])]), self.root / 'validation.sqlite')
+        for value in ('ore:missing', {}, ('ore:missing',), [''], [None], [True]):
+            with self.subTest(value=value), self.assertRaisesRegex(DatasetError, 'excluded_group_ids'):
+                dataset.trace_processes(start_id='a', target_id='b', excluded_group_ids=value)
+        with self.assertRaisesRegex(DatasetError, 'Unknown groups ID'):
+            dataset.trace_processes(start_id='a', target_id='b', excluded_group_ids=['ore:missing'])
+        self.assertEqual(dataset.trace_processes(start_id='a', target_id='b')['group_exclusions'], [])
 
     def small_ore_sources(self):
         generation = {'id': 'generation', 'kind': 'small_ore', 'display_name': 'small ore generation',

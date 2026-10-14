@@ -270,6 +270,56 @@ class TransportTests(unittest.TestCase):
             response = client.get('/api/trace', params={'start_id': 'a', 'target_id': 'b', 'path_selection': 'unknown'})
             self.assertEqual(response.status_code, 400)
 
+    def test_http_and_cli_forward_repeated_trace_group_exclusions(self):
+        groups = [{'id': 'ore:starts', 'kind': 'ore_dict', 'name': 'starts', 'members': ['a'], 'provenance': {}},
+                  {'id': 'unified:middle', 'kind': 'unified', 'name': 'middle', 'members': ['middle'], 'provenance': {}}]
+        dataset = Dataset.import_snapshot(snapshot(self.root / 'group-transport',
+            resources=[resource(id) for id in ('a', 'b', 'middle', 'excluded')], groups=groups,
+            processes=[process('make', [slot(choice('a'))], ['b'])]), self.root / 'groups.sqlite')
+        expected_summaries = [{'group_id': 'ore:starts', 'name': 'starts', 'kind': 'ore_dict', 'member_count': 1},
+                              {'group_id': 'unified:middle', 'name': 'middle', 'kind': 'unified', 'member_count': 1}]
+        with TestClient(create_app(dataset)) as client:
+            response = client.get('/api/trace', params=[('start_id', 'a'), ('target_id', 'b'),
+                ('excluded_group_id', 'unified:middle'), ('excluded_group_id', 'ore:starts'), ('excluded_resource_id', 'excluded')])
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(response.json()['paths'], [])
+            self.assertEqual(response.json()['group_exclusions'], expected_summaries)
+            self.assertEqual(client.get('/api/trace', params={'start_id': 'a', 'target_id': 'b',
+                'excluded_group_id': 'missing'}).status_code, 404)
+            self.assertEqual(client.get('/api/trace', params={'start_id': 'a', 'target_id': 'b',
+                'excluded_group_id': ''}).status_code, 400)
+        output = StringIO()
+        with redirect_stdout(output):
+            result = main(['trace', '--database', str(self.root / 'groups.sqlite'), '--start-id', 'a', '--target-id', 'b',
+                           '--exclude-group', 'unified:middle', '--exclude-group', 'ore:starts', '--excluded-resource-id', 'excluded'])
+        self.assertEqual(result, 0)
+        self.assertEqual(json.loads(output.getvalue())['paths'], [])
+        self.assertEqual(json.loads(output.getvalue())['group_exclusions'], expected_summaries)
+
+    def test_official_mcp_trace_accepts_literal_groups_and_reports_unknown_ids(self):
+        groups = [{'id': 'ore:middle', 'kind': 'ore_dict', 'name': 'middle', 'members': ['middle'], 'provenance': {}}]
+        database = self.root / 'mcp-groups.sqlite'
+        dataset = Dataset.import_snapshot(snapshot(self.root / 'mcp-groups', resources=[resource(id) for id in ('a', 'b', 'middle')],
+            groups=groups, processes=[process('first', [slot(choice('a'))], ['middle']),
+                                     process('last', [slot(choice('middle'))], ['b'])]), database)
+        async def exercise():
+            parameters = StdioServerParameters(command=sys.executable,
+                args=['-m', 'gtnh_data', 'mcp', '--database', str(database)], env=dict(os.environ))
+            async with stdio_client(parameters) as (read_stream, write_stream):
+                async with ClientSession(read_stream, write_stream, read_timeout_seconds=15) as session:
+                    await session.initialize()
+                    tools = {tool.name: tool for tool in (await session.list_tools()).tools}
+                    self.assertIn('excluded_group_ids', tools['trace_processes'].input_schema['properties'])
+                    arguments = {'start_id': 'a', 'target_id': 'b', 'excluded_group_ids': ['ore:middle']}
+                    answer = await session.call_tool('trace_processes', arguments)
+                    self.assertFalse(answer.is_error, answer.content)
+                    self.assertEqual(network_semantics(answer.structured_content),
+                                     network_semantics(dataset.trace_processes(**arguments, view='compact')))
+                    for groups in (['missing'], [''], 'ore:middle'):
+                        invalid = await session.call_tool('trace_processes', dict(arguments, excluded_group_ids=groups))
+                        self.assertTrue(invalid.is_error, invalid.content)
+        asyncio.run(exercise())
+
     def test_http_and_cli_share_explicit_path_selection_and_defaults(self):
         for selection in ('diverse', 'shortest', 'material'):
             with self.subTest(selection=selection):

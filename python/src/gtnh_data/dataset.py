@@ -1805,7 +1805,7 @@ class Dataset:
         return route, paths, search, sorted(reasons), duplicates, branches
 
     def trace_processes(self, *, start_id, target_id, max_depth=12, max_processes=300, max_paths=8,
-                        required_resource_ids=None, excluded_resource_ids=None, max_extra_steps=6,
+                        required_resource_ids=None, excluded_resource_ids=None, excluded_group_ids=None, max_extra_steps=6,
                         min_tier=None, max_tier=None, unknown_tier_policy='exclude', path_selection='diverse', view='full'):
         tier_filter = self._tier_filter(min_tier, max_tier, unknown_tier_policy)
         if view not in ('full', 'compact'):
@@ -1820,15 +1820,24 @@ class Dataset:
             raise DatasetError("max_paths must be between 1 and 100")
         if type(max_extra_steps) is not int or not 0 <= max_extra_steps <= 64:
             raise DatasetError("max_extra_steps must be between 0 and 64")
-        for name, ids in (("required_resource_ids", required_resource_ids), ("excluded_resource_ids", excluded_resource_ids)):
+        for name, ids, kind in (("required_resource_ids", required_resource_ids, "resource"),
+                                ("excluded_resource_ids", excluded_resource_ids, "resource"),
+                                ("excluded_group_ids", excluded_group_ids, "group")):
             if ids is not None and (not isinstance(ids, list) or any(not isinstance(id, str) or not id for id in ids)):
-                raise DatasetError(f"{name} must be an array of resource IDs")
+                raise DatasetError(f"{name} must be an array of {kind} IDs")
         if any(not isinstance(id, str) or not id for id in (start_id, target_id)):
             raise DatasetError("start_id and target_id must be resource IDs")
         with self._connect() as connection:
             required, excluded = set(required_resource_ids or []), set(excluded_resource_ids or [])
             for id in sorted(required | excluded):
                 self._record(connection, "resources", id)
+            group_exclusions = []
+            for group_id in sorted(set(excluded_group_ids or [])):
+                group = self._record(connection, "groups", group_id)
+                members = {row[0] for row in connection.execute("SELECT resource_id FROM members WHERE group_id=?", (group_id,))}
+                excluded.update(members)
+                group_exclusions.append({'group_id': group_id, 'name': group['name'], 'kind': group['kind'],
+                                         'member_count': len(members)})
             resources = {id: self._record(connection, "resources", id) for id in (start_id, target_id)}
             processes = {}
             edges = {}
@@ -1963,7 +1972,8 @@ class Dataset:
                       "edges": edges_list, "leaves": leaves, "cycles": cycles, "truncated": bool(limit_reasons), "coverage": coverage,
                       "route": route, "paths": paths, "search": search, "limit_reasons": sorted(limit_reasons), "duplicate_process_records": duplicates,
                       'tier_filter': tier_filter, 'recipe_tiers': [self._recipe_tier(processes[id]) for id in sorted(processes)],
-                      'path_selection': path_selection, 'branch_coverage': branches, 'path_details': details}
+                      'path_selection': path_selection, 'branch_coverage': branches, 'path_details': details,
+                      'group_exclusions': group_exclusions}
             return self._compact_trace(result, connection) if view == 'compact' else result
 
     def _compact_trace(self, result, connection):

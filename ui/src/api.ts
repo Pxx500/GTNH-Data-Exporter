@@ -47,6 +47,7 @@ export interface StatisticsTier {status:string;tier:number|null;name:string|null
 export interface StatisticsReport {snapshot_id:string;overview:{resources:{count:number;by_kind:Record<string,number>;by_namespace:Record<string,number>};groups:{count:number;by_kind:Record<string,number>;member_counts:StatisticsSummary};processes:{count:number;by_family:Record<string,number>;by_tier:{recipe_tier:StatisticsTier;count:number}[];by_executability:Record<string,number>;gates:Record<string,number>;energy_status:Record<string,number>}};distributions:(StatisticsSummary&{family:string;recipe_tier:StatisticsTier;metric:string;comparison:string})[];findings:{kind:string;comparison_scope:string;process_ids:string[];normalized_signature:unknown;batch_scales:unknown;normalized_costs:unknown;cost_ratio:Rational;count:number}[];exclusions:Record<string,number>;search:{complete:boolean;truncated:boolean;limit_reasons:string[];[key:string]:unknown};processes:Record<string,Process>}
 export interface Trace {
   path_selection: 'diverse' | 'shortest' | 'material'
+  group_exclusions?: {group_id:string;name:string;kind:string;member_count:number}[]
   path_details?: {
     path_index:number;selection_reason:string;material_continuity:'supported'|'partial'|'discontinuous'
     byproduct_steps:{process_id:string;resource_id:string;basis:'secondary_output_position_hint'}[]

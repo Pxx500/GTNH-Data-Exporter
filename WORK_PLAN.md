@@ -447,10 +447,14 @@ etap. Bieżące pomiary i decyzje są w SEARCH_EXPERIMENTS.md.
   Wszystkie 15 plików źródłowych i 22 klasy są identyczne. Świeży dump ma
   4695 zgodnych wektorów wobec obu wcześniejszych wspieranych wersji oraz
   zachowuje 6541 odwołań źródłowych. Przechodzi 173 testów Pythona i 32 Javy.
-- [ ] Dodać wykluczanie przechwyconych grup wariantów w Trace, GUI i MCP.
+- [x] Dodać wykluczanie przechwyconych grup wariantów w Trace, GUI i MCP.
   Rozwiązać dosłownych członków raz w Dataset, zachować pełne receptury i
   ograniczenia ścieżki. Nie utożsamiać grup ore i unified ani grupy nuggetIron
   z formą wszystkich nuggetów. Nie publikować nowego GUI do starego backendu.
+  Testy obejmują trzy polityki, aliasy i literalne NBT oraz transporty. W
+  przeglądarce grupa nuggetIron usuwa nuggety ze ścieżek, zachowując cztery
+  trasy. Kompaktowy widok zmniejsza zasób danych z 1724 do 21 surowców,
+  zachowując dziesięć pełnych receptur. Osobna instancja została zamknięta.
 - [x] Sprawdzić wybieranie wyjść regionu na podstawie rzeczywistych gałęzi
   celu i przygotowanych odległości. Policzyć przygotowanie, konkretne kroki,
   walidację i pracę zapytania. Odrzucić rozwiązanie, jeśli wyjścia pozostaną
