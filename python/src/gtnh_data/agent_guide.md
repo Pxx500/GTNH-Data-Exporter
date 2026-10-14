@@ -45,6 +45,15 @@ transitions remain valid alternatives. The GUI defaults to this policy. Agent,
 CLI and HTTP calls retain `diverse` as the default, so request `material`
 explicitly when that is the intended question.
 
+Material mode gives lower priority to captured recovery recipes that dismantle
+an explicitly composed component, or turn a crafted form back into dust of the
+same primary material. This is a soft preference. Required recovery paths and
+byproduct paths remain eligible. Unknown material roles receive no extra
+recovery weight. It does not certify source-atom transfer, chemical purity or
+lossless recycling. Inspect `search.recovery_preference` for the weight and
+candidate fact lookups. This metadata is read per query, without a new index
+version or a game dump. The extra lookups can increase query time.
+
 `path_selection="diverse"` spreads routes across target ingredient branches.
 `path_selection="shortest"` prefers fewer steps. Neither means lower EU or
 better ore utilization. Choose the policy explicitly when comparing results.

@@ -96,7 +96,7 @@ root's consolidated code inspection and all 163 Python tests. A public
 2,000-variant, twelve-slot regression
 fails before the fix and passes afterward with both target branches and full
 AND recipes retained. No API, matching, index version or material hint changes
-are needed. The separate typed-operation experiment remains in progress.
+are needed.
 
 HTTP and the actual connected MCP session both return eight Volcanus paths,
 10/15 represented branch jobs and 1,113 admissions, with `path_limit` remaining
@@ -104,3 +104,80 @@ explicit. Fresh LV casing, hull and double-plate HTTP requests still find their
 paths and represent 9/9, 9/9 and 2/2 jobs without search limits. The current GUI
 server is running the cursor implementation. These checks do not establish
 complete planning or a finished semantic map.
+
+## Semantic direction and recycling
+
+The typed-operation experiment is complete. A soft recovery weight of two
+replaces the Volcanus construction-to-salvage detour through an Advanced Forge
+Hammer IV with a material-processing spine through Steel, Tungstensteel,
+an IV Machine Hull and a Computer Cube. The hammer assembly already needs
+an IV hull and other cofeeds, so the old spine is legal but a poor explanation
+of how the source contributes to the target.
+
+The rule uses captured recipe families and native ItemData roles. It recognizes
+explicit composite items recovered to ordinary material forms, and crafted
+forms recovered to dust of the same primary material. It adds a preference,
+not an exclusion. Unknown roles receive no additional weight. Necessary
+recovery and chemical loops remain legal. Quantity conservation and atom
+provenance are not inferred from a primary material name.
+
+Unrestricted Volcanus still returns eight paths and 10/15 jobs. The exact job
+set changes, adding `p204431:1` and losing `p25071:5`. Casing, hull and double
+plate preserve their unrestricted path sets. LV Volcanus keeps three paths
+and all five jobs. LV hull still includes a Hermetic Casing recovery path.
+Strength six produces no measured benefit over two.
+
+A candidate-only cache reproduces all native result fields of the wide
+descriptor treatment except search telemetry in eight unrestricted/LV cases.
+It uses indexed exact-record JSON extraction and roughly 133–911 KiB of
+shallow cache storage. It introduces no persistent store or sidecar rebuild.
+Unrestricted Volcanus takes 0.518 seconds versus 0.433 for the cursor baseline,
+and LV Volcanus takes 1.517 versus 1.045 seconds in single local samples.
+This is an explanation-quality tradeoff, not a speedup. The preference is now
+implemented in the existing material-search owner. The main public regression
+fails before the change and passes afterward. Additional public cases preserve
+required/only-route recovery, plate-to-dust conversion, unknown composition,
+complete AND/OR/presence cofeeds and the qualifying hop reference. All 167
+Python tests pass. Eight production queries match every one of the 20 native
+result fields outside search against the frozen compact treatment, with equal
+work, admissions, examined states/processes and hop reference. Native matching
+and recipe equality were checked for 35 paths and 173 steps.
+
+The GUI server was restarted with verified ownership at 127.0.0.1:8000.
+HTTP Volcanus matches all 20 native result fields of the treatment and reports
+1,357 admissions. A Water-to-Hydrogen HTTP check still ranks direct electrolysis
+first. It returns eight paths and swaps one alternative under the new ordering,
+with 713 admissions versus 866 before the change. All eight paths and 15 steps
+pass canonical recipe and native consumed-choice checks. This does not verify
+a closed regenerative network. Energy audits and chemical-loop tools are
+separate implementations, covered by the unchanged contracts in the full suite.
+
+The existing connected MCP process still serves the previously loaded cursor
+code, without `search.recovery_preference`. Its snapshot remains current, but
+that session needs a client reconnect to adopt the new ranking. Fresh transport
+tests pass. Neither those tests nor the successful HTTP check establishes that
+the existing MCP connection has refreshed. No Codex-managed client was killed.
+The official MCP documentation describes a client-side Restart action after
+configuring a desktop server. It does not establish an agent-callable refresh
+operation for this session. The available task tools expose no such operation,
+so no unsupported control or automatic reconnection is claimed.
+[Official MCP documentation](https://learn.chatgpt.com/docs/extend/mcp?surface=cli)
+
+The larger semantic-map hypothesis remains separate. Grouping a material's
+forms can hide familiar recycling circuits at the overview level, but an
+ingot and a plate must stay distinct recipe ports. A quotient graph may guide
+search only if it preserves concrete witnesses and charges refinement work.
+Its relaxed distance can become too weak when many form edges disappear.
+The current diagnostic measures that loss alongside group sizes and remaining
+connectivity before proposing a runtime change. The native material-and-form
+alias projection is not promoted. It is separate from the coarser region idea
+with multiple exact form ports and lazy internal witnesses.
+
+Further useful candidates are operation-aware route diversity and construction
+obligations. Distinct recipe IDs often describe the same material-processing
+story, while a coproduct can lead into a different story. A diversity signature
+should distinguish those stories without replacing exact resource IDs or
+dropping ingredient branches. An assembly input already produced elsewhere
+in the selected spine is still an AND obligation, not proof of a complete
+build plan. These are hypotheses for measured experiments, not implemented
+guarantees.

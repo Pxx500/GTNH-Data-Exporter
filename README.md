@@ -200,6 +200,15 @@ other target ingredients are considered. Limits remain unchanged. Every child
 admission and resume is counted, and `search.partial_expansion` reports deferred
 candidates separately from queued path states.
 
+Main material flow also gives a lower priority to known dismantling and
+crafted-form-to-dust recovery. This favors processing materials into components
+over building a component just to recover its materials. It remains a soft
+preference, so required recycling is still searchable. The rule uses captured
+recipe families and native material roles. It leaves unknown roles unpenalized
+and does not establish chemical provenance or a complete build plan. Candidate
+facts are cached within the query and reported in `search.recovery_preference`.
+These lookups can add latency without requiring another dump or index rebuild.
+
 MCP traces default to `view="compact"`, retaining complete selected recipes,
 declared choices and path resources with explicit omission counts for expanded
 matching candidates. Request `view="full"` for the expanded candidate graph.

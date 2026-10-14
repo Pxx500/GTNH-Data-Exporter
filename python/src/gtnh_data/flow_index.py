@@ -18,6 +18,15 @@ from heapq import heappop, heappush
 
 ANALYSIS_VERSION = 3
 
+_RECOVERY_FAMILIES = frozenset(('gregtech:gt.recipe.macerator', 'gregtech:gt.recipe.arcfurnace',
+                                'gregtech:gt.recipe.alloysmelter'))
+_DUST_FORMS = frozenset(('dust', 'dustSmall', 'dustTiny'))
+_SIMPLE_FORMS = frozenset(('dust', 'dustSmall', 'dustTiny', 'ingot', 'ingotHot', 'nugget',
+                         'plate', 'plateDouble', 'plateDense', 'foil', 'stick', 'stickLong',
+                         'gearGt', 'gearGtSmall', 'ring', 'bolt', 'screw', 'rotor', 'wireFine', 'frameGt', 'block'))
+_CRAFTED_FORMS = _SIMPLE_FORMS - _DUST_FORMS - {'ingot', 'ingotHot', 'nugget'}
+_RECOVERY_WEIGHT = 2
+
 
 def index_path(dataset):
     return dataset.path.with_suffix('.flow.sqlite')
@@ -256,6 +265,12 @@ def find_paths(dataset, canonical, start_id, target_id, max_depth, max_processes
                'deferred_candidates': 0, 'peak_deferred_candidates': 0,
                'retained_candidates': 0, 'peak_retained_candidates': 0}
     search['partial_expansion'] = partial
+    recovery = {'policy': 'native_recycling_association_hint', 'weight': _RECOVERY_WEIGHT,
+                'recipe_family_lookups': 0, 'recipe_family_cache_hits': 0,
+                'resource_fact_lookups': 0, 'resource_fact_cache_hits': 0,
+                'penalty_evaluations': 0, 'penalized_evaluations': 0}
+    search['recovery_preference'] = recovery
+    families, resource_facts = {}, {}
     paths, reasons, branches = [], set(), []
     if required & excluded or start_id in excluded or target_id in excluded:
         return route, paths, search, [], [], branches
@@ -314,10 +329,47 @@ def find_paths(dataset, canonical, start_id, target_id, max_depth, max_processes
             reverse[key] = entries
             return entries
 
-        def penalty(source, dest, position):
+        def recipe_family(pid):
+            if pid in families:
+                recovery['recipe_family_cache_hits'] += 1
+                return families[pid]
+            recovery['recipe_family_lookups'] += 1
+            families[pid] = canonical.execute("SELECT json_extract(payload,'$.family') FROM records WHERE collection='processes' AND id=?", (pid,)).fetchone()[0]
+            return families[pid]
+
+        def resource_role(rid):
+            if rid in resource_facts:
+                recovery['resource_fact_cache_hits'] += 1
+                return resource_facts[rid]
+            recovery['resource_fact_lookups'] += 1
+            resource_facts[rid] = tuple(canonical.execute('''SELECT json_extract(payload,'$.kind'),
+                json_extract(payload,'$.material_facts.association.primary.material.name'),
+                json_extract(payload,'$.material_facts.association.prefix'),
+                json_extract(payload,'$.material_facts.association.has_explicit_composition')
+                FROM records WHERE collection='resources' AND id=?''', (rid,)).fetchone())
+            return resource_facts[rid]
+
+        def recovery_penalty(pid, source, dest):
+            recovery['penalty_evaluations'] += 1
+            if recipe_family(pid) not in _RECOVERY_FAMILIES:
+                return 0
+            left_kind, left_material, left_form, explicit = resource_role(source)
+            right_kind, right_material, right_form, _ = resource_role(dest)
+            if left_kind != 'item' or right_kind != 'item' or right_material is None:
+                return 0
+            # Recycling composition describes the item, not the selected input's atom provenance.
+            composite = explicit == 1 and left_form is None and right_form in _SIMPLE_FORMS
+            crafted = (left_material is not None and left_material == right_material
+                       and left_form in _CRAFTED_FORMS and right_form in _DUST_FORMS)
+            if composite or crafted:
+                recovery['penalized_evaluations'] += 1
+                return _RECOVERY_WEIGHT
+            return 0
+
+        def penalty(source, dest, position, pid):
             left, right = materials[source], materials[dest]
             discontinuity = 0 if left & right else 4 if left and right else 1
-            return discontinuity + (2 if position else 0)
+            return discontinuity + (2 if position else 0) + recovery_penalty(pid, source, dest)
 
         jobs = {}
         target_entries = predecessors(target_id)
@@ -328,7 +380,7 @@ def find_paths(dataset, canonical, start_id, target_id, max_depth, max_processes
             if distances[nodes[input_id]] + 1 > max_depth:
                 search['distance_pruned_states'] += 1
                 continue
-            score = penalty(input_id, target_id, position)
+            score = penalty(input_id, target_id, position, pid)
             heappush(job['heap'], (score, 1 + distances[nodes[input_id]], (target_id, input_id), (pid,)))
             search['queued_states'] += 1
             search['peak_queue'] = max(search['peak_queue'], len(job['heap']))
@@ -409,7 +461,7 @@ def find_paths(dataset, canonical, start_id, target_id, max_depth, max_processes
                     if job.get('objective') == 'hops':
                         next_score = depth + 1 + distances[nodes[input_id]]
                     else:
-                        next_score = score + penalty(input_id, rid, position)
+                        next_score = score + penalty(input_id, rid, position, pid)
                         # Material overlap guides ties before a branch spends its budget.
                         next_score += 0 if materials[input_id] & source_materials else 1
                     choices.append((next_score, depth + 1 + distances[nodes[input_id]], pid, input_id))
@@ -490,7 +542,7 @@ def find_paths(dataset, canonical, start_id, target_id, max_depth, max_processes
             score = 0
             for rid, dest, pid in zip(path['resource_ids'], path['resource_ids'][1:], path['process_ids']):
                 position = connection.execute('SELECT MIN(position) FROM outputs WHERE process_id=? AND resource_id=?', (pid, dest)).fetchone()[0]
-                score += penalty(rid, dest, position)
+                score += penalty(rid, dest, position, pid)
             return score, len(path['process_ids']), tuple(path['process_ids'])
         paths.sort(key=path_score)
         if len(paths) >= max_paths:

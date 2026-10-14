@@ -17,7 +17,88 @@ def material(id, name, components=()):
     return row
 
 
+def associated_material(id, name, prefix, components=(), *, explicit=False):
+    row = material(id, name, components)
+    row['material_facts'].update(status='associated', source_api='GTOreDictUnificator.getItemData')
+    row['material_facts']['association'].update(prefix=prefix, has_explicit_composition=explicit)
+    return row
+
+
+def recovery_fixture(root, *, explicit=True):
+    rows = [associated_material('start', 'Iron', 'dust'),
+            associated_material('anvil', 'Iron', None),
+            associated_material('machine', 'Alloy', None, ['Iron'], explicit=explicit),
+            associated_material('steel-ingot', 'Steel', 'ingot', ['Iron']),
+            associated_material('steel-dust', 'Steel', 'dust', ['Iron']),
+            associated_material('alloy-dust', 'Alloy', 'dust', ['Iron']),
+            associated_material('alloy-ingot', 'Alloy', 'ingot', ['Iron']),
+            associated_material('target', 'Alloy', None, ['Iron']),
+            *[resource(id) for id in ('alloy-feed', 'alternate-feed', 'carbon', 'tungsten', 'tool')]]
+    recipes = [process('anvil-maker', [slot(choice('start'))], ['anvil']),
+               process('machine-maker', [slot(choice('anvil')),
+                   slot(choice('alloy-feed', amount=8), choice('alternate-feed', amount=8)),
+                   slot(choice('tool'), role='presence')], ['machine'], family='gregtech:gt.recipe.assembler'),
+               process('machine-recovery', [slot(choice('machine'))], ['alloy-ingot'], family='gregtech:gt.recipe.arcfurnace'),
+               process('steel-maker', [slot(choice('start')), slot(choice('carbon'))], ['steel-ingot']),
+               process('steel-grinding', [slot(choice('steel-ingot'))], ['steel-dust'], family='gregtech:gt.recipe.macerator'),
+               process('alloy-mixing', [slot(choice('steel-dust')), slot(choice('tungsten'))], ['alloy-dust']),
+               process('alloy-forming', [slot(choice('alloy-dust'))], ['alloy-ingot']),
+               process('finish', [slot(choice('alloy-ingot'))], ['target'])]
+    dataset = Dataset.import_snapshot(snapshot(root / 'capture', resources=rows, processes=recipes), root / 'index.sqlite')
+    return dataset, {row['id']: row for row in recipes}
+
+
 class FlowIndexTests(unittest.TestCase):
+    def test_material_route_prefers_processing_over_composite_recovery(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            dataset, recipes = recovery_fixture(Path(temporary))
+            shortest = dataset.trace_processes(start_id='start', target_id='target', path_selection='shortest', max_paths=1)
+            self.assertEqual(shortest['paths'][0]['resource_ids'], ['start', 'anvil', 'machine', 'alloy-ingot', 'target'])
+            result = dataset.trace_processes(start_id='start', target_id='target', path_selection='material', max_paths=1)
+            self.assertEqual(result['paths'][0]['resource_ids'],
+                             ['start', 'steel-ingot', 'steel-dust', 'alloy-dust', 'alloy-ingot', 'target'])
+            records = {row['id']: row for row in result['processes']}
+            self.assertEqual(records['steel-maker'], recipes['steel-maker'])
+            self.assertEqual(records['alloy-mixing'], recipes['alloy-mixing'])
+            self.assertTrue({'carbon', 'tungsten'} <= {row['resource_id'] for row in result['leaves']})
+            self.assertEqual(result['search']['hop_reference']['hops'], 4)
+
+    def test_material_recovery_remains_available_when_required_or_only_route(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            dataset, recipes = recovery_fixture(Path(temporary))
+            only_route = dataset.trace_processes(start_id='machine', target_id='alloy-ingot',
+                path_selection='material', max_paths=1, max_extra_steps=0)
+            self.assertEqual(only_route['paths'][0]['resource_ids'], ['machine', 'alloy-ingot'])
+            for required in ([], ['machine']):
+                with self.subTest(required=required):
+                    result = dataset.trace_processes(start_id='start', target_id='target',
+                        path_selection='material', max_paths=1, max_extra_steps=0, required_resource_ids=required)
+                    self.assertEqual(result['paths'][0]['resource_ids'],
+                                     ['start', 'anvil', 'machine', 'alloy-ingot', 'target'])
+                    records = {row['id']: row for row in result['processes']}
+                    self.assertEqual(records['machine-maker'], recipes['machine-maker'])
+                    self.assertEqual(records['machine-recovery'], recipes['machine-recovery'])
+                    self.assertTrue({'alloy-feed', 'alternate-feed', 'tool'} <=
+                                    {row['resource_id'] for row in result['leaves']})
+                    self.assertEqual(result['search']['hop_reference']['hops'], 4)
+
+    def test_material_plate_to_dust_recovery_remains_legal(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            recipe = process('grind', [slot(choice('plate'))], ['dust'], family='gregtech:gt.recipe.macerator')
+            dataset = Dataset.import_snapshot(snapshot(root / 'capture', resources=[
+                associated_material('plate', 'Steel', 'plate'), associated_material('dust', 'Steel', 'dust')],
+                processes=[recipe]), root / 'index.sqlite')
+            result = dataset.trace_processes(start_id='plate', target_id='dust', path_selection='material', max_extra_steps=0)
+            self.assertEqual(result['paths'][0]['resource_ids'], ['plate', 'dust'])
+            self.assertEqual(result['processes'], [recipe])
+
+    def test_material_unknown_recycling_composition_keeps_existing_preference(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            dataset, _ = recovery_fixture(Path(temporary), explicit=None)
+            result = dataset.trace_processes(start_id='start', target_id='target', path_selection='material', max_paths=1)
+            self.assertEqual(result['paths'][0]['resource_ids'], ['start', 'anvil', 'machine', 'alloy-ingot', 'target'])
+
     def test_large_ingredient_group_keeps_both_target_branch_spines(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
