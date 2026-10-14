@@ -14,6 +14,7 @@ from pathlib import Path
 from array import array
 from collections import deque
 from contextlib import closing
+from functools import lru_cache
 from heapq import heappop, heappush
 
 ANALYSIS_VERSION = 3
@@ -283,8 +284,12 @@ def find_paths(dataset, canonical, start_id, target_id, max_depth, max_processes
         before = time.perf_counter()
         distances, nodes, distance_work, reused = _source_distances(dataset, connection, start_id, tier_filter, excluded)
         search.update(distance_work=distance_work, distance_seconds=time.perf_counter() - before, distance_cache_hit=reused)
-        materials = {rid: set(json.loads(tokens)) for rid, tokens in connection.execute('SELECT id,materials FROM resources')}
-        source_materials = materials[start_id]
+        @lru_cache(maxsize=None)
+        def material_for(rid):
+            tokens = connection.execute('SELECT materials FROM resources WHERE id=?', (rid,)).fetchone()[0]
+            return frozenset(json.loads(tokens))
+
+        source_materials = material_for(start_id)
         examined, reverse, checked_tiers = set(), {}, set()
         connection.execute('CREATE TEMP TABLE distance(resource_id TEXT PRIMARY KEY,depth INTEGER)')
         connection.executemany('INSERT INTO distance VALUES(?,?)',
@@ -367,7 +372,7 @@ def find_paths(dataset, canonical, start_id, target_id, max_depth, max_processes
             return 0
 
         def penalty(source, dest, position, pid):
-            left, right = materials[source], materials[dest]
+            left, right = material_for(source), material_for(dest)
             discontinuity = 0 if left & right else 4 if left and right else 1
             return discontinuity + (2 if position else 0) + recovery_penalty(pid, source, dest)
 
@@ -463,7 +468,7 @@ def find_paths(dataset, canonical, start_id, target_id, max_depth, max_processes
                     else:
                         next_score = score + penalty(input_id, rid, position, pid)
                         # Material overlap guides ties before a branch spends its budget.
-                        next_score += 0 if materials[input_id] & source_materials else 1
+                        next_score += 0 if material_for(input_id) & source_materials else 1
                     choices.append((next_score, depth + 1 + distances[nodes[input_id]], pid, input_id))
                 if choices:
                     # Repeated AND slots retain one recipe witness and the same spine continuation.
@@ -514,7 +519,7 @@ def find_paths(dataset, canonical, start_id, target_id, max_depth, max_processes
         clear_job(reference)
 
         ordered = sorted(jobs.values(), key=lambda job: (
-            not any(materials[rid] & source_materials for rid in job['candidates']), job['pid'], job['slot']))
+            not any(material_for(rid) & source_materials for rid in job['candidates']), job['pid'], job['slot']))
         signatures, admitted = {}, set()
         while any(job['heap'] for job in ordered) and len(paths) < max_paths:
             for job in ordered:

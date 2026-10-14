@@ -464,3 +464,37 @@ Its 0.375-second run is not a runtime search speedup claim. The next question
 is whether target-conditioned profiles improve concrete native paths at the
 same query limits. Evidence is in
 `exports/search-research-20261014/communities/USE_SIGNATURES.md`.
+
+## Decode only the material hints a query uses
+
+Profiling the current search finds about 119,000 JSON decodes per native query.
+Most come from eagerly reading every prepared resource's material tokens. These
+tokens only guide ordering. The actual search touches a much smaller subset.
+The production function now reads tokens by exact ID with a query-local
+standard-library cache. Its immutable sets and database connection stay inside
+the existing search owner. There is no shared cache, invalidation protocol,
+snapshot change, new index format or changed score.
+
+Three alternating baseline/treatment pairs per native case use fresh Dataset
+handles and the same limits. Every result field and search counter remains
+equal except distance timing. Material decoding falls to 239–2,096 records.
+Median wall times are indicative, with warm OS caches and concurrent work:
+
+| Case | Baseline seconds | On-demand seconds | Decoded material records |
+| --- | ---: | ---: | ---: |
+| Casing | 0.721 | 0.543 | 729 |
+| Casing LV | 0.865 | 0.710 | 356 |
+| Hull | 1.002 | 0.848 | 1,861 |
+| Hull LV | 1.176 | 0.941 | 1,075 |
+| Double plate | 0.836 | 0.677 | 1,136 |
+| Double plate LV | 0.856 | 0.716 | 239 |
+| Volcanus | 0.678 | 0.542 | 1,655 |
+| Volcanus LV | 1.962 | 1.852 | 2,096 |
+
+A separate production comparison against the frozen original function preserves
+all eight complete native results and counters. All 173 Python tests pass.
+Canonical DB and sidecar size/modification metadata stay unchanged. This reduces
+unnecessary query work, not the number of search states or semantic ambiguity.
+The main already-loaded service is not claimed to contain this update.
+Reproducible profiles, baseline, paired measurements and production verification
+are in `exports/search-research-20261014/current-profile/`.

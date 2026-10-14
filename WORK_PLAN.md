@@ -412,6 +412,10 @@ etap. Bieżące pomiary i decyzje są w SEARCH_EXPERIMENTS.md.
   zastosowań składników celu. Porównać te same osiem przypadków i limity,
   zachować wszystkie natywne kroki i policzyć przygotowanie. Nie promować
   samego podobieństwa form, jeśli nie poprawia jakości konkretnych tras.
+- [x] Sprawdzić profil kosztów bieżącego zapytania i usunąć zbędną pracę.
+  Odczyt informacji materiałowych na żądanie zastępuje dekodowanie niemal
+  119 tysięcy rekordów odczytem 239–2096. Osiem przypadków zachowuje wszystkie
+  wyniki i liczniki. Mediany czasu spadają o około 6–25%, a 173 testy przechodzą.
 - [x] Sprawdzić możliwość ścisłego bilansu GT++ na podstawie nowych deklaracji.
   Brakuje niezależnej podstawy ilości i tożsamości pierwiastków. Nominalne
   ilości form pozostają informacją o przetwarzaniu, bez certyfikacji chemii.
