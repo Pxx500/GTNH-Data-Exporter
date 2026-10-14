@@ -459,10 +459,20 @@ etap. Bieżące pomiary i decyzje są w SEARCH_EXPERIMENTS.md.
   Pokrycie rośnie z 10 do 11 gałęzi, ale selektor traci historię casingu i
   dodaje udział młotka w produkcji płyty. Nie promujemy samej metryki pokrycia.
   Koszt zebrania większej puli pozostaje osobny od taniego wyboru wyników.
-- [ ] Sprawdzić przyszłą możliwość zachowania natywnego pochodzenia GT++
+- [x] Sprawdzić przyszłą możliwość zachowania natywnego pochodzenia GT++
   na granicy fabryki, zanim utracona zostanie referencja do GT enumu.
   Odróżnić pochodzenie od tożsamości chemicznej, jednostek form i czystości.
   Na razie badanie źródeł bez instrumentacji ani uruchamiania gry.
+  Fabryka pozwala obserwować faktyczne pochodzenie nowego obiektu, ale nie
+  kopiuje komponentów ani normalizacji ilości. Bezpośrednie konstrukcje W/N
+  pozostają poza tym miejscem. Brakuje konfiguracji i zależności kompilacji
+  hooka oraz dowodu instalacji przed inicjalizacją. Instrumentację odkładamy.
+- [ ] Sprawdzić, czy dominacja stanów według materiału i formy może ograniczyć
+  zbędne obiegi bez utraty wymaganych składników, historii i pełnych receptur.
+  Nie powtarzać odrzuconej kary za formy ani usuwać loopów z audytu balansu.
+- [ ] Sprawdzić opisowe rozróżnienie przemiany materiału od udziału narzędzia
+  i zależności pobocznej. Użyć istniejących deklaracji, zachować niepewność
+  i nie nazywać podobieństwa składu dowodem pochodzenia atomów.
 - [x] Sprawdzić wybieranie wyjść regionu na podstawie rzeczywistych gałęzi
   celu i przygotowanych odległości. Policzyć przygotowanie, konkretne kroki,
   walidację i pracę zapytania. Odrzucić rozwiązanie, jeśli wyjścia pozostaną

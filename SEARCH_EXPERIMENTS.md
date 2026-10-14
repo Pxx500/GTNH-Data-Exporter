@@ -719,3 +719,27 @@ from identifying where the starting material contributes to the product.
 Native input roles, declared composition and opaque components remain separate
 evidence dimensions. No policy changes follow from this single fixed pool.
 Evidence is in `exports/search-research-20261014/branch-selection/`.
+
+## GT++ factory provenance is a deferred integration path
+
+The exact .225 factory exposes the actual GT material input, nullable Element
+reference and new native Material object at its fresh return. Actual JAR
+disassembly distinguishes cache-hit return at 32, construction at 423, cache
+publication at 434 and fresh return at 442. Observing every return would assign
+later cached requests as origins incorrectly. The label-based cache key is not
+material identity.
+
+This could preserve historical construction provenance for GT-derived wrappers.
+It would not establish chemical equivalence, current attributes, purity or form
+units. The factory does not copy GT components or density normalization. Direct
+Hastelloy-W/N and Fermium construction remains outside the seam. Constructors
+can catch initialization failures, and attributes can change after construction.
+
+All six inspected hook APIs exist in the installed UniMixins runtime but none
+exists in the exporter's actual 121-entry compile classpath. The exporter has
+Mixins disabled and no hook configuration. Installation before the first target
+load and material singleton initialization has not been demonstrated. Prefer a
+future upstream provenance getter on the native owner. Defer instrumentation
+pending an explicit integration decision and isolated pack lifecycle evidence.
+No dependency, configuration, code or capture changes follow from this study.
+Evidence is in `exports/search-research-20261014/gtpp-factory-provenance/`.
