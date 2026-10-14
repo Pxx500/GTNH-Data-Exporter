@@ -1147,3 +1147,27 @@ caps. It must charge grouping and retain native recipe contexts. A separate
 source-only contract check and two-paper primary-source comparison examine the
 general alternative-path limitation. Tool-category work stays deferred following
 the user's instruction. None of these studies changes production or active data.
+
+The contract check produces a concrete six-resource, five-recipe witness.
+Root reproduced it through the public Dataset API using existing fixture helpers.
+The unchanged search returns p/u/f. A private full blocked-resource/PID history
+key returns p/r/q/u/f, a better-ranked legal dependency spine. Both preserve p's
+complete AND inputs, including unresolved cofeed x. This is measured omission,
+not an invalid baseline path or a certified manufacturing plan. The temporary
+fixture uses no GTNH store. Production files remain unchanged. Evidence is in
+`route-diversity-contract/reproduce.py` and `reproduction-summary.json`.
+
+The bounded literature check verifies Eppstein's author-hosted paper and its
+retained sidetrack histories and heap frontier. It permits cyclic walks, so its
+theorem does not certify our resource-simple and process-simple routes. Yen's
+original paper remains unread after HTTP 403 and unavailable/challenged browser
+extraction. No algorithm claims are attributed to that unread paper. Evidence
+and page extracts are in `alternative-path-literature/`.
+
+One further private correctness pilot tests history-safe Pareto dominance.
+At the same resource and covered-required mask, a stored label must have no
+greater cost/depth and a subset of blocked resources and PIDs before discarding
+another label. The inverse condition removes stored labels. Bookkeeping and
+comparisons share the existing cap. Scores, job clearing and scheduler remain
+unchanged. This is not K-alternative enumeration. Nine fixed controls and the
+reproduced toy determine whether the extra retained histories are affordable.

@@ -586,11 +586,23 @@ etap. Bieżące pomiary i decyzje są w SEARCH_EXPERIMENTS.md.
   klasy przez inną recepturę końcową. Zachować osobne kolejki i historie.
   Policzyć grupowanie i planowanie. Nie zwiększać limitów ani puli kandydatów.
   Dziewięć ustalonych przypadków musi zachować gałęzie obwodu, casingu i stali.
-- [ ] Sprawdzić kontrakt alternatywnych dróg i minimalny ogólny przykład
+- [x] Sprawdzić kontrakt alternatywnych dróg i minimalny ogólny przykład
   odrzucenia przez dominację historii. Oddzielić brak wariantu od błędnej trasy.
-- [ ] Porównać reguły zachowywania alternatyw z dwiema pracami źródłowymi
+  Sześć zasobów i pięć receptur odtwarza zgubienie lepiej ocenianej drogi.
+  Obecny silnik zwraca p/u/f. Prywatny klucz pełnych historii zwraca p/r/q/u/f.
+  Pełny rekord p i jego drugi składnik x pozostają identyczne. Nie jest to
+  dowód kompletnego planu produkcji. Produkcja i snapshoty pozostają bez zmian.
+- [x] Porównać reguły zachowywania alternatyw z dwiema pracami źródłowymi
   o najkrótszych prostych ścieżkach. Oddzielić graf przejść od pełnych wymagań
   AND/OR receptur. Bez nowego prototypu przed konkretną diagnozą.
+  Przeczytano i sprawdzono pracę Eppsteina. Dopuszcza cykle, więc nie daje
+  gwarancji dla naszego wyszukiwania prostych ścieżek. Pracy Yena nie udało się
+  pobrać po 403 i zablokowanych przeglądarkach. Drugi tekst pozostaje nieczytany.
+  Przydatny punkt odniesienia to odrębne historie i zachowana kolejka alternatyw.
+- [ ] Sprawdzić jedną prywatną próbę dominacji uwzględniającej dozwolone
+  kontynuacje. Tańszy stan może odrzucić drugi tylko przy nie większej liczbie
+  kroków i podzbiorze jego zablokowanych zasobów oraz receptur. Policzyć koszt
+  historii i porównań. Zachować obecne limity oraz dziewięć ustalonych kontroli.
 - [x] Sprawdzić literaturę o landmarkach i planach zrelaksowanych pod kątem
   kierowania przez gałęzie składników celu. Odróżnić osiągalność pojedynczej
   ścieżki od spełnienia wszystkich wejść receptury i policzyć przygotowanie.
