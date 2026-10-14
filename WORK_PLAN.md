@@ -473,17 +473,33 @@ etap. Bieżące pomiary i decyzje są w SEARCH_EXPERIMENTS.md.
   Natywny kontrprzykład wymaga przejścia Steel Ingot do Steel Dust przed
   mikserem. Materiał obu form jest identyczny, ale tylko dust pasuje do wejścia.
   Dominacja według samego materiału ucina ten potrzebny most. Odrzucono ją.
-- [ ] Sprawdzić opisowe rozróżnienie przemiany materiału od udziału narzędzia
+- [x] Sprawdzić opisowe rozróżnienie przemiany materiału od udziału narzędzia
   i zależności pobocznej. Użyć istniejących deklaracji, zachować niepewność
   i nie nazywać podobieństwa składu dowodem pochodzenia atomów.
-- [ ] Zachować rzeczywiste dopasowanie kategorii OreDictionary dla itemów,
+  Obecne pola pozwalają opisać postać, materiał, rodzinę procesu i kategorię
+  wejścia. Nie przypisują materiału z konkretnego wejścia do konkretnego wyjścia.
+  Potwierdzono lukę kategorii narzędzi z NBT i natywne API do jej uzupełnienia.
+- [x] Zachować rzeczywiste dopasowanie kategorii OreDictionary dla itemów,
   również wariantów narzędzi z NBT. Użyć sprawdzonego natywnego getOreIDs,
   oddzielić te dane od dosłownych członków grup i ograniczeń wyszukiwania.
   Potwierdzić jeden odrębny dump, adnotacje, starsze obsługiwane snapshoty
   oraz opis podstawy rozpoznania w GUI i MCP. Nie zmieniać oceny tras.
-- [ ] Sprawdzić literaturę o landmarkach i planach zrelaksowanych pod kątem
+  Jeden dump potwierdza 117299 poprawnych odczytów bez błędów, w tym wariant
+  młotka z NBT. Wszystkie wcześniejsze pola surowców i zestawy członków grup
+  są zgodne. Przechodzi 180 testów Pythona, 67 GUI i 32 Javy. HTTP, nowy
+  klient MCP i osobne GUI potwierdzają adnotację. Główna instancja bez zmian.
+  Nie stwierdzamy pełnej zgodności kolejności i warunków wszystkich procesów.
+- [ ] Zweryfikować rzeczywiste ilości i wymagania Eye of Harmony. Zbadać,
+  czy ogólny zapis GT jest oznaczonym proxy, czy trafia do planera jako zwykła
+  receptura. Zachować natywne ilości long i zależności wykonania bez zgadywania
+  ustawień maszyny ani gwarantowanego uzysku.
+- [x] Sprawdzić literaturę o landmarkach i planach zrelaksowanych pod kątem
   kierowania przez gałęzie składników celu. Odróżnić osiągalność pojedynczej
   ścieżki od spełnienia wszystkich wejść receptury i policzyć przygotowanie.
+  Literatura uzasadnia warunkową mapę AND/OR dla istniejącego planera granic.
+  Próba zatrzymała się przed eksperymentem, bo snapshot nie ma żadnego profilu
+  surowców wejściowych. Nie wymyślono zapasów, nie wykonano ani nie oceniono
+  mapy. Powrót do pilota wymaga jawnego profilu przez istniejący interfejs.
 - [x] Sprawdzić wybieranie wyjść regionu na podstawie rzeczywistych gałęzi
   celu i przygotowanych odległości. Policzyć przygotowanie, konkretne kroki,
   walidację i pracę zapytania. Odrzucić rozwiązanie, jeśli wyjścia pozostaną

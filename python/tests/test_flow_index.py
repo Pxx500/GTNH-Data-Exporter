@@ -49,6 +49,43 @@ def recovery_fixture(root, *, explicit=True):
 
 
 class FlowIndexTests(unittest.TestCase):
+    def test_native_tool_matching_hint_covers_nbt_variant_without_literal_group_membership(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            member = resource('member', registry_name='test:hammer', metadata=12,
+                              nbt={'type': 'compound', 'value': {'material': {'type': 'string', 'value': 'Steel'}}})
+            variant = resource('variant', registry_name='test:hammer', metadata=12,
+                               nbt={'type': 'compound', 'value': {'material': {'type': 'string', 'value': 'Iron'}}})
+            variant['ore_dictionary_membership'] = {
+                'status': 'captured', 'source_api': 'OreDictionary.getOreIDs',
+                'matching_semantics': 'item_and_metadata_with_wildcard_nbt_ignored',
+                'group_ids': ['ore:craftingToolHardHammer']}
+            group = {'id': 'ore:craftingToolHardHammer', 'kind': 'ore_dict', 'name': 'craftingToolHardHammer',
+                     'members': ['member'], 'provenance': {'owner': 'Forge OreDictionary'}}
+            matching = choice('member')
+            matching['match']['nbt_sensitive'] = False
+            recipe = process('craft', [slot(matching), slot(choice('feed')),
+                                      slot(choice('member'), role='presence')], ['target'], family='minecraft:crafting')
+            dataset = Dataset.import_snapshot(snapshot(root / 'capture', resources=[member, variant, resource('feed'), resource('target')],
+                groups=[group], processes=[recipe]), root / 'index.sqlite')
+            trace = dataset.trace_processes(start_id='variant', target_id='target', path_selection='material',
+                                             excluded_group_ids=['ore:craftingToolHardHammer'])
+            self.assertEqual(trace['paths'][0]['resource_ids'], ['variant', 'target'])
+            self.assertEqual(trace['group_exclusions'][0]['member_count'], 1)
+            hints = trace['path_details'][0]['input_category_hints']
+            self.assertEqual(len(hints), 1)
+            self.assertEqual(hints[0]['resource_id'], 'variant')
+            self.assertEqual(hints[0]['basis'], 'native_ore_dictionary_matching_membership')
+            self.assertEqual(hints[0]['group_ids'], ['ore:craftingToolHardHammer'])
+            self.assertEqual(hints[0]['input_role'], 'consume')
+            self.assertEqual(hints[0]['scope'], 'selected_resource_category_only')
+            self.assertEqual(trace['processes'], [recipe])
+            self.assertEqual(next(r for r in trace['resources'] if r['id'] == 'variant'), variant)
+            compact = dataset.trace_processes(start_id='variant', target_id='target', path_selection='material', view='compact',
+                                               excluded_group_ids=['ore:craftingToolHardHammer'])
+            self.assertEqual(compact['path_details'], trace['path_details'])
+            self.assertEqual(compact['processes'], [recipe])
+
     def test_selected_tool_category_hint_preserves_mixed_unknown_and_presence_inputs(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -75,6 +112,35 @@ class FlowIndexTests(unittest.TestCase):
             self.assertEqual(compact['path_details'], full['path_details'])
             self.assertEqual(full['processes'], [maker])
             self.assertEqual(compact['processes'], [maker])
+
+    def test_native_empty_failed_and_malformed_membership_never_substitute_literal_tool_hints(self):
+        native = {'status': 'captured', 'source_api': 'OreDictionary.getOreIDs',
+                  'matching_semantics': 'item_and_metadata_with_wildcard_nbt_ignored', 'group_ids': []}
+        evidence = [native,
+                    {'status': 'failed', 'source_api': 'OreDictionary.getOreIDs',
+                     'diagnostic': 'native lookup failed'},
+                    None,
+                    dict(native, group_ids='ore:craftingToolHardHammer'),
+                    dict(native, group_ids=['ore:craftingToolHardHammer', 'missing']),
+                    dict(native, source_api='guessed', group_ids=['ore:craftingToolHardHammer']),
+                    dict(native, group_ids=['ore:craftingToolAlias'])]
+        for membership in evidence:
+            with self.subTest(membership=membership), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                tool = resource('tool')
+                tool['ore_dictionary_membership'] = membership
+                groups = [{'id': 'ore:craftingToolHardHammer', 'kind': 'ore_dict', 'name': 'craftingToolHardHammer',
+                           'members': ['tool'], 'provenance': {}},
+                          {'id': 'ore:craftingToolAlias', 'kind': 'unified', 'name': 'craftingToolAlias',
+                           'members': ['tool'], 'provenance': {}}]
+                recipe = process('craft', [slot(choice('tool'))], ['target'], family='minecraft:crafting')
+                dataset = Dataset.import_snapshot(snapshot(root / 'capture', resources=[tool, resource('target')],
+                    groups=groups, processes=[recipe]), root / 'index.sqlite')
+                result = dataset.trace_processes(start_id='tool', target_id='target', path_selection='material')
+                self.assertEqual(result['paths'][0]['resource_ids'], ['tool', 'target'])
+                self.assertEqual(result['path_details'][0]['input_category_hints'], [])
+                self.assertEqual(next(r for r in result['resources'] if r['id'] == 'tool')['ore_dictionary_membership'], membership)
+                self.assertEqual(result['processes'], [recipe])
 
     def test_tool_category_hint_requires_exact_member_not_nbt_alias_or_unified_group(self):
         with tempfile.TemporaryDirectory() as temporary:

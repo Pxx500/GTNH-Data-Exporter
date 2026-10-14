@@ -54,7 +54,7 @@ export interface Trace {
     target_process_id:string|null;target_slot_index:number|null;scope:'dependency_spine_with_external_inputs'
     input_category_hints?: {
       step_index:number;process_id:string;resource_id:string;category:'crafting_tool'
-      basis:'exact_captured_ore_dictionary_membership';group_ids:string[];input_role:'consume'
+      basis:'exact_captured_ore_dictionary_membership'|'native_ore_dictionary_matching_membership';group_ids:string[];input_role:'consume'
       native_accounting:{tool_accounting:string|null;container_returns:string|null;input_accounting:string|null}
       scope:'selected_resource_category_only'
     }[]

@@ -790,3 +790,99 @@ lookups and 115 logical work units verify seven native steps in about 0.039
 seconds. No actual query work or results change. Alternative routes were not
 searched, so no whole-query coverage-loss estimate is claimed.
 Evidence is in `exports/search-research-20261014/form-cycle-dominance/`.
+
+## Native categories can explain routes without asserting atom flow
+
+A bounded census of nine saved routes and thirty-three steps finds twelve
+steps with both native form prefixes and nineteen with both primary material
+declarations. Those fields, recipe families and native input/output records can
+describe processing. None assigns the material of a selected input to a specific
+output. The hammer-to-plate recipe has plate cofeeds, while multi-output chemistry
+does not expose an input-to-output atom assignment.
+
+Three selected inputs have literal tool-category hints. Exact Forge source
+matching predicts five when NBT variants are included. This is a source-backed
+prediction pending native acceptance, not a measured new capture result.
+getOreIDs reads wildcard and exact item/metadata maps, and getOreName reads the
+name list. Persist native names, not runtime-local numeric IDs. Keep this matching
+evidence separate from literal captured group members and path exclusions.
+
+The lookup calls ItemStack.getItemDamage, which dispatches to Item.getDamage.
+The inspected GT metatool hierarchy inherits the passive raw metadata getter.
+Arbitrary custom overrides are outside that proof, so the API analysis does not
+claim universal absence of mod callbacks. Avoid GT getToolStats on originals,
+which can mutate enchantment NBT. Native matching capture and basis-specific
+annotations are being implemented in existing owners without a search bias.
+Evidence is in `exports/search-research-20261014/route-meaning/`.
+
+## Conditional AND/OR landmarks need a declared supply boundary
+
+The full [Keyder, Richter and Helmert paper](https://ai.dmi.unibas.ch/papers/keyder-et-al-ecai2010.pdf),
+[LAMA paper](https://arxiv.org/abs/1401.3839) and official
+[Fast Downward documentation](https://www.fast-downward.org/latest/documentation/search/LandmarkFactory/)
+support a distinct research direction. AND nodes retain joint recipe prerequisites,
+OR nodes retain alternative producers, and shared support can explain more than
+a single dependency spine. Current implementation sources are pinned rather
+than assumed identical to historical LAMA.
+
+Their guarantees require a defined initial state and producer model. Our external
+cofeeds, quantities, consumption, chance, startup and incomplete captured frontiers
+prevent a direct global-necessity or admissibility claim. The proposed pilot uses
+the existing boundary/network owner with a conditional shared-cofeed agenda,
+neutral unknown frontiers and unchanged preparation-inclusive budgets.
+
+The read-only prerequisite check returns no existing boundary profiles for the
+canonical snapshot. Its profile sidecar is absent. LV Casing and Volcanus resolve
+to exact native identities, but no baseline, treatment or map runs. Supplies are
+not invented. The canonical hash remains unchanged. Map preparation, complete
+AND support and ranking quality are unmeasured, not zero. Defer this pilot until
+an explicit boundary exists through the existing owner. This is a prerequisite
+result, not a negative algorithm experiment.
+Evidence is in `exports/search-research-20261014/planning-landmarks/`, including
+the bounded `pilot/` prerequisite report.
+
+## Native matching membership closes the generated-tool explanation gap
+
+NativeCapture now records the actual OreDictionary.getOreIDs result once for
+each emitted item, through the existing resource owner and prepared ore-group
+roster. Names are sorted and unique. Success, explicit empty and failure remain
+distinct. Fluids omit the field. No group members, matching rules, quantity
+profiles or recipe arrays are replaced.
+
+One isolated .225 capture produces snapshot bed9f2cf-3362-420a-a1c3-d074cabfd348.
+All 117299 items have captured membership, with zero failures and 63800 explicit
+empty results. All 1420 fluids omit it. The registered hammer and Iron/Wood NBT
+hammer share craftingToolHardHammer. The NBT variant remains outside the literal
+group, so literal group exclusions keep their original meaning.
+
+The consumer uses a native matching basis for successful native evidence and
+retains literal-member evidence for supported immutable captures with the field
+absent. Empty, failed and malformed native fields do not substitute older hints.
+No search score or policy changes. Four saved native route sets retain every
+non-hint explanation field. Annotation alone costs 2.388 to 3.036 ms in these
+samples, including its connection and 4 to 17 group-record reads. These samples
+do not establish a query speedup.
+
+All 180 Python, 67 GUI and 32 Java tests pass. An official isolated MCP client
+and HTTP agree on three native hammer paths, their complete recipes and new
+basis. Real candidate GUI shows four paths and correct basis tooltips. Local
+inspection retains all five recipe tiles. Temporary client, browser and server
+are closed. Main port 8000, its served bundle and existing MCP connections remain
+unchanged. Older supported data keeps its explicitly documented evidence basis.
+
+Independent root checks verify both public hammer records, preserved typed NBT
+and earlier fields, all item/fluid status counts and two protected hashes.
+Producer verification preserves all five protected hashes, all 118719 resource
+identities and earlier fields, and all 186528 normalized group memberships.
+Snapshot-local ID changes and thirteen member-order differences remain recorded.
+Whole-process parity is not claimed. Native condition/object text and ordered
+matcher differences remain separate comparison evidence.
+
+IntelliJ finds no issue in added code. The audit wrapper skips PMD because of
+nested wrapper discovery. Supplemental classpath-aware PMD adds one collector
+complexity advisory, retained rather than split into unnecessary types. A direct
+native collector unit test would require artificial Minecraft initialization,
+so no private test hook or producer RED is claimed. Public consumer RED/GREEN
+and real native capture provide the behavioral acceptance.
+Evidence is in `exports/search-research-20261014/native-ore-membership/` and
+`exports/search-research-20261014/route-meaning/`.

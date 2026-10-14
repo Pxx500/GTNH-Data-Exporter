@@ -61,6 +61,33 @@ world machine. Neither reference kind establishes semantic use, material
 composition, chemical accounting or obtainable stock. An empty list or older
 snapshot without references does not establish the absence of a native role.
 
+Item resources may carry `ore_dictionary_membership`:
+
+```json
+{
+  "status": "captured",
+  "source_api": "OreDictionary.getOreIDs",
+  "matching_semantics": "item_and_metadata_with_wildcard_nbt_ignored",
+  "group_ids": ["ore:craftingToolHardHammer"]
+}
+```
+
+The field records the native lookup for this stack, using item and metadata
+with registered wildcard matches and no direct NBT or count comparison.
+Names are persisted as sorted unique group references. Runtime-local numeric
+ore IDs are not persisted. A successful empty lookup has `group_ids: []`.
+Lookup failure has `status: "failed"` and a `diagnostic` object with exception
+class and message, without a successful group list. Fluids omit the field.
+The lookup dispatches through the item's metadata getter. The inspected GT
+metatool getter is passive, while arbitrary custom overrides are outside that
+source proof.
+
+Native matching membership differs from literal registered group members.
+It can include an NBT variant absent from the group's captured `members` list.
+It does not modify that list, resource identity or exclusion semantics, and
+does not establish actual tool use, wear, material contribution or chemistry.
+Existing snapshots without this field retain their literal-member evidence.
+
 Resources can also carry `material_facts` schema 1. These facts retain the
 actual GT version, accounting profile, source API, associations, prefix/native
 material amounts, component trees, density fields, element/isotope data and
@@ -474,13 +501,23 @@ The primary `route` remains the shortest qualifying witness discovered.
 candidate_resources, paths, path_indices, status}` for consumed target slots.
 `paths` counts emitted witnesses and `path_indices` points into `paths`.
 Status is `represented` or `not_discovered`. The latter does not establish
-unreachability. Presence and tool slots are not material-flow branches.
+unreachability. Slots explicitly marked as presence or tool roles are not
+dependency-spine transitions. A tool-category hint does not change a consumed
+slot's native role.
+
+Material-path `path_details[].input_category_hints` describes selected input
+categories. Its basis is `native_ore_dictionary_matching_membership` for a
+successful native field, or `exact_captured_ore_dictionary_membership` for
+supported snapshots without that field. Valid native empty results and failed
+or malformed native evidence do not substitute literal hints. Failed evidence
+remains in the resource record. Absence of a hint does not certify absence of
+a tool category. Native recipe roles and accounting remain unchanged.
 
 `route` contains `status`, `strategy`, ordered `resource_ids` and ordered
 `process_ids`. The strategy is `shortest_known_dependency_path`: fewest process
 steps in the discovered graph through supported positive consumed inputs,
-with stable ID ordering for ties. Presence and tool inputs are requirements,
-not material-flow transitions.
+with stable ID ordering for ties. Explicit presence and tool roles are
+requirements, not dependency-spine transitions.
 The statuses are `found`, `not_found`, `incomplete` and `same_resource`.
 `found` establishes a dependency connection, not best yield, minimum energy,
 batch feasibility or satisfaction of every machine condition.

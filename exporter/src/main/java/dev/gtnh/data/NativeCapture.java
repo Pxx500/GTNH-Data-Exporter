@@ -33,6 +33,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.UUID;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Item;
@@ -220,11 +221,15 @@ final class NativeCapture {
             resourceIds.put(key, id);
             JsonObject facts = stack instanceof ItemStack ? materialFacts.item((ItemStack) stack)
                 : materialFacts.fluid((FluidStack) stack);
-            writer.append("resources", object("id", id, "kind", kind, "registry_name", registry,
+            JsonObject record = object("id", id, "kind", kind, "registry_name", registry,
                 "metadata", damage, "nbt", nbt, "display_name", label,
                 "material_facts", facts,
                 "native_source_refs", sourceReferences(key, stack),
-                "provenance", object("owner", "native_registry")));
+                "provenance", object("owner", "native_registry"));
+            if (stack instanceof ItemStack) {
+                record.add("ore_dictionary_membership", oreDictionaryMembership((ItemStack) stack));
+            }
+            writer.append("resources", record);
         }
         return id;
     }
@@ -242,6 +247,7 @@ final class NativeCapture {
         List<String> names = new ArrayList<>();
         Collections.addAll(names, OreDictionary.getOreNames());
         Collections.sort(names);
+        for (String name : names) oreGroups.put(name, "ore:" + name);
         for (String name : names) {
             JsonArray members = new JsonArray();
             Set<String> seen = new HashSet<>();
@@ -249,12 +255,36 @@ final class NativeCapture {
                 String resource = item(stack);
                 if (resource != null && seen.add(resource)) members.add(new com.google.gson.JsonPrimitive(resource));
             }
-            String id = "ore:" + name;
-            oreGroups.put(name, id);
+            String id = oreGroups.get(name);
             writer.append("groups", object("id", id, "kind", "ore_dict", "name", name, "members", members,
                 "provenance", object("owner", "Forge OreDictionary")));
         }
         coverage("forge.ore_dictionary", "complete", names.size(), "Enumerated the live ore dictionary after world readiness");
+    }
+
+    private JsonObject oreDictionaryMembership(ItemStack stack) {
+        JsonObject result = object("source_api", "OreDictionary.getOreIDs",
+            "matching_semantics", "item_and_metadata_with_wildcard_nbt_ignored");
+        try {
+            int[] ids = OreDictionary.getOreIDs(stack);
+            if (ids == null) throw new IllegalStateException("Native ore membership returned null IDs");
+            Set<String> groups = new TreeSet<>();
+            for (int id : ids) {
+                if (id < 0 || id >= oreGroups.size()) {
+                    throw new IllegalStateException("Native ore ID is outside the captured group roster: " + id);
+                }
+                String name = OreDictionary.getOreName(id);
+                String group = oreGroups.get(name);
+                if (group == null) throw new IllegalStateException("Native ore name is not in the captured group roster: " + name);
+                groups.add(group);
+            }
+            result.addProperty("status", "captured");
+            result.add("group_ids", SnapshotWriter.JSON.toJsonTree(groups));
+        } catch (RuntimeException error) {
+            result.addProperty("status", "failed");
+            result.add("diagnostic", object("class", error.getClass().getName(), "message", error.getMessage()));
+        }
+        return result;
     }
 
     private void gregTech() throws IOException {

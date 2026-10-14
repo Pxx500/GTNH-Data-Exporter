@@ -276,14 +276,24 @@ machines. Unknown material facts stay unsupported. Formula display text alone
 does not establish composition, purity or chemical conservation.
 
 Material-path `path_details` can include `input_category_hints`. A
-`crafting_tool` hint means the exact selected resource ID is a captured member
-of the listed native OreDictionary groups. It does not establish actual tool
-use, unchanged stock, wear, source-atom contribution or every OR alternative's
-category. The selected input retains its `consume` role. Inspect the full
-recipe and copied `native_accounting` conditions for unresolved tool damage
-and container returns. An empty or absent hint list is not proof that an input
-cannot function as a tool. These are output explanations, not search filters
-or penalties, and they preserve the selected recipe witnesses.
+`crafting_tool` hint reports the selected resource's category membership.
+The `native_ore_dictionary_matching_membership` basis uses captured
+`resource.ore_dictionary_membership` from `OreDictionary.getOreIDs`. Native
+matching uses item and metadata, includes registered wildcards, and ignores
+NBT and count. The `exact_captured_ore_dictionary_membership` basis reports
+literal registered-variant membership. It remains supported for existing
+immutable snapshots whose native membership field is absent. This preserves
+their captured evidence without treating it as a native matching result.
+A valid captured empty field produces no category hint. Failed or malformed
+native evidence also produces no positive hint and does not substitute
+literal membership. Inspect the resource field's status and diagnostic.
+Hint absence is not negative evidence, including failed or uncaptured states.
+Neither basis establishes actual tool use, unchanged stock, wear, source-atom
+contribution or every OR alternative's category. The selected input retains
+its `consume` role. Inspect the full recipe and copied `native_accounting`
+conditions for unresolved tool damage and container returns. These are output
+explanations, not search filters or penalties. Literal group exclusions and
+the full selected recipe witnesses retain their existing semantics.
 
 The native quantity profile explicitly supports GT `5.09.54.221`,
 `5.09.54.223` and `5.09.54.225`, with the same `.221` interpretation profile. Read the actual

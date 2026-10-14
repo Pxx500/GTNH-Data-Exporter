@@ -575,18 +575,42 @@ def find_paths(dataset, canonical, start_id, target_id, max_depth, max_processes
 
 
 def path_details(dataset, paths, resources, processes, branches):
+    from .dataset import DatasetError
     details, categories, groups = [], {}, {}
     with dataset._connect() as connection:
         def category_groups(rid):
             if rid not in categories:
-                categories[rid] = []
-                for gid, in connection.execute("SELECT group_id FROM members WHERE resource_id=? "
-                        "AND group_id GLOB 'ore:craftingTool*' ORDER BY group_id", (rid,)):
+                matched, basis = [], 'native_ore_dictionary_matching_membership'
+                categories[rid] = matched, basis
+                resource = resources[rid]
+                if 'ore_dictionary_membership' in resource:
+                    membership = resource['ore_dictionary_membership']
+                    if (resource['kind'] != 'item' or not isinstance(membership, dict) or membership.get('status') != 'captured'
+                            or membership.get('source_api') != 'OreDictionary.getOreIDs'
+                            or membership.get('matching_semantics') != 'item_and_metadata_with_wildcard_nbt_ignored'
+                            or not isinstance(membership.get('group_ids'), list)
+                            or any(not isinstance(gid, str) or not gid for gid in membership['group_ids'])):
+                        return categories[rid]
+                    candidate_ids = sorted(set(membership['group_ids']))
+                else:
+                    # Existing immutable captures retain their exact registered-member evidence.
+                    basis = 'exact_captured_ore_dictionary_membership'
+                    candidate_ids = [gid for gid, in connection.execute("SELECT group_id FROM members WHERE resource_id=? "
+                        "AND group_id GLOB 'ore:craftingTool*' ORDER BY group_id", (rid,))]
+                for gid in candidate_ids:
                     if gid not in groups:
-                        groups[gid] = dataset._record(connection, 'groups', gid)
+                        try:
+                            groups[gid] = dataset._record(connection, 'groups', gid)
+                        except DatasetError:
+                            groups[gid] = None
                     group = groups[gid]
+                    if group is None or (basis == 'native_ore_dictionary_matching_membership'
+                            and (group['kind'] != 'ore_dict' or gid != 'ore:' + group['name'])):
+                        matched.clear()
+                        return categories[rid]
                     if group['kind'] == 'ore_dict' and group['name'].startswith('craftingTool'):
-                        categories[rid].append(gid)
+                        matched.append(gid)
+                categories[rid] = matched, basis
             return categories[rid]
 
         for index, path in enumerate(paths):
@@ -601,12 +625,12 @@ def path_details(dataset, paths, resources, processes, branches):
                 position = next(i for i, output in enumerate(outputs) if output['resource_id'] == dest)
                 if position:
                     byproducts.append({'process_id': pid, 'resource_id': dest, 'basis': 'secondary_output_position_hint'})
-                group_ids = category_groups(source)
+                group_ids, basis = category_groups(source)
                 if group_ids:
                     # Category membership does not establish actual tool use or remainder behavior.
                     conditions = processes[pid]['conditions']
                     input_hints.append({'step_index': step, 'process_id': pid, 'resource_id': source,
-                        'category': 'crafting_tool', 'basis': 'exact_captured_ore_dictionary_membership',
+                        'category': 'crafting_tool', 'basis': basis,
                         'group_ids': group_ids, 'input_role': 'consume',
                         'native_accounting': {key: conditions.get(key) for key in
                             ('tool_accounting', 'container_returns', 'input_accounting')},
