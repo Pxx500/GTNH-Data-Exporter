@@ -401,6 +401,11 @@ def find_paths(dataset, canonical, start_id, target_id, max_depth, max_processes
             route.update(status='same_resource', **paths[0])
         return route, paths, search, [], [], branches
     with closing(sqlite3.connect(f'{index_path(dataset).as_uri()}?mode=ro', uri=True)) as connection:
+        if not dataset._terminal_endpoints_allowed(connection, start_id, target_id, terminal_categories, search, reasons, prepared=True):
+            search['truncated'] = bool(reasons)
+            if reasons:
+                route['status'] = 'incomplete'
+            return route, paths, search, sorted(reasons), [], branches
         before = time.perf_counter()
         distances, nodes, distance_work, reused = _source_distances(dataset, connection, start_id, tier_filter, excluded)
         search.update(distance_work=distance_work, distance_seconds=time.perf_counter() - before, distance_cache_hit=reused)

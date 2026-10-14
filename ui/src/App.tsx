@@ -131,6 +131,7 @@ function TraceWorkspace({startId,targetId,setStartId,setTargetId,onSelect}: {sta
     <ActionHint id="trace-action-hint" reason={disabledReason} ready="Ready to find paths between the selected resources."/><div className="trace-submit"><button aria-describedby="trace-action-hint" className="primary" disabled={!!disabledReason}>Trace dependencies</button></div>
   </form>
   {current && <RequestState {...trace} retry={trace.reload}/>}
+  {current && terminalArtifacts?.policy==='direct_targets_only' && terminalArtifacts.endpoint_compatibility==='incompatible' && <p className="notice" role="status">The selected start is a tool or part. Direct targets only won't use it to make other products. Select Allow intermediates for unrestricted path inspection.</p>}
   {current && terminalArtifacts?.policy==='direct_targets_only' && terminalArtifacts.recognition_status==='partial' && <p className="notice" role="status">Tool and part recognition is incomplete for this search: {terminalArtifacts.unknown_resources.toLocaleString()} inspected resources lack usable captured class evidence. Direct-target restrictions apply only to recognized tools and parts.</p>}
   {url && !current && <p className="notice">Search selections or filters changed. Submit to search the Dataset with these settings.</p>}
   {!url && <div className="empty-state"><h3>Complete paths in one graph</h3><p>Shared recipe tiles are merged. Drag and arrange the graph after the search.</p></div>}

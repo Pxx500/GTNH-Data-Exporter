@@ -10,6 +10,53 @@ const status = {snapshot_id:'test-snapshot',manifest:{created_at:'2026-10-11',ca
 function response(value: unknown, code=200) { return new Response(JSON.stringify(value), {status:code,headers:{'Content-Type':'application/json'}}) }
 function page(items: unknown[]) {return {snapshot_id:'test-snapshot',items,total:items.length,limit:30,offset:0}}
 
+test('terminal endpoint policy rejection explains the constraint and preserves selections across filter changes',async()=>{
+  const ordinary={...resource,id:'ordinary-target',display_name:'Ordinary target'}
+  const terminal={...resource,id:'terminal-target',display_name:'Tool target'}
+  const traceCalls:URL[]=[]
+  vi.stubGlobal('fetch',vi.fn(async(input:string)=>{
+    const url=new URL(input,'http://localhost')
+    if(url.pathname==='/api/status')return response(status)
+    if(url.pathname==='/api/environments')return response(page([]))
+    if(url.pathname==='/api/resources')return response(page(url.searchParams.get('q')==='Ordinary target'?[ordinary]:url.searchParams.get('q')==='Tool target'?[terminal]:[resource]))
+    if(url.pathname.startsWith('/api/resources/'))return response({snapshot_id:'test-snapshot',item:[resource,ordinary,terminal].find(item=>decodeURIComponent(url.pathname).endsWith(item.id))})
+    if(url.pathname==='/api/trace'){
+      traceCalls.push(url)
+      const target=url.searchParams.get('target_id')===ordinary.id?ordinary:terminal
+      return response({branch_coverage:[],path_selection:'material',snapshot_id:'test-snapshot',start_id:resource.id,target_id:target.id,resources:[resource,target],processes:[],edges:[],leaves:[],cycles:[],truncated:false,coverage:[],route:{status:'not_found',strategy:'shortest_known_dependency_path',resource_ids:[],process_ids:[]},paths:[],search:{examined_processes:0,limit:1000,truncated:false,terminal_artifacts:{policy:'direct_targets_only',basis:'runtime_item_class_hierarchy',scope:'selected_consumed_spine_edges',recognition_status:'captured_for_checked_resources',endpoint_checks:2,endpoint_compatibility:target===ordinary?'incompatible':'compatible',checked_edges:0,blocked_edges:0,resource_lookups:2,terminal_resources:target===ordinary?1:2,unknown_resources:0,not_applicable_resources:0,charged_work:2}},limit_reasons:[]})
+    }
+    throw new Error(`Unexpected route ${url.pathname}`)
+  }))
+  render(<App/>)
+  await screen.findByText('Pack: Synthetic contract fixture')
+  fireEvent.click(screen.getByRole('button',{name:'Trace'}))
+  fireEvent.change(screen.getByLabelText('Tools and parts in paths'),{target:{value:'direct_targets_only'}})
+  fireEvent.focus(screen.getByLabelText('Supplied start resource'));fireEvent.change(screen.getByLabelText('Supplied start resource'),{target:{value:'Test mold'}})
+  fireEvent.click(await screen.findByRole('option',{name:/Test mold/}))
+  fireEvent.focus(screen.getByLabelText('Target resource'));fireEvent.change(screen.getByLabelText('Target resource'),{target:{value:'Ordinary target'}})
+  fireEvent.click(await screen.findByRole('option',{name:/Ordinary target/}))
+  await waitFor(()=>expect(screen.getByRole('button',{name:'Trace dependencies'})).toBeEnabled())
+  fireEvent.click(screen.getByRole('button',{name:'Trace dependencies'}))
+  const notice=await screen.findByText(/The selected start is a tool or part/)
+  expect(notice).toHaveTextContent("Direct targets only won't use it to make other products")
+  expect(notice).toHaveTextContent('Select Allow intermediates for unrestricted path inspection')
+  expect(screen.getByLabelText('Tools and parts in paths')).toHaveValue('direct_targets_only')
+  fireEvent.change(screen.getByLabelText('Maximum depth'),{target:{value:'8'}})
+  expect(screen.queryByText(/The selected start is a tool or part/)).not.toBeInTheDocument()
+  expect(screen.getByLabelText('Supplied start resource')).toHaveValue('Test mold')
+  expect(screen.getByLabelText('Target resource')).toHaveValue('Ordinary target')
+  expect(screen.getByLabelText('Tools and parts in paths')).toHaveValue('direct_targets_only')
+  fireEvent.focus(screen.getByLabelText('Target resource'));fireEvent.change(screen.getByLabelText('Target resource'),{target:{value:'Tool target'}})
+  fireEvent.click(await screen.findByRole('option',{name:/Tool target/}))
+  await waitFor(()=>expect(screen.getByRole('button',{name:'Trace dependencies'})).toBeEnabled())
+  fireEvent.click(screen.getByRole('button',{name:'Trace dependencies'}))
+  await screen.findByRole('heading',{name:'No known route found'})
+  expect(traceCalls[1].searchParams.get('target_id')).toBe(terminal.id)
+  expect(traceCalls[1].searchParams.get('max_depth')).toBe('8')
+  expect(traceCalls[1].searchParams.get('terminal_artifact_policy')).toBe('direct_targets_only')
+  expect(screen.queryByText(/The selected start is a tool or part/)).not.toBeInTheDocument()
+})
+
 test('trace excludes selected captured groups by exact namespace while retaining resource filters and inspection',async()=>{
   const target={...resource,id:'result-id',display_name:'Test output'}
   const side={...resource,id:'side-input',display_name:'Side mold'}

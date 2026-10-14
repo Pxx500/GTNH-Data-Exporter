@@ -15,6 +15,42 @@ def typed_item(id, class_name='net.minecraft.item.Item', *, superclasses=(), int
 
 
 class TerminalPolicyTests(unittest.TestCase):
+    def test_incompatible_terminal_endpoints_stop_before_recipe_graph_discovery(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            rows = [typed_item('start', 'tconstruct.library.tools.ToolCore'),
+                typed_item('intermediate', 'gregtech.api.items.MetaGeneratedTool'),
+                typed_item('ordinary'), resource('unknown')]
+            recipes = [process('upgrade', [slot(choice('start'))], ['intermediate']),
+                process('recover', [slot(choice('intermediate'))], ['ordinary', 'unknown'])]
+            dataset = Dataset.import_snapshot(snapshot(root / 'capture', resources=rows, processes=recipes), root / 'index.sqlite')
+            for selection in ('shortest', 'diverse', 'material'):
+                terminal = dataset.trace_processes(start_id='start', target_id='intermediate', path_selection=selection,
+                    terminal_artifact_policy='direct_targets_only')
+                self.assertEqual(terminal['paths'], [{'resource_ids': ['start', 'intermediate'], 'process_ids': ['upgrade']}])
+                self.assertEqual(terminal['processes'], [recipes[0]])
+                for target in ('ordinary', 'unknown'):
+                    with self.subTest(selection=selection, target=target):
+                        result = dataset.trace_processes(start_id='start', target_id=target, path_selection=selection,
+                            terminal_artifact_policy='direct_targets_only')
+                        self.assertEqual(result['paths'], [])
+                        self.assertEqual(result['processes'], [])
+                        self.assertEqual(result['limit_reasons'], [])
+                        search = result['search']
+                        self.assertEqual(search['examined_processes'], 0)
+                        self.assertEqual(search['examined_states'], 0)
+                        self.assertEqual(search['queued_states'], 0)
+                        self.assertEqual(search.get('distance_work', 0), 0)
+                        metric = search['terminal_artifacts']
+                        self.assertEqual(metric['endpoint_compatibility'], 'incompatible')
+                        self.assertEqual(metric['endpoint_checks'], 1)
+                        self.assertEqual(metric['checked_edges'], 0)
+                        self.assertEqual(metric['blocked_edges'], 0)
+                        self.assertEqual(metric['resource_lookups'], 2)
+                        self.assertGreater(metric['charged_work'], 0)
+                        self.assertEqual(metric['charged_work'], search['expansion_work'])
+                        self.assertEqual(metric['unknown_resources'], int(target == 'unknown'))
+
     def test_direct_part_tool_suffix_keeps_exact_nbt_and_all_cofeeds(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -153,7 +189,8 @@ class TerminalPolicyTests(unittest.TestCase):
                         restricted = dataset.trace_processes(start_id='terminal', target_id='target', path_selection=selection,
                             terminal_artifact_policy='direct_targets_only')
                         self.assertEqual(restricted['paths'], [])
-                        self.assertGreater(restricted['search']['terminal_artifacts']['blocked_edges'], 0)
+                        self.assertEqual(restricted['search']['terminal_artifacts']['endpoint_compatibility'], 'incompatible')
+                        self.assertEqual(restricted['search']['terminal_artifacts']['blocked_edges'], 0)
                         self.assertLessEqual(restricted['search']['terminal_artifacts']['charged_work'], restricted['search']['expansion_work'])
                         restored = dataset.trace_processes(start_id='terminal', target_id='target', path_selection=selection,
                             terminal_artifact_policy='allow')

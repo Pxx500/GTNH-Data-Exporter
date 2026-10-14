@@ -543,8 +543,14 @@ There is no extra rule for ordinary component rotors, GGfab, shaping aids or arm
 
 `search.terminal_artifacts` reports the applied policy, recognition basis,
 checked and blocked edges, cached resource lookups, terminal/unknown/not-applicable
-resource counts and charged work. Its scope is inspected selected-spine
-candidates, not the entire snapshot. Missing, failed or malformed item hierarchy
+resource counts and charged work. Classification counts cover inspected route
+endpoints and selected-spine candidates, not the entire snapshot.
+`endpoint_checks` and `endpoint_compatibility` report a separate preflight.
+Every permitted successor of a recognized terminal is terminal, so a terminal
+start cannot reach an ordinary or unclassified target under the restrictive
+policy. An `incompatible` preflight skips recipe discovery and distance work,
+while charging actual endpoint classification. It adds no fictional recipe edge.
+Missing, failed or malformed item hierarchy
 is unknown. Fluids are not applicable. A partial recognition status cannot
 establish complete category enforcement. Prepared analysis version 5 stores
 these facts in the existing flow sidecar and requires an explicit rebuild for

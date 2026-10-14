@@ -1338,50 +1338,81 @@ class Dataset:
     def _terminal_artifact_search(policy):
         return {'policy': policy, 'basis': 'runtime_item_class_hierarchy', 'scope': 'selected_consumed_spine_edges',
                 'recognition_status': 'not_requested' if policy == 'allow' else 'not_checked',
+                'endpoint_compatibility': 'not_requested' if policy == 'allow' else 'not_checked', 'endpoint_checks': 0,
                 'checked_edges': 0, 'blocked_edges': 0, 'resource_lookups': 0,
                 'terminal_resources': 0, 'unknown_resources': 0, 'not_applicable_resources': 0, 'charged_work': 0}
+
+    @staticmethod
+    def _terminal_artifact_charge(search, reasons, units):
+        if search['expansion_work'] + units > search['work_limit']:
+            reasons.add('search_work_limit')
+            return False
+        search['expansion_work'] += units
+        search['terminal_artifacts']['charged_work'] += units
+        return True
+
+    def _terminal_category_for(self, connection, rid, categories, search, reasons, *, prepared=False):
+        if rid in categories:
+            return categories[rid]
+        metric = search['terminal_artifacts']
+        if not self._terminal_artifact_charge(search, reasons, 1):
+            return None
+        metric['resource_lookups'] += 1
+        if prepared:
+            category = connection.execute('SELECT terminal_category FROM resources WHERE id=?', (rid,)).fetchone()[0]
+        else:
+            kind, fact_type, raw = connection.execute("SELECT json_extract(payload,'$.kind'),json_type(payload,'$.item_type'),json_extract(payload,'$.item_type') "
+                "FROM records WHERE collection='resources' AND id=?", (rid,)).fetchone()
+            facts = json.loads(raw) if fact_type == 'object' else None
+            visits = 1 + sum(len(facts[key]) for key in ('superclasses', 'interfaces')
+                if isinstance(facts, dict) and isinstance(facts.get(key), list))
+            if not self._terminal_artifact_charge(search, reasons, visits):
+                return None
+            category = self._terminal_artifact_category({'kind': kind, 'item_type': facts})
+        if not self._terminal_artifact_charge(search, reasons, 1):
+            return None
+        categories[rid] = category
+        metric['unknown_resources'] += int(category == 'unknown')
+        metric['not_applicable_resources'] += int(category == 'not_applicable')
+        metric['terminal_resources'] += int(category not in ('ordinary', 'unknown', 'not_applicable'))
+        if category != 'not_applicable':
+            metric['recognition_status'] = 'partial' if metric['unknown_resources'] else 'captured_for_checked_resources'
+        return category
+
+    def _terminal_endpoints_allowed(self, connection, start_id, target_id, categories, search, reasons, *, prepared=False):
+        metric = search['terminal_artifacts']
+        if metric['policy'] == 'allow':
+            return True
+        if not self._terminal_artifact_charge(search, reasons, 1):
+            metric['endpoint_compatibility'] = 'work_limit'
+            return False
+        metric['endpoint_checks'] += 1
+        source = self._terminal_category_for(connection, start_id, categories, search, reasons, prepared=prepared)
+        if source in ('ordinary', 'unknown', 'not_applicable'):
+            metric['endpoint_compatibility'] = 'unrestricted_start'
+            return True
+        target = None if source is None else self._terminal_category_for(
+            connection, target_id, categories, search, reasons, prepared=prepared)
+        if source is None or target is None:
+            metric['endpoint_compatibility'] = 'work_limit'
+            return False
+        # Every permitted successor of a recognized terminal is also terminal.
+        blocked = target in ('ordinary', 'unknown', 'not_applicable')
+        metric['endpoint_compatibility'] = 'incompatible' if blocked else 'compatible'
+        return not blocked
 
     def _terminal_edge_allowed(self, connection, source_id, output_id, categories, search, reasons, *, prepared=False):
         metric = search['terminal_artifacts']
         if metric['policy'] == 'allow':
             return True
-
-        def charge(units):
-            if search['expansion_work'] + units > search['work_limit']:
-                reasons.add('search_work_limit')
-                return False
-            search['expansion_work'] += units
-            metric['charged_work'] += units
-            return True
-
-        if not charge(1):
+        if not self._terminal_artifact_charge(search, reasons, 1):
             return False
         metric['checked_edges'] += 1
         for rid in (source_id, output_id):
-            if rid not in categories:
-                if not charge(1):
-                    return False
-                metric['resource_lookups'] += 1
-                if prepared:
-                    category = connection.execute('SELECT terminal_category FROM resources WHERE id=?', (rid,)).fetchone()[0]
-                else:
-                    kind, fact_type, raw = connection.execute("SELECT json_extract(payload,'$.kind'),json_type(payload,'$.item_type'),json_extract(payload,'$.item_type') "
-                        "FROM records WHERE collection='resources' AND id=?", (rid,)).fetchone()
-                    facts = json.loads(raw) if fact_type == 'object' else None
-                    visits = 1 + sum(len(facts[key]) for key in ('superclasses', 'interfaces')
-                        if isinstance(facts, dict) and isinstance(facts.get(key), list))
-                    if not charge(visits):
-                        return False
-                    category = self._terminal_artifact_category({'kind': kind, 'item_type': facts})
-                if not charge(1):
-                    return False
-                categories[rid] = category
-                metric['unknown_resources'] += int(category == 'unknown')
-                metric['not_applicable_resources'] += int(category == 'not_applicable')
-                metric['terminal_resources'] += int(category not in ('ordinary', 'unknown', 'not_applicable'))
-                if category != 'not_applicable':
-                    metric['recognition_status'] = 'partial' if metric['unknown_resources'] else 'captured_for_checked_resources'
-            if rid == source_id and categories[rid] in ('ordinary', 'unknown', 'not_applicable'):
+            category = self._terminal_category_for(connection, rid, categories, search, reasons, prepared=prepared)
+            if category is None:
+                return False
+            if rid == source_id and category in ('ordinary', 'unknown', 'not_applicable'):
                 return True
         blocked = categories[output_id] in ('ordinary', 'unknown', 'not_applicable')
         metric['blocked_edges'] += int(blocked)
@@ -1406,6 +1437,11 @@ class Dataset:
                 route.update(status="same_resource", **path)
                 paths.append(path)
             return route, paths, search, [], []
+        if not self._terminal_endpoints_allowed(connection, start_id, target_id, terminal_categories, search, reasons):
+            search['truncated'] = bool(reasons)
+            if reasons:
+                route['status'] = 'incomplete'
+            return route, paths, search, sorted(reasons), []
 
         def predecessors(resource_id):
             if resource_id in adjacency:
@@ -1583,6 +1619,8 @@ class Dataset:
             1, required, excluded, 0, dict(tier_filter), terminal_artifact_policy)
         route, paths, primary_search, primary_reasons, primary_duplicates = primary
         if start_id == target_id or required & excluded or start_id in excluded or target_id in excluded:
+            return (*primary, [])
+        if primary_search['terminal_artifacts']['endpoint_compatibility'] in ('incompatible', 'work_limit'):
             return (*primary, [])
         primary_limit_reasons = set(primary_reasons) - {'path_limit'}
         reasons = set()

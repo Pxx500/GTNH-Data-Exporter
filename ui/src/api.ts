@@ -71,6 +71,7 @@ export interface Trace {
     terminal_artifacts?: {
       policy:'allow'|'direct_targets_only';basis:'runtime_item_class_hierarchy';scope:'selected_consumed_spine_edges'
       recognition_status:'not_requested'|'not_checked'|'captured_for_checked_resources'|'partial'
+      endpoint_checks:number;endpoint_compatibility:'not_requested'|'not_checked'|'work_limit'|'unrestricted_start'|'incompatible'|'compatible'
       checked_edges:number;blocked_edges:number;resource_lookups:number;terminal_resources:number
       unknown_resources:number;not_applicable_resources:number;charged_work:number
     }

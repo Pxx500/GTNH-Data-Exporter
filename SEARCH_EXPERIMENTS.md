@@ -1346,7 +1346,7 @@ so their positive coverage is source/public-fixture evidence, not runtime proof.
 All nine predeclared bounded native Trace calls pass. A Green Sapphire
 TGregworks shard-to-gem carrier is blocked by all selectors while direct
 part manufacture stays available. Native recipe records, exact NBT, consumed
-cofeeds and presence inputs are retained. In shortest mode queued states fall
+cofeeds and presence inputs are retained. Before endpoint preflight, shortest queued states fall
 1760→54, but classification adds 39815 charged units and total work rises
 3619→41728. There is no blanket speedup. Prepared material mode reads stored
 classifications without those hierarchy-array visits.
@@ -1361,3 +1361,21 @@ unchanged. All 194 Python, 67 GUI and 32 Java tests pass. Java audits add no
 new advisory meanings. Evidence stays local under `terminal-native-acceptance/`.
 Root checked the native shard, part target and ordinary component-rotor facts.
 No active dataset, main bundle, service or configuration was switched.
+
+### Terminal endpoint preflight
+
+The static terminal-edge rule yields an early impossibility proof: every
+permitted successor of a recognized terminal resource is terminal. Such a
+start cannot reach an ordinary or unclassified target under the restrictive
+policy. The shared Dataset loader now checks endpoints before shortest
+discovery or material source-distance construction. Diverse reuses its
+shortest preflight. Actual classification reads and ancestry visits remain
+charged. Endpoint checks have separate telemetry and do not invent recipe edges.
+
+The public regression is RED, then GREEN across all three selectors and both
+ordinary/unknown targets. It proves zero examined recipes, queued states and
+distance work while preserving terminal targets. All 84 focused checks pass.
+The GUI explains policy rejection and retains the selected filter. All 68 GUI
+tests, typecheck and candidate build pass. The combined Python working-tree
+suite passes too. The earlier nine native measurements remain the original
+baseline, without repeated queries, rebuilds or a new speedup claim.

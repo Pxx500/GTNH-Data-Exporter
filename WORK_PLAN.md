@@ -673,6 +673,12 @@ etap. Bieżące pomiary i decyzje są w SEARCH_EXPERIMENTS.md.
   pozostają niezmienione. Brak ogólnego przyspieszenia: tryb shortest płaci
   za odczyt hierarchii, a material używa przygotowanych kategorii.
   Domyślnie pozostaje `allow`. Aktywnej bazy i usług nie przełączono.
+  Dodatkowy preflight końców trasy odrzuca niemożliwe pary narzędzie/część
+  do zwykłego lub nierozpoznanego celu przed rozwijaniem grafu. Wynika to
+  z tej samej reguły przejść. Odczyty są płatne, a sprawdzenia końców są
+  oddzielone od prawdziwych krawędzi. GUI wyjaśnia powód pustego wyniku.
+  Przechodzi 84 testy skupione na kontrakcie oraz pełny zestaw GUI 68 testów.
+  Nie powtarzano wcześniejszych dziewięciu zapytań natywnych.
 - [ ] Sprawdzić opcjonalną natywną historię rejestracji receptur jako dowód
   roli wejść Cuttera. GT udostępnia `GTRecipe.stackTraces`, ale historia może
   zniknąć przy kopiowaniu i jej zbieranie obejmuje całą paczkę. Oddzielny

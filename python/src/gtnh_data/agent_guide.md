@@ -121,6 +121,13 @@ and direct recipe lookup stays available. Request `"allow"` for unrestricted
 dependency investigation. Recycling explicitly uses that unrestricted policy.
 Loop and energy audits retain their original accounting.
 
+An incompatible tool/part start and ordinary or unclassified target is rejected
+before graph discovery. This follows the same edge rule and does not establish
+general unobtainability. Inspect `search.terminal_artifacts.endpoint_compatibility`
+and `endpoint_checks`. Endpoint classification is charged separately from
+actual recipe-edge checks. Choose `"allow"` to investigate that resource's
+recycling or other unrestricted dependencies.
+
 Recognition uses captured `item_type` class/interface ancestry. Missing or
 failed item evidence is unknown, not a negative classification. Inspect the
 returned recognition diagnostics before claiming the categories were fully
