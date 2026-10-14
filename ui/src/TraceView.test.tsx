@@ -65,6 +65,37 @@ test('material path explanations identify their target ingredient branch and hon
   expect(within(paths).getByText(/Material continuity hint: supported/)).toHaveTextContent('input 2')
   expect(within(paths).getByText(/Other recipe inputs still need external supplies/)).toBeVisible()
   expect(within(paths).getByText(/Native output order is a hint/)).toBeVisible()
+  expect(within(paths).queryByText('Crafting tool category:')).not.toBeInTheDocument()
+})
+
+test('category hints name only the selected path input and preserve local inspection and graph state',async()=>{
+  const navigate=vi.fn()
+  const wrench={...resources[1],display_name:'Steel Wrench'}
+  vi.stubGlobal('fetch',vi.fn(async(input:string)=>new Response(JSON.stringify({snapshot_id:'fixture',item:input.endsWith('r1')?wrench:resources.find(resource=>input.endsWith(resource.id))}))))
+  const {rerender}=render(<TraceView trace={{...trace,resources:trace.resources.map(resource=>resource.id==='r1'?wrench:resource),paths:[trace.paths[0],trace.paths[0]],path_details:[{path_index:0,selection_reason:'Selected dependency branch',material_continuity:'partial',byproduct_steps:[],target_process_id:'p2',target_slot_index:0,scope:'dependency_spine_with_external_inputs',input_category_hints:[{step_index:1,process_id:'p1',resource_id:'r1',category:'crafting_tool',basis:'exact_captured_ore_dictionary_membership',group_ids:['ore:craftingToolWrench'],input_role:'consume',native_accounting:{tool_accounting:'container_damage_and_breakage_unresolved',container_returns:'native_unknown',input_accounting:'declared_consumption_without_container_return_credit'},scope:'selected_resource_category_only'}]}]}} onSelect={navigate}/>)
+  const graph=screen.getByRole('region',{name:'Recipe path graph'})
+  const tile=await within(graph).findByRole('article',{name:'Recipe Alloy Smelter'})
+  fireEvent.change(screen.getByLabelText('Highlight path'),{target:{value:'1'}})
+  const paths=screen.getByText('Ordered paths and explanations (2)').closest('details')!
+  paths.setAttribute('open','')
+  const hintedPath=within(paths).getByRole('heading',{name:'Path 1 · 3 steps'}).closest('section')!
+  const otherPath=within(paths).getByRole('heading',{name:'Path 2 · 3 steps'}).closest('section')!
+  const label=within(hintedPath).getByText('Crafting tool category:')
+  const note=label.closest('p')!
+  expect(note).toHaveTextContent('Steel Wrench at step 2 (Alloy Smelter)')
+  expect(label).toHaveAttribute('title','The category comes from captured OreDictionary membership. It does not determine actual tool use, wear or material contribution.')
+  expect(note).toHaveTextContent('See the recipe for other inputs and consumption')
+  expect(within(otherPath).queryByText('Crafting tool category:')).not.toBeInTheDocument()
+  fireEvent.click(within(note).getByRole('button',{name:'Steel Wrench'}))
+  expect(await within(screen.getByRole('complementary')).findByRole('heading',{name:'Steel Wrench'})).toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button',{name:'Close record inspector'}))
+  fireEvent.click(within(note).getByRole('button',{name:'Alloy Smelter'}))
+  expect(within(screen.getByRole('complementary')).getByText('Required presence')).toBeInTheDocument()
+  expect(screen.getByLabelText('Highlight path')).toHaveValue('1')
+  expect(within(graph).getByRole('article',{name:'Recipe Alloy Smelter'})).toBe(tile)
+  expect(navigate).not.toHaveBeenCalled()
+  rerender(<TraceView trace={{...trace,path_details:[{path_index:0,selection_reason:'Selected dependency branch',material_continuity:'partial',byproduct_steps:[],target_process_id:'p2',target_slot_index:0,scope:'dependency_spine_with_external_inputs',input_category_hints:[]}]}} onSelect={navigate}/>)
+  expect(within(paths).queryByText('Crafting tool category:')).not.toBeInTheDocument()
 })
 
 test('narrow inspector keeps its close control outside the scrolling content and Escape restores graph focus',async()=>{

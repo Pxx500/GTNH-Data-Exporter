@@ -49,6 +49,74 @@ def recovery_fixture(root, *, explicit=True):
 
 
 class FlowIndexTests(unittest.TestCase):
+    def test_selected_tool_category_hint_preserves_mixed_unknown_and_presence_inputs(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            groups = [{'id': 'ore:' + name, 'kind': 'ore_dict', 'name': name, 'members': ['tool'],
+                       'provenance': {'owner': 'Forge OreDictionary'}}
+                      for name in ('craftingToolHardHammer', 'craftingToolFile')]
+            accounting = {'tool_accounting': 'container_damage_and_breakage_unresolved',
+                          'container_returns': 'native_unknown',
+                          'input_accounting': 'declared_consumption_without_container_return_credit'}
+            maker = process('craft', [slot(choice('tool'), choice('feed'), choice('unknown', mode='native_unknown')),
+                            slot(choice('tool'), role='presence')], ['target'],
+                            family='minecraft:crafting', conditions=accounting)
+            dataset = Dataset.import_snapshot(snapshot(root / 'capture', resources=[
+                resource(id) for id in ('tool', 'feed', 'unknown', 'target')], groups=groups, processes=[maker]), root / 'index.sqlite')
+            full = dataset.trace_processes(start_id='tool', target_id='target', path_selection='material', max_paths=1)
+            compact = dataset.trace_processes(start_id='tool', target_id='target', path_selection='material', max_paths=1, view='compact')
+            expected = [{'step_index': 0, 'process_id': 'craft', 'resource_id': 'tool',
+                         'category': 'crafting_tool', 'basis': 'exact_captured_ore_dictionary_membership',
+                         'group_ids': ['ore:craftingToolFile', 'ore:craftingToolHardHammer'],
+                         'input_role': 'consume', 'native_accounting': accounting,
+                         'scope': 'selected_resource_category_only'}]
+            self.assertEqual(full['paths'][0]['resource_ids'], ['tool', 'target'])
+            self.assertEqual(full['path_details'][0].get('input_category_hints'), expected)
+            self.assertEqual(compact['path_details'], full['path_details'])
+            self.assertEqual(full['processes'], [maker])
+            self.assertEqual(compact['processes'], [maker])
+
+    def test_tool_category_hint_requires_exact_member_not_nbt_alias_or_unified_group(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            rows = [resource('tool', registry_name='test:shared-tool', nbt={'type': 'int', 'value': 1}),
+                    resource('alias', registry_name='test:shared-tool', nbt={'type': 'int', 'value': 2}), resource('target')]
+            groups = [{'id': 'ore:craftingToolHardHammer', 'kind': 'ore_dict', 'name': 'craftingToolHardHammer',
+                       'members': ['tool'], 'provenance': {'owner': 'Forge OreDictionary'}},
+                      {'id': 'ore:craftingToolAlias', 'kind': 'unified', 'name': 'craftingToolAlias',
+                       'members': ['alias'], 'provenance': {'owner': 'fixture'}}]
+            match = choice('tool')
+            match['match']['nbt_sensitive'] = False
+            maker = process('craft', [slot(match)], ['target'], family='minecraft:crafting')
+            dataset = Dataset.import_snapshot(snapshot(root / 'capture', resources=rows, groups=groups, processes=[maker]), root / 'index.sqlite')
+            member = dataset.trace_processes(start_id='tool', target_id='target', path_selection='material', max_paths=1)
+            alias = dataset.trace_processes(start_id='alias', target_id='target', path_selection='material', max_paths=1)
+            self.assertEqual(member['path_details'][0].get('input_category_hints', []), [
+                {'step_index': 0, 'process_id': 'craft', 'resource_id': 'tool', 'category': 'crafting_tool',
+                 'basis': 'exact_captured_ore_dictionary_membership', 'group_ids': ['ore:craftingToolHardHammer'],
+                 'input_role': 'consume', 'native_accounting': {'tool_accounting': None, 'container_returns': None,
+                                                              'input_accounting': None},
+                 'scope': 'selected_resource_category_only'}])
+            self.assertEqual(alias['paths'][0]['resource_ids'], ['alias', 'target'])
+            self.assertEqual(alias['path_details'][0].get('input_category_hints'), [])
+            self.assertEqual(alias['processes'], [maker])
+
+    def test_presence_tool_category_is_not_a_selected_consumed_input_hint(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            groups = [{'id': 'ore:craftingToolHardHammer', 'kind': 'ore_dict', 'name': 'craftingToolHardHammer',
+                       'members': ['tool'], 'provenance': {'owner': 'Forge OreDictionary'}}]
+            maker = process('craft', [slot(choice('feed')), slot(choice('tool'), role='presence')], ['target'],
+                            family='minecraft:crafting')
+            dataset = Dataset.import_snapshot(snapshot(root / 'capture', resources=[resource(id) for id in ('feed', 'tool', 'target')],
+                groups=groups, processes=[maker]), root / 'index.sqlite')
+            result = dataset.trace_processes(start_id='feed', target_id='target', path_selection='material', max_paths=1)
+            self.assertEqual(result['path_details'][0].get('input_category_hints'), [])
+            self.assertEqual(result['processes'], [maker])
+            presence = dataset.trace_processes(start_id='tool', target_id='target', path_selection='material', max_paths=1)
+            self.assertEqual(presence['paths'], [])
+            self.assertEqual(presence['path_details'], [])
+
     def test_repeated_native_slots_do_not_exhaust_spine_budget(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

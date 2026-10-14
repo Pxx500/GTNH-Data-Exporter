@@ -384,10 +384,37 @@ etap. Bieżące pomiary i decyzje są w SEARCH_EXPERIMENTS.md.
   Kara za samą zmianę formy daje regresję i nie trafia do produkcji. W badanych
   trasach nie zaobserwowano powrotu do tej samej sygnatury formy, a kara usuwa
   potrzebne kroki. Spis typów przejść pozostaje dowodem do dalszych badań.
-- [ ] Sprawdzić natywne role wejść, zwłaszcza narzędzie do craftingu i materiał
+- [x] Sprawdzić natywne role wejść, zwłaszcza narzędzie do craftingu i materiał
   produkcyjny. Oprzeć je na grupach i deklaracjach receptury, bez zgadywania
   po nazwach. Nie zmieniać zużywanego narzędzia w nieznikającą obecność ani
   nie wywodzić pochodzenia atomów z samego udziału składnika.
+  Kara w wyszukiwaniu nie poprawia wyników i jest kosztowna. Dodano zamiast
+  niej adnotacje wybranych wejść oraz krótkie wyjaśnienie w GUI. Natywne
+  ścieżki i liczniki wyszukiwania pozostają takie same. Adnotacja kosztuje
+  około 3 ms, a 173 testy Pythona i 64 testy GUI przechodzą.
+- [x] Uzupełnić natywne deklaracje GT++ o właścicieli płynów. Korzystać z
+  rzeczywistych referencji w istniejącym rejestrze, bez fabryk i zgadywania
+  nazw. Zachować wszystkich kandydatów, oddzielić te dane od bilansów i
+  potwierdzić odczyt w jednym odrębnym eksporcie.
+  Potwierdzono 268 właścicieli płynów i zgodne deklaracje stopionych
+  Hastelloy-W/N z ich komponentami. Paczka przeszła na `.225`, więc
+  nowy dump zachowuje nieobsługiwane bilanse zamiast przyjmować tę wersję
+  bez dowodów zgodności. Aktywny snapshot pozostaje bez zmian.
+- [x] Sprawdzić literaturę o grupach podobnych zastosowań i ścieżkach po
+  typach relacji. Odróżnić je od grup SCC i przygotować najwyżej jeden mały
+  test sygnatur zastosowań na obecnych danych. Nie traktować podobieństwa
+  jako dowodu osiągalności ani nie dodawać dużego treningu bez wyników.
+  Profile rodzin produkujących i zużywających rozpoznają postacie materiałów
+  lepiej niż kontrola stopnia grafu: 75,76% wobec 30,30% w 33 przypadkach.
+  To wynik pośredni. Nie potwierdza jakości tras ani zastosowań 17 komponentów
+  bez niezależnych etykiet. Koszty przygotowania i odczytów pozostają jawne.
+- [ ] Sprawdzić jeden wariant kierowania wyszukiwaniem na podstawie profili
+  zastosowań składników celu. Porównać te same osiem przypadków i limity,
+  zachować wszystkie natywne kroki i policzyć przygotowanie. Nie promować
+  samego podobieństwa form, jeśli nie poprawia jakości konkretnych tras.
+- [x] Sprawdzić możliwość ścisłego bilansu GT++ na podstawie nowych deklaracji.
+  Brakuje niezależnej podstawy ilości i tożsamości pierwiastków. Nominalne
+  ilości form pozostają informacją o przetwarzaniu, bez certyfikacji chemii.
 - [x] Sprawdzić wybieranie wyjść regionu na podstawie rzeczywistych gałęzi
   celu i przygotowanych odległości. Policzyć przygotowanie, konkretne kroki,
   walidację i pracę zapytania. Odrzucić rozwiązanie, jeśli wyjścia pozostaną

@@ -570,24 +570,48 @@ def find_paths(dataset, canonical, start_id, target_id, max_depth, max_processes
 
 
 def path_details(dataset, paths, resources, processes, branches):
-    details = []
-    for index, path in enumerate(paths):
-        if not path['process_ids']:
-            continue
-        missing, breaks, byproducts = 0, 0, []
-        for source, dest, pid in zip(path['resource_ids'], path['resource_ids'][1:], path['process_ids']):
-            left, right = material_tokens(resources[source]), material_tokens(resources[dest])
-            missing += int(not left or not right)
-            breaks += int(bool(left and right and not left & right))
-            outputs = processes[pid]['outputs']
-            position = next(i for i, output in enumerate(outputs) if output['resource_id'] == dest)
-            if position:
-                byproducts.append({'process_id': pid, 'resource_id': dest, 'basis': 'secondary_output_position_hint'})
-        branch = next((row for row in branches if index in row['path_indices']), {})
-        details.append({'path_index': index, 'material_continuity': 'discontinuous' if breaks else 'partial' if missing else 'supported',
-            'selection_reason': 'Preserved a target ingredient branch despite a material discontinuity hint' if breaks else
-                                'Dependency branch found with incomplete material hints' if missing else
-                                'Prioritized native material continuity and target ingredient coverage',
-            'byproduct_steps': byproducts, 'target_process_id': branch.get('target_process_id'),
-            'target_slot_index': branch.get('slot_index'), 'scope': 'dependency_spine_with_external_inputs'})
+    details, categories, groups = [], {}, {}
+    with dataset._connect() as connection:
+        def category_groups(rid):
+            if rid not in categories:
+                categories[rid] = []
+                for gid, in connection.execute("SELECT group_id FROM members WHERE resource_id=? "
+                        "AND group_id GLOB 'ore:craftingTool*' ORDER BY group_id", (rid,)):
+                    if gid not in groups:
+                        groups[gid] = dataset._record(connection, 'groups', gid)
+                    group = groups[gid]
+                    if group['kind'] == 'ore_dict' and group['name'].startswith('craftingTool'):
+                        categories[rid].append(gid)
+            return categories[rid]
+
+        for index, path in enumerate(paths):
+            if not path['process_ids']:
+                continue
+            missing, breaks, byproducts, input_hints = 0, 0, [], []
+            for step, (source, dest, pid) in enumerate(zip(path['resource_ids'], path['resource_ids'][1:], path['process_ids'])):
+                left, right = material_tokens(resources[source]), material_tokens(resources[dest])
+                missing += int(not left or not right)
+                breaks += int(bool(left and right and not left & right))
+                outputs = processes[pid]['outputs']
+                position = next(i for i, output in enumerate(outputs) if output['resource_id'] == dest)
+                if position:
+                    byproducts.append({'process_id': pid, 'resource_id': dest, 'basis': 'secondary_output_position_hint'})
+                group_ids = category_groups(source)
+                if group_ids:
+                    # Category membership does not establish actual tool use or remainder behavior.
+                    conditions = processes[pid]['conditions']
+                    input_hints.append({'step_index': step, 'process_id': pid, 'resource_id': source,
+                        'category': 'crafting_tool', 'basis': 'exact_captured_ore_dictionary_membership',
+                        'group_ids': group_ids, 'input_role': 'consume',
+                        'native_accounting': {key: conditions.get(key) for key in
+                            ('tool_accounting', 'container_returns', 'input_accounting')},
+                        'scope': 'selected_resource_category_only'})
+            branch = next((row for row in branches if index in row['path_indices']), {})
+            details.append({'path_index': index, 'material_continuity': 'discontinuous' if breaks else 'partial' if missing else 'supported',
+                'selection_reason': 'Preserved a target ingredient branch despite a material discontinuity hint' if breaks else
+                                    'Dependency branch found with incomplete material hints' if missing else
+                                    'Prioritized native material continuity and target ingredient coverage',
+                'byproduct_steps': byproducts, 'target_process_id': branch.get('target_process_id'),
+                'target_slot_index': branch.get('slot_index'), 'scope': 'dependency_spine_with_external_inputs',
+                'input_category_hints': input_hints})
     return details

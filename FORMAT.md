@@ -57,8 +57,8 @@ phase-identity candidate, with its tree, phases, accounting and evidence.
 Ambiguous identity is not resolved by name. Query accounting may establish a
 common vector only when all candidate bases, scales and vectors agree exactly.
 
-Item resources may additionally carry `material_facts.native_owner`. This is
-independent direct item or block owner evidence. Its source class and API,
+Item and fluid resources may additionally carry `material_facts.native_owner`.
+This is independent direct item, block or fluid owner evidence. Its source class and API,
 literal native material identity, form and declaration tree do not replace the
 GT ItemData association or change chemical accounting eligibility.
 
@@ -79,6 +79,18 @@ Neither a completed traversal nor matching names establishes chemical identity,
 purity, source-atom transfer, resource interchangeability or obtainable stock.
 Existing accounting consumers continue to use the supported GT accounting
 profile and preserve unresolved GT++ accounting.
+
+Fluid native-owner evidence has scope `native_fluid_owner`. It records the
+actual fluid class and every distinct material object in the native GT++
+catalog whose stored fluid or plasma field references that fluid object.
+Each candidate retains its owner class, actual field bindings (`mFluid` or
+`mPlasma`) and bounded declaration tree. One distinct owner is associated,
+multiple owners are ambiguous, and no match is unassociated. Failed catalog
+traversal retains partial candidates with diagnostics and cannot establish
+uniqueness. Field bindings describe native references, not certified phase,
+amount, purity or GT5 identity. Item and block owner fields remain independent.
+This links the fluid object, not stack-specific NBT behavior. Tagged resource
+identities and native recipe predicates remain separate.
 
 The unchanged native GT quantity profile is identified by `5.09.54.221` and
 explicitly supports runtime versions `5.09.54.221` and `5.09.54.223`.

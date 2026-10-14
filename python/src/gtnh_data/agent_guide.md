@@ -247,6 +247,16 @@ filters native chemical accounting. A gain can consume external reagents.
 machines. Unknown material facts stay unsupported. Formula display text alone
 does not establish composition, purity or chemical conservation.
 
+Material-path `path_details` can include `input_category_hints`. A
+`crafting_tool` hint means the exact selected resource ID is a captured member
+of the listed native OreDictionary groups. It does not establish actual tool
+use, unchanged stock, wear, source-atom contribution or every OR alternative's
+category. The selected input retains its `consume` role. Inspect the full
+recipe and copied `native_accounting` conditions for unresolved tool damage
+and container returns. An empty or absent hint list is not proof that an input
+cannot function as a tool. These are output explanations, not search filters
+or penalties, and they preserve the selected recipe witnesses.
+
 The native quantity profile explicitly supports GT `5.09.54.221` and
 `5.09.54.223`, with the same `.221` interpretation profile. Read the actual
 snapshot and resource accounting status. A supported runtime version alone

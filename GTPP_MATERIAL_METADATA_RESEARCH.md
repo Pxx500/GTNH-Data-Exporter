@@ -263,3 +263,50 @@ Protected indexes retain their hashes. The active GUI and MCP dataset stay
 on the canonical `.221` snapshot. Detailed source comparisons, actual native
 samples, all vector comparisons and audit evidence are in
 `exports/search-research-20261014/accounting-223/`.
+
+## Passive GT++ fluid ownership
+
+The existing `MaterialFacts.fluid` owner now also captures native GT++ fluid
+bindings. The public `Material.mMaterialMap` catalog and direct `getFluid` and
+`getPlasma` field returns permit passive object-reference comparison. Native
+name equality is not used for candidate deduplication. The implementation
+adds 45 lines and keeps the original GT fluid association/accounting body.
+It records every distinct matching object, actual field bindings and the
+existing bounded declaration tree. Failed scans retain partial candidates
+without claiming uniqueness. This does not establish global material equality
+or quantities for the GT++ namespace.
+
+The isolated runtime refreshes to GT `.225`, CoreMod `2.9.89` and GTNHLib
+`0.11.54`. Snapshot `4966d66c-68f3-4689-adf5-ab55c1a8e4b2` contains 268
+associated fluid owners and 1,152 unassociated fluids. No ambiguous or failed
+scan is observed. All 268 owners use the native Material class, with 231
+`mFluid` and 37 `mPlasma` bindings. All 865 emitted declaration nodes have
+complete traversal. Ambiguity and failure handling are reviewed code paths,
+not positive runtime cases from this pack.
+
+Molten Hastelloy-W `r33027` and gear `r10135` have equal declaration trees.
+Molten Hastelloy-N `r33043` and double plate `r24290` likewise agree. Both
+fluids are actual FluidGT6 objects with one `mFluid` owner. Native alloy and
+casting witnesses preserve all cofeeds and the required mold. Tree agreement
+does not prove shared persisted object identity or chemical accounting.
+
+The four relevant owner class files remain byte-identical across `.221`,
+`.223` and the actual `.225` JAR. Compilation and all 30 Java tests pass.
+IntelliJ completes and supplemental PMD reports 22 metric advisories with no
+analyzer error, independently of the combined runner's wrapper-discovery skip.
+The default tests cover the existing GT phase/accounting seam. Runtime
+capture supplies the positive GT++ object-link evidence.
+
+GT `.225` remains outside the explicit chemical accounting versions. Both
+Hastelloy pairs remain unsupported, and complete-vector equivalence is not
+claimed. Native declarations and GT associations match 118,718 prior resource
+identities after excluding runtime versions and every accounting object.
+One Printer Manual NBT text correction changes its identity. This is scoped
+declaration comparison, not whole-pack equality.
+
+The fresh pipeline takes 174.823 seconds, including about 14 seconds of native
+dump publication. Compressed streams total 14,455,749 bytes. The canonical
+`.221` and preceding `.223` indexes retain their hashes. No active dataset is
+switched. Exact source/API evidence, class bytes, native records, recipe
+witnesses and limitations are in
+`exports/search-research-20261014/gtpp-fluid-owner/`.

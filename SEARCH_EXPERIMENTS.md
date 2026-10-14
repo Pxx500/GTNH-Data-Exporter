@@ -388,3 +388,79 @@ appears in the eight dedup paths, embedded resources or input-choice anchors,
 so they do not explain these benchmark results. A future typed projection
 should retain their unknown state rather than treating NULL as continuity.
 No speculative production fix is added for this finding.
+
+## Native input categories explain routes without changing search
+
+The whole-slot crafting-tool score does not improve the nine native controls.
+All twenty non-search result fields remain equal, while unrestricted Volcanus
+takes 7.332 seconds instead of 0.556 and the hammer control takes 5.576 instead
+of 0.501. The added membership and complete-slot checks are not justified as
+search guidance. That score is rejected.
+
+The production change instead annotates exact selected resources belonging to
+captured OreDictionary crafting-tool groups after search finishes. This says
+that the resource has a native category, not that the selected recipe uses it
+as a tool, preserves it, or receives its material from it. Native consumption,
+presence, tool accounting and container returns remain separate facts.
+Unknown roles stay unknown. The GUI provides short text and existing local
+inspection links rather than adding another planner setting.
+
+The nine paired native cases preserve every non-search result field after
+removing only the new annotation. Search counters remain equal, apart from
+timing. Actual annotation cost including its database connection is
+2.815–3.628 ms. Integrated verification passes 173 Python tests and 64 GUI tests.
+A temporary HTTP server using the real application verifies the casing's
+native wrench annotation and built static bundle, then closes gracefully.
+This is not browser visual verification. The main server on port 8000 still
+has the earlier loaded backend because automatic approval review blocked its
+restart. Existing MCP connections are not claimed to have refreshed.
+Evidence is in `exports/search-research-20261014/tool-roles/`.
+
+## GT++ fluid owner capture remains separate from chemistry
+
+The native collector now reads actual fluid references from the public GT++
+material registry. It retains every distinct owner and distinguishes unique,
+ambiguous, missing and failed association states. It invokes no material
+factory or name-based cross-system match. The bound fields describe native
+references, not certified phase quantities or purity.
+
+Fresh snapshot `4966d66c-68f3-4689-adf5-ab55c1a8e4b2` contains 268 associated
+fluid owners and 1,152 unassociated fluids. No ambiguous or failed association
+occurs in this run. Molten Hastelloy-W/N declarations match the corresponding
+gear and double plate declarations. The full-pack manifest advances to GT
+`.225`, whose accounting remains explicitly unsupported. No implicit version
+extension or active dataset switch follows. Both protected `.221` and accepted
+`.223` indexes retain their hashes. Compilation and all 30 Java tests pass.
+Evidence is in `exports/search-research-20261014/gtpp-fluid-owner/`.
+
+GT++ quantity research finds no public fraction-preserving composition getter
+or retained GT5 Element identity. Hastelloy-W/N declarations avoid fractional
+loss, but their ratios of `3:1:12:3:31` and `2:4:2:2:15` do not declare an
+elemental quantity basis. Nominal prefix amounts and casting batch sizes are
+useful operational facts. They cannot independently certify chemical balance.
+No new GT++ chemical accounting is introduced. Exact source and runtime
+evidence is in `exports/search-research-20261014/gtpp-quantity-feasibility/`.
+
+## Contextual use profiles show a form signal
+
+Leiden communities and typed metapath literature offer directions distinct
+from strongly connected components. Connectivity or embedding similarity is
+not directed recipe feasibility. No clustering or embedding dependency is
+installed. The first bounded diagnostic uses separate consuming and producing
+recipe-family profiles with exact resource identities.
+
+Across 33 eligible queries, combined profiles retrieve the same native
+form/phase in 75.76% of top-three positions, compared with 30.30% for the degree
+control. The fixed improvement is 45.45 percentage points. This is a native
+form proxy, not independently validated semantic use or better pathfinding.
+The 17 opaque resources have profiles but no evaluation labels.
+
+The diagnostic withholds 1,609 processes producing target or pre-target
+components. It excludes same-primary and shared-matcher pairs. All 64 profiles
+complete within the fixed caps. Collection, lookup and matching cost 62,998
+operations, while scoring and verification cost 48,712. The 20,246 family-row
+accesses touching 35.77 MB are reported separately from full evidence records.
+Its 0.375-second run is not a runtime search speedup claim. The next question
+is whether target-conditioned profiles improve concrete native paths at the
+same query limits. Evidence is in
+`exports/search-research-20261014/communities/USE_SIGNATURES.md`.

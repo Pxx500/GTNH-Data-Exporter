@@ -191,6 +191,51 @@ final class MaterialFacts {
     }
 
     JsonObject fluid(FluidStack original) {
+        JsonObject facts = gtFluid(original);
+        facts.add("native_owner", nativeFluidOwner(original));
+        return facts;
+    }
+
+    private static JsonObject nativeFluidOwner(FluidStack original) {
+        String source = "Material.mMaterialMap + Material.getFluid/getPlasma";
+        JsonArray candidates = new JsonArray();
+        JsonObject result = object("status", "unassociated", "scope", "native_fluid_owner",
+            "source_api", source, "source_class", Material.class.getName(), "fluid_class", null,
+            "candidate_count", 0, "candidates", candidates);
+        try {
+            Fluid fluid = original == null ? null : original.getFluid();
+            if (fluid == null) {
+                result.addProperty("reason", "Missing native fluid");
+                return result;
+            }
+            result.addProperty("fluid_class", fluid.getClass().getName());
+            Set<Material> seen = java.util.Collections.newSetFromMap(new IdentityHashMap<>());
+            for (Material candidate : Material.mMaterialMap) {
+                if (candidate == null || seen.contains(candidate)) continue;
+                JsonArray bindings = new JsonArray();
+                if (candidate.getFluid() == fluid) bindings.add(new com.google.gson.JsonPrimitive("mFluid"));
+                if (candidate.getPlasma() == fluid) bindings.add(new com.google.gson.JsonPrimitive("mPlasma"));
+                if (bindings.size() == 0) continue;
+                seen.add(candidate);
+                JsonObject owner = object("owner_class", candidate.getClass().getName(), "bindings", bindings,
+                    "material", null);
+                candidates.add(owner);
+                result.addProperty("candidate_count", candidates.size());
+                owner.add("material", nativeMaterial(candidate, new IdentityHashMap<>(), 0,
+                    new int[] {NATIVE_DECLARATION_NODES}));
+            }
+            result.addProperty("status", candidates.size() == 0 ? "unassociated"
+                : candidates.size() == 1 ? "associated" : "ambiguous");
+            if (candidates.size() == 0) result.addProperty("reason", "No native GT++ material fluid binding");
+            return result;
+        } catch (RuntimeException error) {
+            result.addProperty("status", "failed");
+            result.add("failure", object("class", error.getClass().getName(), "message", error.getMessage()));
+            return result;
+        }
+    }
+
+    private JsonObject gtFluid(FluidStack original) {
         try {
             FluidStack query = original.copy();
             Fluid fluid = query.getFluid();
