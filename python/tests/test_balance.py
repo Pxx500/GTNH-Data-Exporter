@@ -39,6 +39,27 @@ def facts(material, quantity=Fraction(1), basis="gt_material_units"):
 
 
 class BalanceTests(unittest.TestCase):
+    def test_eye_of_harmony_projection_is_not_an_execution_ledger(self):
+        original = recipe('proxy', [slot('dimension', 1, 'presence')], [('dust', 1, Fraction(1))])
+        original.update(family='gregtech:gt.recipe.eyeofharmony', provenance={'owner': 'GTRecipe'})
+        original['conditions']['special_items'] = {'type': 'tectech.recipe.EyeOfHarmonyRecipe', 'status': 'uninterpreted'}
+        for captured in (True, None):
+            with self.subTest(executable=captured):
+                proxy = deepcopy(original)
+                proxy['executable'] = captured
+                if captured is None:
+                    proxy['conditions'].update(dynamic_inputs='unresolved', dynamic_output='unresolved')
+                    proxy['conditions']['special_items']['status'] = 'captured_native_declaration'
+                result = net_ledger({'proxy': proxy}, {'proxy': 1})
+                self.assertEqual(result['status'], 'unsupported')
+                self.assertEqual(result['produced'], {})
+                self.assertIn('Eye of Harmony', result['unsupported'][0]['reason'])
+        for key in ('family', 'provenance', 'special_items'):
+            with self.subTest(missing_marker=key):
+                normal = deepcopy(original)
+                (normal['conditions'] if key == 'special_items' else normal).pop(key)
+                self.assertEqual(net_ledger({'proxy': normal}, {'proxy': 1})['status'], 'complete')
+
     def test_undeclared_start_stock_is_a_net_change_and_differs_from_declared_empty_inventory(self):
         processes = {"r": recipe("r", [slot("water", 9000), slot("sulfur", 9)],
                                 [("sulfur", 9, Fraction(1)), ("hydrogen", 9000, Fraction(1))])}

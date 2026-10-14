@@ -886,3 +886,49 @@ so no private test hook or producer RED is claimed. Public consumer RED/GREEN
 and real native capture provide the behavioral acceptance.
 Evidence is in `exports/search-research-20261014/native-ore-membership/` and
 `exports/search-research-20261014/route-meaning/`.
+
+## Custom machine declarations correct an Eye of Harmony phantom plan
+
+The .225 capture contains 43 Eye of Harmony GT display projections. They report
+zero EU/t, a derived ULV tier and presence inputs without consumed quantities.
+A concrete public accounting reproduction accepts guaranteed outputs with no
+consumed material and a recipe-runs network accepts a phantom production step.
+The nominal-energy audit already rejects the zero energy, but material accounting
+and recipe-tier discovery need a separate correction.
+
+One shared exact-marker diagnostic now rejects these projections in accounting
+and discovery, including supported immutable older snapshots. Recipe voltage is
+unknown. Raw inspection remains unchanged. Ordinary native zero-EU recipes keep
+their existing semantics. Unknown-tier inclusion cannot restore the unsupported
+accounting step.
+
+The producer now decodes the native EyeOfHarmonyRecipe declaration through its
+public getters. Output resource references retain ordered base quantities as
+exact decimal strings. Requirements, energy, timing, casing and rocket tiers,
+base success chance and efficiency retain their source API. These fields do not
+establish executed quantities or guaranteed machine yield. The original GT arrays
+remain visible beside null executability, unresolved dynamic inputs and outputs,
+and unresolved voltage without a derived nominal tier.
+
+One isolated capture produces snapshot 5b2dbdde-c08b-4efa-b85d-3e4b55893587.
+All 43 declarations pass exact long-string, source, reference and unresolved-state
+checks. Their declaration resource order matches the GT projection within this
+capture. Against the preceding capture, all 43 input identities and raw output
+multisets preserve amounts and chances, as do duration, EU/t and amperage.
+Output order differs in all 43 records. Prior source inspection explains native
+hash collection and tied sorting behavior without claiming the cause of every
+movement or treating order as a primary-output designation.
+
+All 118719 resource identities and prior fields remain unchanged apart from local
+IDs. Native matching membership is retained. All 19 protected indexes keep their
+hashes. The bounded phantom-plan control now returns no solutions, which is not
+a global unreachability proof. All 183 Python tests pass. Producer build, Java
+checks and scoped audits pass their established checks, with audit limits recorded
+in the evidence. Root independently checks one fresh public process, all its 350
+native output references, exact start EU above JavaScript's integer precision,
+the older public rejection and its protected database hash.
+
+This correction changes fidelity and accounting, not search budgets or ranking.
+The active snapshot, main served GUI and established MCP processes remain unchanged.
+Evidence is in `exports/search-research-20261014/eoh-native-declarations/` and
+`exports/search-research-20261014/output-order-semantics/eye-of-harmony/`.

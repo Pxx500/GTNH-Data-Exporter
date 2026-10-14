@@ -263,6 +263,15 @@ regenerating reagent can still require startup stock. Savings are relative to
 equal net target quantity and nominal recipe energy, without proving machine
 efficiency, overclock behavior or a global optimum.
 
+Some GT recipe maps expose display projections of custom machine logic. Eye of
+Harmony is one verified example. Its raw zero EU/t and one-item display outputs
+do not establish an ULV recipe or free production. New captures retain exact
+native base quantities and requirements under `conditions.special_items`, with
+execution and voltage explicitly unresolved. Those base declarations do not
+include all runtime yield conditions. Accounting and discovery reject the exact
+typed projection in older supported snapshots too. Inspect its raw process for
+research, but do not present it as a solvable production step.
+
 ### Audit loops and candidate anomalies
 
 ```json

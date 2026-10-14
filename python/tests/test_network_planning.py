@@ -16,6 +16,40 @@ class NetworkPlanningTests(unittest.TestCase):
         return Dataset.import_snapshot(snapshot(self.root / 'snapshot',
             resources=[resource(id) for id in ids], processes=records, **collections), self.root / 'index.sqlite')
 
+    def test_eye_of_harmony_proxies_are_inspectable_but_never_solvable_producers(self):
+        records = []
+        for id, executable in [('old', True), ('new', None)]:
+            conditions = {'enabled': True, 'fake': False, 'special_items': {
+                'type': 'tectech.recipe.EyeOfHarmonyRecipe',
+                'status': 'uninterpreted' if executable else 'captured_native_declaration'}}
+            if executable is None:
+                conditions.update(dynamic_inputs='unresolved', dynamic_output='unresolved',
+                                  recipe_voltage_tier_status='unresolved')
+            p = process(id, [slot(choice('dimension'), role='presence')], [id + '_dust'],
+                        family='gregtech:gt.recipe.eyeofharmony', executable=executable, conditions=conditions)
+            p['provenance']['owner'] = 'GTRecipe'
+            p['eu_per_tick'] = 0
+            records.append(p)
+        dataset = self.dataset(records, ['dimension', 'old_dust', 'new_dust'])
+        for p in records:
+            with self.subTest(process=p['id']):
+                target = p['outputs'][0]['resource_id']
+                discovery = dataset.discover_network(target, allowed_feed_ids=['dimension'],
+                    max_tier=1, unknown_tier_policy='include')
+                self.assertEqual(discovery['variants'], [])
+                self.assertEqual(discovery['exclusions']['counts'], {'unsupported_process': 1})
+                self.assertIn('Eye of Harmony', discovery['exclusions']['examples'][0]['detail'])
+                plan = dataset.plan_network(target, allowed_feed_ids=['dimension'], objective='recipe_runs',
+                    start_stock={'dimension': 1}, max_tier=1, unknown_tier_policy='include')
+                self.assertEqual(plan['solutions'], [])
+                self.assertNotEqual(plan['status'], 'complete')
+                self.assertEqual(dataset.get_process(p['id'])['item'], p)
+                self.assertEqual(dataset.find_processes(output_id=target)['items'], [p])
+                for policy in ('shortest', 'diverse'):
+                    self.assertEqual(dataset.trace_processes(start_id='dimension', target_id=target,
+                        path_selection=policy)['paths'], [])
+
+
     def test_candidate_discovery_keeps_all_and_inputs_presence_and_regeneration(self):
         main = process('main', [slot(choice('feed')), slot(choice('reagent')),
             slot(choice('tool'), role='presence')], ['target', 'spent'])

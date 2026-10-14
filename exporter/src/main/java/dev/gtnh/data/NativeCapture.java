@@ -41,6 +41,10 @@ import net.minecraft.item.crafting.FurnaceRecipes;
 import net.minecraft.util.StatCollector;
 import net.minecraftforge.fluids.FluidStack;
 import net.minecraftforge.oredict.OreDictionary;
+import tectech.recipe.EyeOfHarmonyRecipe;
+import tectech.recipe.TecTechRecipeMaps;
+import tectech.util.FluidStackLong;
+import tectech.util.ItemStackLong;
 
 /**
  * Independent canonical capture. The native crafting dispatch and GT registry enumeration
@@ -343,9 +347,17 @@ final class NativeCapture {
                     "fake", recipe.mFakeRecipe, "requires_empty_outputs", recipe.mNeedsEmptyOutput,
                     "special_items", nativeValue(recipe.mSpecialItems), "native_description", recipe.getNeiDesc(),
                     "machine_behavior", "native_machine_conditions_not_fully_interpreted");
+                boolean customMachineProjection = recipe.mSpecialItems instanceof EyeOfHarmonyRecipe
+                    && map == TecTechRecipeMaps.eyeOfHarmonyRecipes;
+                if (customMachineProjection) {
+                    conditions.addProperty("dynamic_inputs", "unresolved");
+                    conditions.addProperty("dynamic_output", "unresolved");
+                    conditions.addProperty("recipe_voltage_tier_status", "unresolved");
+                    conditions.addProperty("recipe_voltage_tier_reason", "custom_machine_projection");
+                }
                 emitProcess("gregtech:" + map.unlocalizedName, StatCollector.translateToLocal(map.unlocalizedName),
                     inputs, outputs, recipe.mDuration, recipe.mEUt, map.getAmperage(),
-                    recipe.mEnabled && !recipe.mFakeRecipe, conditions,
+                    customMachineProjection ? null : recipe.mEnabled && !recipe.mFakeRecipe, conditions,
                     object("owner", "GTRecipe", "map", map.unlocalizedName,
                         "map_class", map.getClass().getName(), "recipe_class", recipe.getClass().getName(), "index", count));
                 count++;
@@ -454,6 +466,7 @@ final class NativeCapture {
     }
 
     private JsonElement nativeValue(Object value) throws IOException {
+        if (value instanceof EyeOfHarmonyRecipe) return eyeOfHarmonyDeclaration((EyeOfHarmonyRecipe) value);
         if (value != null && value.getClass() == Sievert.class) {
             Sievert sievert = (Sievert) value;
             return object("type", value.getClass().getName(), "sievert", sievert.sievert, "isExact", sievert.isExact);
@@ -483,6 +496,32 @@ final class NativeCapture {
         return object("type", value.getClass().getName(), "status", "uninterpreted", "native_text", value.toString());
     }
 
+    private JsonObject eyeOfHarmonyDeclaration(EyeOfHarmonyRecipe recipe) throws IOException {
+        JsonArray itemOutputs = new JsonArray();
+        for (ItemStackLong output : recipe.getOutputItems()) {
+            itemOutputs.add(object("resource_id", item(output.itemStack),
+                "amount_decimal", Long.toString(output.getStackSize())));
+        }
+        JsonArray fluidOutputs = new JsonArray();
+        for (FluidStackLong output : recipe.getOutputFluids()) {
+            fluidOutputs.add(object("resource_id", fluid(output.fluidStack),
+                "amount_decimal", Long.toString(output.amount)));
+        }
+        return object("type", recipe.getClass().getName(), "status", "captured_native_declaration",
+            "native_text", recipe.toString(), "quantity_scope", "base_not_executed_yield", "runtime_execution", "unresolved",
+            "item_outputs", object("source_api", "EyeOfHarmonyRecipe.getOutputItems", "amount_source_api", "ItemStackLong.getStackSize", "entries", itemOutputs),
+            "fluid_outputs", object("source_api", "EyeOfHarmonyRecipe.getOutputFluids", "amount_source_api", "FluidStackLong.amount", "entries", fluidOutputs),
+            "hydrogen_requirement", object("source_api", "EyeOfHarmonyRecipe.getHydrogenRequirement", "value_decimal", Long.toString(recipe.getHydrogenRequirement())),
+            "helium_requirement", object("source_api", "EyeOfHarmonyRecipe.getHeliumRequirement", "value_decimal", Long.toString(recipe.getHeliumRequirement())),
+            "eu_start_cost", object("source_api", "EyeOfHarmonyRecipe.getEUStartCost", "value_decimal", Long.toString(recipe.getEUStartCost())),
+            "eu_output", object("source_api", "EyeOfHarmonyRecipe.getEUOutput", "value_decimal", Long.toString(recipe.getEUOutput())),
+            "duration_ticks", object("source_api", "EyeOfHarmonyRecipe.getRecipeTimeInTicks", "value_decimal", Long.toString(recipe.getRecipeTimeInTicks())),
+            "spacetime_casing_tier_required", object("source_api", "EyeOfHarmonyRecipe.getSpacetimeCasingTierRequired", "value_decimal", Long.toString(recipe.getSpacetimeCasingTierRequired())),
+            "rocket_tier", object("source_api", "EyeOfHarmonyRecipe.getRocketTier", "value_decimal", Long.toString(recipe.getRocketTier())),
+            "base_success_chance", object("source_api", "EyeOfHarmonyRecipe.getBaseRecipeSuccessChance", "value", recipe.getBaseRecipeSuccessChance()),
+            "energy_efficiency", object("source_api", "EyeOfHarmonyRecipe.getRecipeEnergyEfficiency", "value", recipe.getRecipeEnergyEfficiency()));
+    }
+
     private JsonObject chance(int nativeChance) { return object("numerator", nativeChance, "denominator", 10000); }
 
     /** Counts accepted outcomes on the uniform 24-bit java.util.Random.nextFloat lattice. */
@@ -498,7 +537,8 @@ final class NativeCapture {
 
     void emitProcess(String family, String label, JsonArray inputs, JsonArray outputs, Integer duration,
         Integer energy, Integer amperage, Boolean executable, JsonObject conditions, JsonObject provenance) throws IOException {
-        if (family.startsWith("gregtech:")) {
+        if (family.startsWith("gregtech:") && !(conditions.has("recipe_voltage_tier_status")
+            && "unresolved".equals(conditions.get("recipe_voltage_tier_status").getAsString()))) {
             if (energy != null && energy >= 0) {
                 int tier = GTUtility.getTier(energy);
                 conditions.addProperty("recipe_voltage_tier", tier);

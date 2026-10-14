@@ -201,6 +201,22 @@ duration and energy stay unknown because machine state and scaling affect them.
 Recipe-side wildcard metadata and asymmetric NBT matching remain explicit.
 Native HashSet selection order describes the captured run, not a stable priority.
 
+Eye of Harmony has a native machine declaration behind its GT display recipe.
+The GT arrays remain a captured projection. They do not establish execution
+quantities, guaranteed yield or recipe voltage. Its process has `executable: null`,
+unresolved dynamic inputs and outputs, and unresolved recipe voltage. Raw GT
+EU/t and duration remain visible without deriving a nominal voltage tier.
+`conditions.special_items` retains the native type and adds
+`status: captured_native_declaration`, `quantity_scope: base_not_executed_yield`
+and `runtime_execution: unresolved`. Native item and fluid output lists preserve
+their order and exact long quantities as `amount_decimal` strings beside resource
+references and getter provenance. Native long requirements, energy and timing use
+`value_decimal`. Native success chance and efficiency retain their numeric values.
+Casing and rocket tiers are machine requirements, not GT recipe voltage.
+Accounting and discovery also reject the exact typed Eye of Harmony projection
+in supported older snapshots. Raw inspection remains available. Neither the
+display outputs nor the base declaration alone certify an executable network.
+
 Botania Mana Infusion retains one-item consumption, output quantity and typed
 NBT, plus `conditions.total_mana` and `energy_unit: mana`. Catalyst predicates
 in `conditions.catalyst_below` identify the required block one block below the

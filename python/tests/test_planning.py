@@ -43,6 +43,32 @@ class PlanningTests(unittest.TestCase):
             with self.assertRaises(DatasetError):
                 dataset.trace_processes(start_id='a', target_id='b', **args)
 
+    def test_custom_proxy_and_explicit_unresolved_voltage_stay_unknown(self):
+        records = []
+        for id in ('proxy', 'normal', 'unresolved'):
+            p = process(id, [slot(choice('feed'))], ['target'], family='gregtech:gt.recipe.eyeofharmony')
+            p['provenance']['owner'] = 'GTRecipe'
+            p['eu_per_tick'] = 0
+            if id == 'proxy':
+                p['conditions']['special_items'] = {'type': 'tectech.recipe.EyeOfHarmonyRecipe'}
+            if id == 'unresolved':
+                p['conditions']['recipe_voltage_tier_status'] = 'unresolved'
+            records.append(p)
+        dataset = self.dataset(records, ['feed', 'target'])
+        trace = dataset.trace_processes(start_id='feed', target_id='target', max_tier=1,
+                                        unknown_tier_policy='include')
+        tiers = {t['process_id']: t for t in trace['recipe_tiers']}
+        self.assertEqual(tiers['proxy']['status'], 'unknown')
+        self.assertIsNone(tiers['proxy']['tier'])
+        self.assertIn('Eye of Harmony', tiers['proxy']['reason'])
+        self.assertEqual(tiers['unresolved']['status'], 'unknown')
+        self.assertEqual(tiers['normal']['status'], 'known')
+        self.assertEqual(tiers['normal']['name'], 'ULV')
+        filtered = dataset.trace_processes(start_id='feed', target_id='target', max_tier=1)
+        self.assertEqual({p['id'] for p in filtered['processes']}, {'normal'})
+        discovery = dataset.discover_network('target', allowed_feed_ids=['feed'], max_tier=1)
+        self.assertEqual({v['process_id'] for v in discovery['variants']}, {'normal'})
+
     def test_recycling_preserves_extra_and_inputs_startup_and_net_return(self):
         main = process('main', [slot(choice('a')), slot(choice('d', amount=4))], ['b', 'c'])
         main['outputs'][1]['amount'] = 2

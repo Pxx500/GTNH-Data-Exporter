@@ -92,6 +92,16 @@ def _empty(yield_mode):
                                  "Certain outputs and maximum possible input consumption"]}
 
 
+def native_projection_issue(process):
+    """Identify captured display projections that cannot certify execution facts."""
+    special = process.get("conditions", {}).get("special_items")
+    if (process.get("provenance", {}).get("owner") == "GTRecipe"
+            and process.get("family") == "gregtech:gt.recipe.eyeofharmony"
+            and isinstance(special, dict) and special.get("type") == "tectech.recipe.EyeOfHarmonyRecipe"):
+        return "Eye of Harmony custom-machine projection has unresolved execution quantities, yield and voltage"
+    return None
+
+
 def net_ledger(processes, executions, *, selections=None, groups=None, yield_mode="guaranteed"):
     """Account selected AND inputs, OR choices, cooutputs and presence exactly."""
     if yield_mode not in ("guaranteed", "expected"):
@@ -103,6 +113,9 @@ def net_ledger(processes, executions, *, selections=None, groups=None, yield_mod
         try:
             runs = _positive(count)
             process = processes[pid]
+            issue = native_projection_issue(process)
+            if issue:
+                raise ValueError(issue)
             if process.get("executable") is not True:
                 raise ValueError("Native recipe executability is false or unresolved")
             conditions = process.get("conditions", {})

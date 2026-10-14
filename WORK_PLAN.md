@@ -489,10 +489,16 @@ etap. Bieżące pomiary i decyzje są w SEARCH_EXPERIMENTS.md.
   są zgodne. Przechodzi 180 testów Pythona, 67 GUI i 32 Javy. HTTP, nowy
   klient MCP i osobne GUI potwierdzają adnotację. Główna instancja bez zmian.
   Nie stwierdzamy pełnej zgodności kolejności i warunków wszystkich procesów.
-- [ ] Zweryfikować rzeczywiste ilości i wymagania Eye of Harmony. Zbadać,
+- [x] Zweryfikować rzeczywiste ilości i wymagania Eye of Harmony. Zbadać,
   czy ogólny zapis GT jest oznaczonym proxy, czy trafia do planera jako zwykła
   receptura. Zachować natywne ilości long i zależności wykonania bez zgadywania
   ustawień maszyny ani gwarantowanego uzysku.
+  Potwierdzono 43 projekcje wyświetlania z fałszywie rozpoznanym poziomem ULV
+  i bez zużywanych wejść. Planer odrzuca je także w starszych snapshotach.
+  Jeden nowy dump zachowuje natywne ilości long, wymagania i bazowy uzysk.
+  Wykonanie oraz poziom napięcia pozostają jawnie nierozwiązane. Wszystkie
+  wcześniejsze tożsamości surowców i ich pola pozostają zgodne. Przechodzi
+  183 testy Pythona. Nie zmieniono aktywnego snapshota ani głównego serwera.
 - [x] Sprawdzić literaturę o landmarkach i planach zrelaksowanych pod kątem
   kierowania przez gałęzie składników celu. Odróżnić osiągalność pojedynczej
   ścieżki od spełnienia wszystkich wejść receptury i policzyć przygotowanie.

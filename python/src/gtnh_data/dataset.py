@@ -726,6 +726,7 @@ class Dataset:
     def discover_network(self, target_id, *, allowed_feed_ids, selections=None, scope=None, max_depth=8,
                          max_processes=200, max_variants=128, max_resources=512,
                          min_tier=None, max_tier=None, unknown_tier_policy='exclude', preferred_process_ids=None):
+        from .balance import native_projection_issue
         for key, value, maximum in (('max_depth', max_depth, 20), ('max_processes', max_processes, 1000),
                                     ('max_variants', max_variants, 512), ('max_resources', max_resources, 2000)):
             if type(value) is not int or not 1 <= value <= maximum:
@@ -737,10 +738,12 @@ class Dataset:
         variants, records, resources, groups = [], {}, {}, {}
         counts, examples, reasons = {}, [], set()
         work, work_limit, examined = 0, 50000, 0
-        def exclude(reason, id):
+        def exclude(reason, id, detail=None):
             counts[reason] = counts.get(reason, 0) + 1
             if len(examples) < 50:
                 examples.append({'reason': reason, 'id': id})
+                if detail:
+                    examples[-1]['detail'] = detail
         with self._connect() as connection:
             self._record(connection, 'resources', target_id)
             feeds = self._resource_ids(connection, allowed_feed_ids, 'allowed_feed_ids')
@@ -794,6 +797,10 @@ class Dataset:
                         continue
                     if any(o['resource_id'] not in allowed for o in p['outputs']):
                         exclude('output_resource_scope', pid)
+                        continue
+                    issue = native_projection_issue(p)
+                    if issue:
+                        exclude('unsupported_process', pid, issue)
                         continue
                     if p['executable'] is not True or p['conditions'].get('dynamic_inputs') == 'unresolved' or p['conditions'].get('dynamic_output') == 'unresolved' or p['conditions'].get('enabled') is False or p['conditions'].get('fake') is True:
                         exclude('unsupported_process', pid)
@@ -1247,10 +1254,15 @@ class Dataset:
 
     @staticmethod
     def _recipe_tier(record):
+        from .balance import native_projection_issue
         voltage = record.get('eu_per_tick')
         result = {'process_id': record['id'], 'status': 'unknown', 'tier': None, 'name': None,
                   'scope': 'recipe_voltage_not_machine_capability'}
         conditions = record['conditions']
+        issue = native_projection_issue(record)
+        if issue or conditions.get('recipe_voltage_tier_status') == 'unresolved':
+            result['reason'] = issue or 'Native recipe-voltage declaration is unresolved'
+            return result
         if (conditions.get('recipe_voltage_applicability') == 'not_applicable_crafting_grid'
                 and record['family'] == 'minecraft:crafting'
                 and record['provenance'].get('owner') == 'CraftingManager'
