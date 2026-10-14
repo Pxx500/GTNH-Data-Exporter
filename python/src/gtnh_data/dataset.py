@@ -1313,7 +1313,82 @@ class Dataset:
         return ((filters['min_tier'] is None or tier >= filters['min_tier'])
                 and (filters['max_tier'] is None or tier <= filters['max_tier']))
 
-    def _find_paths_shortest(self, connection, start_id, target_id, max_depth, max_processes, max_paths, required, excluded, max_extra_steps, tier_filter=None):
+    @staticmethod
+    def _terminal_artifact_category(record):
+        if record.get('kind') == 'fluid':
+            return 'not_applicable'
+        facts = record.get('item_type')
+        if (record.get('kind') != 'item' or not isinstance(facts, dict) or facts.get('status') != 'captured'
+                or facts.get('basis') != 'runtime_item_class_hierarchy'
+                or facts.get('scope') != 'item_object_not_configured_stack'
+                or not isinstance(facts.get('class_name'), str) or not facts['class_name']
+                or any(not isinstance(facts.get(key), list)
+                       or any(not isinstance(name, str) or not name for name in facts[key])
+                       for key in ('superclasses', 'interfaces'))):
+            return 'unknown'
+        names = {facts['class_name'], *facts['superclasses'], *facts['interfaces']}
+        for root, category in (('tconstruct.library.tools.ToolCore', 'tinkers_tool'),
+                               ('tconstruct.library.util.IToolPart', 'tool_part'),
+                               ('gregtech.api.items.MetaGeneratedTool', 'gregtech_tool')):
+            if root in names:
+                return category
+        return 'ordinary'
+
+    @staticmethod
+    def _terminal_artifact_search(policy):
+        return {'policy': policy, 'basis': 'runtime_item_class_hierarchy', 'scope': 'selected_consumed_spine_edges',
+                'recognition_status': 'not_requested' if policy == 'allow' else 'not_checked',
+                'checked_edges': 0, 'blocked_edges': 0, 'resource_lookups': 0,
+                'terminal_resources': 0, 'unknown_resources': 0, 'not_applicable_resources': 0, 'charged_work': 0}
+
+    def _terminal_edge_allowed(self, connection, source_id, output_id, categories, search, reasons, *, prepared=False):
+        metric = search['terminal_artifacts']
+        if metric['policy'] == 'allow':
+            return True
+
+        def charge(units):
+            if search['expansion_work'] + units > search['work_limit']:
+                reasons.add('search_work_limit')
+                return False
+            search['expansion_work'] += units
+            metric['charged_work'] += units
+            return True
+
+        if not charge(1):
+            return False
+        metric['checked_edges'] += 1
+        for rid in (source_id, output_id):
+            if rid not in categories:
+                if not charge(1):
+                    return False
+                metric['resource_lookups'] += 1
+                if prepared:
+                    category = connection.execute('SELECT terminal_category FROM resources WHERE id=?', (rid,)).fetchone()[0]
+                else:
+                    kind, fact_type, raw = connection.execute("SELECT json_extract(payload,'$.kind'),json_type(payload,'$.item_type'),json_extract(payload,'$.item_type') "
+                        "FROM records WHERE collection='resources' AND id=?", (rid,)).fetchone()
+                    facts = json.loads(raw) if fact_type == 'object' else None
+                    visits = 1 + sum(len(facts[key]) for key in ('superclasses', 'interfaces')
+                        if isinstance(facts, dict) and isinstance(facts.get(key), list))
+                    if not charge(visits):
+                        return False
+                    category = self._terminal_artifact_category({'kind': kind, 'item_type': facts})
+                if not charge(1):
+                    return False
+                categories[rid] = category
+                metric['unknown_resources'] += int(category == 'unknown')
+                metric['not_applicable_resources'] += int(category == 'not_applicable')
+                metric['terminal_resources'] += int(category not in ('ordinary', 'unknown', 'not_applicable'))
+                if category != 'not_applicable':
+                    metric['recognition_status'] = 'partial' if metric['unknown_resources'] else 'captured_for_checked_resources'
+            if rid == source_id and categories[rid] in ('ordinary', 'unknown', 'not_applicable'):
+                return True
+        blocked = categories[output_id] in ('ordinary', 'unknown', 'not_applicable')
+        metric['blocked_edges'] += int(blocked)
+        return not blocked
+
+    def _find_paths_shortest(self, connection, start_id, target_id, max_depth, max_processes, max_paths, required, excluded, max_extra_steps,
+                             tier_filter=None, terminal_artifact_policy='allow'):
         search = {"examined_processes": 0, "limit": 10000, "examined_states": 0, "state_limit": 20000,
                   "expansion_work": 0, "work_limit": 100000, "enumeration_work": 0, "enumeration_limit": 100000,
                   "queued_states": 0, "peak_queue": 0, "truncated": False}
@@ -1321,6 +1396,8 @@ class Dataset:
         paths, records, choices, adjacency = [], {}, {}, {}
         fingerprints, duplicate_ids = {}, {}
         reasons, admitted, tier_checked = set(), set(), set()
+        terminal_categories = {}
+        search['terminal_artifacts'] = self._terminal_artifact_search(terminal_artifact_policy)
         if required & excluded or start_id in excluded or target_id in excluded:
             return route, paths, search, [], []
         if start_id == target_id:
@@ -1377,7 +1454,11 @@ class Dataset:
                                 return []
                             choices[key] = candidates
                         input_ids.update(choices[key])
-                entries.extend((process_id, input_id) for input_id in sorted(input_ids - excluded))
+                for input_id in sorted(input_ids - excluded):
+                    if self._terminal_edge_allowed(connection, input_id, resource_id, terminal_categories, search, reasons):
+                        entries.append((process_id, input_id))
+                    if 'search_work_limit' in reasons:
+                        break
             adjacency[resource_id] = entries
             return entries
 
@@ -1490,16 +1571,16 @@ class Dataset:
         return route, paths, search, sorted(reasons), duplicates
 
     def _find_paths(self, connection, start_id, target_id, max_depth, max_processes, max_paths,
-                    required, excluded, max_extra_steps, tier_filter, path_selection):
+                    required, excluded, max_extra_steps, tier_filter, path_selection, terminal_artifact_policy='allow'):
         if path_selection == 'material':
             from .flow_index import find_paths
             return find_paths(self, connection, start_id, target_id, max_depth, max_processes, max_paths,
-                              required, excluded, max_extra_steps, tier_filter)
+                                required, excluded, max_extra_steps, tier_filter, terminal_artifact_policy)
         if path_selection == 'shortest':
             return (*self._find_paths_shortest(connection, start_id, target_id, max_depth, max_processes,
-                max_paths, required, excluded, max_extra_steps, tier_filter), [])
+                max_paths, required, excluded, max_extra_steps, tier_filter, terminal_artifact_policy), [])
         primary = self._find_paths_shortest(connection, start_id, target_id, max_depth, max_processes,
-            1, required, excluded, 0, dict(tier_filter))
+            1, required, excluded, 0, dict(tier_filter), terminal_artifact_policy)
         route, paths, primary_search, primary_reasons, primary_duplicates = primary
         if start_id == target_id or required & excluded or start_id in excluded or target_id in excluded:
             return (*primary, [])
@@ -1516,6 +1597,9 @@ class Dataset:
                   'discovery': {'queued_states': 0, 'examined_states': 0, 'state_limit': 20000, 'pending_states': 0},
                   'enumeration': {'queued_states': 0, 'examined_states': 0, 'state_limit': 20000, 'work': 0, 'work_limit': 100000,
                                   'pending_states': 0, 'variant_pool_limit': 1000, 'deferred_variants': 0, 'peak_deferred_variants': 0}}
+
+        terminal_categories = {}
+        search['terminal_artifacts'] = self._terminal_artifact_search(terminal_artifact_policy)
 
         def read(row):
             pid = row['id']
@@ -1564,10 +1648,13 @@ class Dataset:
             return ids
 
         def edge(source, pid, output):
+            if not self._terminal_edge_allowed(connection, source, output, terminal_categories, search, reasons):
+                return False
             graph.setdefault(source, set()).add((pid, output))
             search['expansion_work'] += 1
             if search['expansion_work'] > search['work_limit']:
                 reasons.add('search_work_limit')
+            return True
 
         jobs = []
         rows = connection.execute("SELECT id,payload FROM records WHERE collection='processes' AND id IN "
@@ -1578,7 +1665,8 @@ class Dataset:
             if record is None or not any(o['resource_id'] == target_id and self._positive_output(o) for o in record['outputs']):
                 continue
             for si, slot in enumerate(record['inputs']):
-                candidates = inputs(slot)
+                candidates = {rid for rid in inputs(slot) if self._terminal_edge_allowed(
+                    connection, rid, target_id, terminal_categories, search, reasons)}
                 key = record['id'], si
                 if not candidates or key in job_keys:
                     continue
@@ -1609,7 +1697,8 @@ class Dataset:
                         dest = output['resource_id']
                         if not self._positive_output(output) or dest in excluded:
                             continue
-                        edge(rid, record['id'], dest)
+                        if not edge(rid, record['id'], dest):
+                            continue
                         if dest not in source_seen:
                             source_seen.add(dest)
                             source_queue.append((dest, depth + 1))
@@ -1642,7 +1731,8 @@ class Dataset:
                                 break
                         reverse_cache[rid] = entries
                     for pid, input_id in sorted(reverse_cache[rid]):
-                        edge(input_id, pid, rid)
+                        if not edge(input_id, pid, rid):
+                            continue
                         if input_id not in job['seen']:
                             if search['discovery']['queued_states'] >= search['discovery']['state_limit']:
                                 reasons.add('search_state_limit')
@@ -1818,12 +1908,15 @@ class Dataset:
 
     def trace_processes(self, *, start_id, target_id, max_depth=12, max_processes=300, max_paths=8,
                         required_resource_ids=None, excluded_resource_ids=None, excluded_group_ids=None, max_extra_steps=6,
-                        min_tier=None, max_tier=None, unknown_tier_policy='exclude', path_selection='diverse', view='full'):
+                        min_tier=None, max_tier=None, unknown_tier_policy='exclude', path_selection='diverse', view='full',
+                        terminal_artifact_policy='allow'):
         tier_filter = self._tier_filter(min_tier, max_tier, unknown_tier_policy)
         if view not in ('full', 'compact'):
             raise DatasetError('view must be full or compact')
         if path_selection not in ('diverse', 'shortest', 'material'):
             raise DatasetError('path_selection must be diverse, shortest or material')
+        if terminal_artifact_policy not in ('allow', 'direct_targets_only'):
+            raise DatasetError('terminal_artifact_policy must be allow or direct_targets_only')
         if isinstance(max_depth, bool) or not isinstance(max_depth, int) or not 1 <= max_depth <= 64:
             raise DatasetError("max_depth must be between 1 and 64")
         if isinstance(max_processes, bool) or not isinstance(max_processes, int) or not 1 <= max_processes <= 5000:
@@ -1854,7 +1947,7 @@ class Dataset:
             processes = {}
             edges = {}
             input_slots = {}
-            route, paths, search, limit_reasons, duplicates, branches = self._find_paths(connection, start_id, target_id, max_depth, max_processes, max_paths, required, excluded, max_extra_steps, tier_filter, path_selection)
+            route, paths, search, limit_reasons, duplicates, branches = self._find_paths(connection, start_id, target_id, max_depth, max_processes, max_paths, required, excluded, max_extra_steps, tier_filter, path_selection, terminal_artifact_policy)
             unresolved = set()
 
             def admit(id):
@@ -2191,7 +2284,7 @@ class Dataset:
         secondary = self.trace_processes(start_id=byproduct_id, target_id=return_id,
             max_depth=max_depth, max_processes=max_processes, max_paths=max_paths,
             max_extra_steps=max_extra_steps, min_tier=min_tier, max_tier=max_tier,
-            unknown_tier_policy=unknown_tier_policy, path_selection='shortest')
+            unknown_tier_policy=unknown_tier_policy, path_selection='shortest', terminal_artifact_policy='allow')
         with self._connect() as connection:
             for pid, slots in selections.items():
                 record = self._record(connection, 'processes', pid)

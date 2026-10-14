@@ -1285,3 +1285,79 @@ sidecar and copy hashes remain unchanged. No active service or data switch occur
 The user confirms that GT turbine rotors are direct-target-only too. The earlier
 recommendation to retain industrial turbines is not adopted. Other extra groups
 remain proposals, with all native recipe cofeeds visible and audits unaffected.
+
+The user also confirms Tinkers ammunition as direct-target-only. Native ToolCore
+ancestry is therefore fully within the reviewed scope. Passive item ancestry
+capture and a shared selected-edge policy are implemented. Their default
+rollout requires accepted native evidence. Old snapshots without this evidence
+must report unknown recognition rather than receive a name-based classifier.
+
+### Cutter role presentation probe
+
+A fixed-pool wafer probe promotes the existing silicon chemistry with stable
+order [1, 2, 3, 4, 0, 5, 6, 7]. All eight paths and their complete native
+records, cofeeds, quantities and search counters remain. Only presentation
+order and attached indices change. No query, matcher call or larger pool is
+used. The source proves that the inspected classic-fluid wafer helper keeps
+the item transformation while varying fluid and duration.
+
+This does not justify a generic Cutter fluid-role classifier. Matching item
+transformation peers and a default fluid identity cannot distinguish automatic
+variants from an explicit provider that uses the same fluid differently.
+The production rule remains deferred until native evidence identifies the
+operational role. No wafer ID rule or universal coolant assumption is added.
+Evidence is in `cutter-role-evidence/` and `cutter-role-pilot/` under the local
+20261015 research directory.
+
+The actual GT model has no dedicated Cutter-purpose/default-alternative tag.
+It does expose optional `GTRecipe.stackTraces` registration provenance.
+Exact relevant .221/.225 sources agree, and the consuming dev JAR exposes the
+public field. The existing `gt.recipe.lookup.validate.capture_callsite=true`
+property enables native collection before recipe construction independently
+of lookup validation. The source-proven classic-fluid helper can remain in
+those traces. Calling `reloadOwner` during export would manufacture exporter
+provenance and is not a valid reconstruction.
+
+Native copies can lose registration origins, traces can be overwritten, and
+collection is global. The next candidate experiment must retain explicit
+missing/ambiguous evidence and measure full-pack initialization/memory cost.
+No callsite collection is enabled in the item-ancestry acceptance capture.
+The `cutter-native-role-options/` report separates the failed library-search
+preparation from successful actual source/JAR checks.
+
+### Native terminal-policy acceptance
+
+Prepared analysis version 5 adds native item-type classifications to the same
+flow sidecar. All three Trace selectors accept `terminal_artifact_policy`.
+Recognized terminal inputs may feed only recognized terminal outputs, so
+material → part → tool remains valid. Co-feeds and lookup remain complete.
+Recycling explicitly uses unrestricted traversal. Public defaults remain
+`allow` pending data/service rollout. HTTP, MCP, CLI and the GUI share the option.
+
+The single .225 capture bfa4c6f5-73d7-4366-8a13-805b4cc4b787 completes in
+239.60 seconds including startup, dump, import and preparation. It contains
+117299 captured item hierarchies with zero failures or category mismatches,
+plus 1420 not-applicable fluids. Categories include 21212 GT tool variants
+and 32609 tool-part variants. The GT turbine and Detrav subsets are retained.
+Ordinary component rotors, casts and GGfab remain outside the rule.
+Finished Tinkers ToolCore/ammunition resources are absent from this corpus,
+so their positive coverage is source/public-fixture evidence, not runtime proof.
+
+All nine predeclared bounded native Trace calls pass. A Green Sapphire
+TGregworks shard-to-gem carrier is blocked by all selectors while direct
+part manufacture stays available. Native recipe records, exact NBT, consumed
+cofeeds and presence inputs are retained. In shortest mode queued states fall
+1760→54, but classification adds 39815 charged units and total work rises
+3619→41728. There is no blanket speedup. Prepared material mode reads stored
+classifications without those hierarchy-array visits.
+
+Game mod versions and hashes match the EOH .225 baseline. Only the exporter
+JAR intentionally differs. Both captures have the same 118719 full resource
+identities. The initial 2282 strict differences are solely top-level local IDs.
+After exact-identity alignment and removal of new item_type, every other old
+resource field matches. No recipe-order or new quantity-certification claim
+follows. Twenty-two protected files and all harness-inspected hashes remain
+unchanged. All 194 Python, 67 GUI and 32 Java tests pass. Java audits add no
+new advisory meanings. Evidence stays local under `terminal-native-acceptance/`.
+Root checked the native shard, part target and ordinary component-rotor facts.
+No active dataset, main bundle, service or configuration was switched.

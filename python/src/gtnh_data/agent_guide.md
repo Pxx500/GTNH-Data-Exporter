@@ -45,7 +45,7 @@ transitions remain valid alternatives. The GUI defaults to this policy. Agent,
 CLI and HTTP calls retain `diverse` as the default, so request `material`
 explicitly when that is the intended question.
 
-Prepared analysis version 4 gives unrepresented target requirement classes a
+Prepared analysis gives unrepresented target requirement classes a
 turn before equivalent endpoint jobs. Class equality uses the complete
 snapshot-specific accepted resource sets and their declared amount, consumption
 chance and NBT effects. Original endpoint recipes, AND slots and cofeeds remain
@@ -55,7 +55,7 @@ scheduling work.
 `unresolved_jobs` and `represented_unresolved_jobs` are separate counts.
 An unresolved job is not a proven equivalent requirement.
 
-Version 4 also distinguishes structured native material declarations from
+It also distinguishes structured native material declarations from
 opaque or partial ones. A disjoint name set across these evidence bases receives
 an uncertainty hint rather than a stronger discontinuity hint. Scoring and
 `path_details.material_continuity` use the same comparison.
@@ -82,9 +82,11 @@ is unknown. If its status is `missing` or `incompatible`, use
 imported database and may take longer than a lookup. Do not rebuild before
 every trace. New imports prepare this data automatically. A rebuild needs
 the imported dump, not a running game. An incompatible index is not silently
-used as if it belonged to the current snapshot or analysis version. These
-additions require `analysis_version: 4` from `flow_index_status`. A process
-reporting version 3 still has older code loaded. Reload the MCP process after
+used as if it belonged to the current snapshot or analysis version. Material
+evidence and requirement classes were introduced in analysis version 4.
+The current preparation format is version 5, which also stores item-type
+classification. A process reporting an earlier version has older code loaded.
+Reload the MCP process after
 upgrading, then explicitly rebuild if status is incompatible.
 Rebuilding derived data does not reload running code.
 
@@ -102,6 +104,29 @@ with a null tier. They need no machine voltage and pass those bounds. This is
 an explicit native marker checked against its declaration context. Null EU by
 itself does not imply that status, free energy or resolved tool returns. Other
 unknown tiers continue to follow `unknown_tier_policy`.
+
+## Keep tools and parts out of ordinary dependency spines
+
+Request `terminal_artifact_policy="direct_targets_only"` when tools and parts
+should be direct targets rather than bridges to ordinary products. Recognized
+families are Tinkers ToolCore tools and ammunition, IToolPart implementations
+including TGregworks parts, and GT MetaGeneratedTool descendants including
+turbine metatools. Ordinary component rotors, casts, shapes, GGfab implements
+and armor receive no extra rule.
+
+A recognized tool or part can feed another recognized tool or part. It cannot
+feed an ordinary or unclassified output on the selected spine. This keeps
+material → part → tool routes available. Full recipe cofeeds remain visible,
+and direct recipe lookup stays available. Request `"allow"` for unrestricted
+dependency investigation. Recycling explicitly uses that unrestricted policy.
+Loop and energy audits retain their original accounting.
+
+Recognition uses captured `item_type` class/interface ancestry. Missing or
+failed item evidence is unknown, not a negative classification. Inspect the
+returned recognition diagnostics before claiming the categories were fully
+recognized. Current older captures lack these facts. The public default stays
+`"allow"` until the native evidence is accepted and rolled out. Prepared item-type facts require
+analysis version 5 and the normal explicit rebuild after loading new code.
 
 ## Interpret resource origin separately from planning boundaries
 

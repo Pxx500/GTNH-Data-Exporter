@@ -575,10 +575,10 @@ class FlowIndexTests(unittest.TestCase):
             self.assertEqual(before, dataset.path.read_bytes())
             self.assertEqual(prepared['snapshot_id'], dataset.snapshot_id)
             self.assertEqual(dataset.flow_index_status()['status'], 'ready')
-            self.assertEqual(prepared['analysis_version'], 4)
+            self.assertEqual(prepared['analysis_version'], 5)
             path = Path(prepared['database'])
             with closing(sqlite3.connect(path)) as connection, connection:
-                connection.execute("UPDATE metadata SET value='3' WHERE key='analysis_version'")
+                connection.execute("UPDATE metadata SET value='4' WHERE key='analysis_version'")
             self.assertEqual(dataset.flow_index_status()['status'], 'incompatible')
             with self.assertRaisesRegex(DatasetError, 'rebuild'):
                 dataset.trace_processes(start_id='start', target_id='target', path_selection='material')

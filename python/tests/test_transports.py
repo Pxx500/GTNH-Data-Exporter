@@ -270,6 +270,53 @@ class TransportTests(unittest.TestCase):
             response = client.get('/api/trace', params={'start_id': 'a', 'target_id': 'b', 'path_selection': 'unknown'})
             self.assertEqual(response.status_code, 400)
 
+    def test_http_and_cli_forward_terminal_artifact_policy_and_reject_invalid_options(self):
+        for policy in ('allow', 'direct_targets_only'):
+            with self.subTest(policy=policy):
+                arguments = dict(start_id='a', target_id='b', terminal_artifact_policy=policy, view='compact')
+                with TestClient(create_app(self.dataset)) as client:
+                    answer = client.get('/api/trace', params=arguments)
+                    self.assertEqual(answer.status_code, 200)
+                    self.assertEqual(answer.json()['search']['terminal_artifacts']['policy'], policy)
+                    self.assertEqual(network_semantics(answer.json()), network_semantics(self.dataset.trace_processes(**arguments)))
+                output = StringIO()
+                with redirect_stdout(output):
+                    code = main(['trace', '--database', str(self.database), '--start-id', 'a', '--target-id', 'b',
+                                 '--terminal-artifact-policy', policy, '--view', 'compact'])
+                self.assertEqual(code, 0)
+                self.assertEqual(network_semantics(json.loads(output.getvalue())), network_semantics(self.dataset.trace_processes(**arguments)))
+        with TestClient(create_app(self.dataset)) as client:
+            self.assertEqual(client.get('/api/trace', params={'start_id': 'a', 'target_id': 'b'}).json()['search']['terminal_artifacts']['policy'], 'allow')
+            invalid = client.get('/api/trace', params={'start_id': 'a', 'target_id': 'b', 'terminal_artifact_policy': 'unknown'})
+            self.assertEqual(invalid.status_code, 400)
+        errors = StringIO()
+        with redirect_stderr(errors), self.assertRaises(SystemExit) as invalid:
+            main(['trace', '--database', str(self.database), '--start-id', 'a', '--target-id', 'b', '--terminal-artifact-policy', 'unknown'])
+        self.assertEqual(invalid.exception.code, 2)
+        self.assertIn('invalid choice', errors.getvalue())
+
+    def test_official_mcp_trace_terminal_artifact_policy_validation_and_forwarding(self):
+        async def exercise():
+            parameters = StdioServerParameters(command=sys.executable,
+                args=['-m', 'gtnh_data', 'mcp', '--database', str(self.database)], env=dict(os.environ))
+            async with stdio_client(parameters) as (read_stream, write_stream):
+                async with ClientSession(read_stream, write_stream, read_timeout_seconds=15) as session:
+                    await session.initialize()
+                    tools = {tool.name: tool for tool in (await session.list_tools()).tools}
+                    self.assertIn('terminal_artifact_policy', tools['trace_processes'].input_schema['properties'])
+                    option = tools['trace_processes'].input_schema['properties']['terminal_artifact_policy']
+                    self.assertEqual(option['enum'], ['allow', 'direct_targets_only'])
+                    self.assertEqual(option['default'], 'allow')
+                    for policy in ('allow', 'direct_targets_only'):
+                        arguments = {'start_id': 'a', 'target_id': 'b', 'terminal_artifact_policy': policy}
+                        answer = await session.call_tool('trace_processes', arguments)
+                        self.assertFalse(answer.is_error, answer.content)
+                        self.assertEqual(answer.structured_content['search']['terminal_artifacts']['policy'], policy)
+                        self.assertEqual(network_semantics(answer.structured_content), network_semantics(self.dataset.trace_processes(**arguments, view='compact')))
+                    invalid = await session.call_tool('trace_processes', {'start_id': 'a', 'target_id': 'b', 'terminal_artifact_policy': 'unknown'})
+                    self.assertTrue(invalid.is_error, invalid.content)
+        asyncio.run(exercise())
+
     def test_http_and_cli_forward_repeated_trace_group_exclusions(self):
         groups = [{'id': 'ore:starts', 'kind': 'ore_dict', 'name': 'starts', 'members': ['a'], 'provenance': {}},
                   {'id': 'unified:middle', 'kind': 'unified', 'name': 'middle', 'members': ['middle'], 'provenance': {}}]

@@ -88,6 +88,28 @@ It does not modify that list, resource identity or exclusion semantics, and
 does not establish actual tool use, wear, material contribution or chemistry.
 Existing snapshots without this field retain their literal-member evidence.
 
+Item resources may carry `item_type`, captured from the registered Item object:
+
+```json
+{
+  "status": "captured",
+  "basis": "runtime_item_class_hierarchy",
+  "scope": "item_object_not_configured_stack",
+  "class_name": "example.RegisteredItem",
+  "superclasses": ["net.minecraft.item.Item", "java.lang.Object"],
+  "interfaces": ["example.ParentInterface", "example.ToolPartInterface"]
+}
+```
+
+Superclass names run from the immediate parent through the root. Interfaces
+are sorted unique names from the class, its parents and inherited interfaces.
+The capture reads JDK class metadata without invoking item behavior. Variants
+of the same Item object reuse the captured hierarchy. Failure records retain
+the basis, scope and diagnostics, without certifying a partial hierarchy.
+Fluids omit this field. Missing or failed evidence means unknown item type.
+These facts do not establish stack usability, acquisition, material contribution
+or native tool wear. Resource identity and recipe accounting remain unchanged.
+
 Resources can also carry `material_facts` schema 1. These facts retain the
 actual GT version, accounting profile, source API, associations, prefix/native
 material amounts, component trees, density fields, element/isotope data and
@@ -508,11 +530,34 @@ unification group IDs retain their distinct meanings. HTTP uses repeated
 The GUI requests compact presentation explicitly, retaining full selected
 recipes with bounded matching-variant presentation.
 
-`path_selection` is `diverse` by default, or `shortest`. Diverse selection
+`terminal_artifact_policy` is `allow` by default, or `direct_targets_only`.
+The restrictive policy uses captured item class/interface ancestry to recognize
+Tinkers ToolCore tools and ammunition, IToolPart implementations including
+TGregworks, and GT MetaGeneratedTool descendants including turbine metatools.
+A selected consumed edge from a recognized tool or part is allowed only when
+its output is also recognized. This preserves material → part → tool targets
+and blocks tool → ordinary product carriers. No process is removed globally.
+Full cofeeds, direct recipe lookup and native accounting remain intact.
+Recycling explicitly requests `allow`. Other audits retain their own accounting.
+There is no extra rule for ordinary component rotors, GGfab, shaping aids or armor.
+
+`search.terminal_artifacts` reports the applied policy, recognition basis,
+checked and blocked edges, cached resource lookups, terminal/unknown/not-applicable
+resource counts and charged work. Its scope is inspected selected-spine
+candidates, not the entire snapshot. Missing, failed or malformed item hierarchy
+is unknown. Fluids are not applicable. A partial recognition status cannot
+establish complete category enforcement. Prepared analysis version 5 stores
+these facts in the existing flow sidecar and requires an explicit rebuild for
+an incompatible version. Captured resource identities remain unchanged.
+
+`path_selection` is `diverse` by default, or `shortest` or `material`. Diverse selection
 spreads emitted dependency paths across consumed input-slot branches at the
 target. Those branches represent different AND requirements, not complete
 alternative production plans. Shortest selection prioritizes fewest steps.
-The primary `route` remains the shortest qualifying witness discovered.
+For diverse and shortest selection, the primary `route` remains the shortest
+qualifying witness discovered. Material selection prioritizes native material
+evidence and distinct target requirements through prepared analysis. Its primary
+route is the first qualifying material witness, without a yield or energy claim.
 `branch_coverage` contains `{target_process_id, slot_index,
 candidate_resources, paths, path_indices, status}` for consumed target slots.
 `paths` counts emitted witnesses and `path_indices` points into `paths`.
@@ -530,9 +575,11 @@ remains in the resource record. Absence of a hint does not certify absence of
 a tool category. Native recipe roles and accounting remain unchanged.
 
 `route` contains `status`, `strategy`, ordered `resource_ids` and ordered
-`process_ids`. The strategy is `shortest_known_dependency_path`: fewest process
-steps in the discovered graph through supported positive consumed inputs,
-with stable ID ordering for ties. Explicit presence and tool roles are
+`process_ids`. The strategy field retains `shortest_known_dependency_path`.
+For diverse and shortest selection this means fewest process steps in the
+discovered graph through supported positive consumed inputs, with stable ID
+ordering for ties. Material selection uses the preference described above.
+Explicit presence and tool roles are
 requirements, not dependency-spine transitions.
 The statuses are `found`, `not_found`, `incomplete` and `same_resource`.
 `found` establishes a dependency connection, not best yield, minimum energy,

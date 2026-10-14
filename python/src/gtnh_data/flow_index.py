@@ -19,7 +19,7 @@ from heapq import heappop, heappush
 
 from .balance import quantity
 
-ANALYSIS_VERSION = 4
+ANALYSIS_VERSION = 5
 
 _RECOVERY_FAMILIES = frozenset(('gregtech:gt.recipe.macerator', 'gregtech:gt.recipe.arcfurnace',
                                 'gregtech:gt.recipe.alloysmelter'))
@@ -124,13 +124,13 @@ def rebuild(dataset):
     os.close(descriptor)
     temporary = Path(temporary)
     counts = {'inputs': 0, 'outputs': 0, 'resources': 0, 'processes': 0, 'unique_matches': 0, 'match_memberships': 0,
-              'material_basis': {}, 'requirement_slots': 0, 'unresolved_requirement_slots': 0,
+              'material_basis': {}, 'terminal_categories': {}, 'requirement_slots': 0, 'unresolved_requirement_slots': 0,
               'requirement_membership_visits': 0}
     try:
         with dataset._connect() as source, closing(sqlite3.connect(temporary)) as prepared, prepared:
             prepared.executescript('''
                 CREATE TABLE metadata(key TEXT PRIMARY KEY,value TEXT NOT NULL);
-                CREATE TABLE resources(id TEXT PRIMARY KEY,materials TEXT NOT NULL,material_basis TEXT NOT NULL);
+                CREATE TABLE resources(id TEXT PRIMARY KEY,materials TEXT NOT NULL,material_basis TEXT NOT NULL,terminal_category TEXT NOT NULL);
                 CREATE TABLE processes(id TEXT PRIMARY KEY,representative TEXT NOT NULL,tier INTEGER,tier_status TEXT NOT NULL,eligible INTEGER NOT NULL);
                 CREATE TABLE matches(match_id INTEGER,resource_id TEXT,PRIMARY KEY(match_id,resource_id));
                 CREATE TABLE inputs(process_id TEXT,slot INTEGER,match_id INTEGER,PRIMARY KEY(process_id,slot,match_id));
@@ -144,8 +144,10 @@ def rebuild(dataset):
                 record = json.loads(row['payload'])
                 basis = material_basis(record)
                 counts['material_basis'][basis] = counts['material_basis'].get(basis, 0) + 1
-                resources.append((row['id'], json.dumps(sorted(material_tokens(record))), basis))
-            prepared.executemany('INSERT INTO resources VALUES(?,?,?)', resources)
+                terminal = dataset._terminal_artifact_category(record)
+                counts['terminal_categories'][terminal] = counts['terminal_categories'].get(terminal, 0) + 1
+                resources.append((row['id'], json.dumps(sorted(material_tokens(record))), basis, terminal))
+            prepared.executemany('INSERT INTO resources VALUES(?,?,?,?)', resources)
             counts['resources'] = len(resources)
             del resources
             matches, fingerprints = {}, {}
@@ -348,7 +350,7 @@ def _source_distances(dataset, connection, start_id, tier_filter, excluded):
 
 
 def find_paths(dataset, canonical, start_id, target_id, max_depth, max_processes, max_paths,
-               required, excluded, max_extra_steps, tier_filter):
+               required, excluded, max_extra_steps, tier_filter, terminal_artifact_policy='allow'):
     from .dataset import DatasetError
     prepared_status = status(dataset)
     if prepared_status['status'] != 'ready':
@@ -380,6 +382,8 @@ def find_paths(dataset, canonical, start_id, target_id, max_depth, max_processes
     search['material_evidence'] = material_evidence
     families, resource_facts = {}, {}
     paths, reasons, branches = [], set(), []
+    terminal_categories = {}
+    search['terminal_artifacts'] = dataset._terminal_artifact_search(terminal_artifact_policy)
 
     def class_charge(counter, units=1):
         if search['expansion_work'] + units > search['work_limit']:
@@ -450,6 +454,10 @@ def find_paths(dataset, canonical, start_id, target_id, max_depth, max_processes
                 if search['expansion_work'] > search['work_limit']:
                     reasons.add('search_work_limit')
                     break
+                if not dataset._terminal_edge_allowed(connection, input_id, rid, terminal_categories, search, reasons, prepared=True):
+                    if 'search_work_limit' in reasons:
+                        break
+                    continue
                 entries.append((pid, si, input_id, position))
             reverse[key] = entries
             return entries

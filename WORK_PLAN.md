@@ -650,9 +650,34 @@ etap. Bieżące pomiary i decyzje są w SEARCH_EXPERIMENTS.md.
   polecenia użytkownika do narzędzi ręcznych bez zaznaczenia tej propozycji.
   Dodatkowe kandydaty to jednorazowe przyrządy, formy/szablony i zbroje gracza.
   GGfab produkuje 64 młotki z 432 jednostek stopionej stali, więc nie są
-  rzadkim wyposażeniem. Flagi nie są jeszcze wdrożone. Brak hurtowej listy ID.
+  rzadkim wyposażeniem. Brak hurtowej listy ID.
   Użytkownik potwierdził, że rotory turbin też mają być tylko bezpośrednim celem.
   Nie wprowadzamy dla nich rekomendowanego wcześniej wyjątku.
+  Użytkownik potwierdził też amunicję Tinkersa jako bezpośredni cel.
+- [x] Wdrożyć rozpoznawanie tych rodzin przez pasywnie przechwyconą hierarchię
+  klas i interfejsów itemu. Przygotować fakty w istniejącym indeksie przepływu
+  i dodać jawny tryb ograniczania pośrednich narzędzi. Zachować crafting celu,
+  pełne wymagania receptur oraz nieograniczony audyt i recykling.
+  Nie zastępować brakującej hierarchii nazwami itemów ani listą ID.
+  Sprawdzić nowy capture przed zmianą ustawienia domyślnego.
+  Wdrożono opcję `terminal_artifact_policy` w silniku, HTTP, MCP, CLI i GUI.
+  Indeks wersji 5 przechowuje klasyfikację. Przechodzi 194 testy Pythona,
+  67 GUI i 32 Javy. Jeden capture `.225` potwierdza 117299 pełnych hierarchii
+  bez błędów oraz zgodność wszystkich przygotowanych kategorii.
+  Jest 21212 wariantów narzędzi GT i 32609 części. Zwykłe rotory, formy oraz
+  GGfab pozostają poza regułą. Gotowych narzędzi i amunicji Tinkersa nie ma
+  w korpusie zasobów, więc ich dodatnie przykłady są tylko w testach i źródłach.
+  Dziewięć ograniczonych zapytań natywnych potwierdza regułę i pełne wymagania.
+  Po połączeniu po tożsamości wszystkie stare pola zasobów są identyczne.
+  2282 różnice dotyczyły wyłącznie lokalnych ID. Wszystkie chronione pliki
+  pozostają niezmienione. Brak ogólnego przyspieszenia: tryb shortest płaci
+  za odczyt hierarchii, a material używa przygotowanych kategorii.
+  Domyślnie pozostaje `allow`. Aktywnej bazy i usług nie przełączono.
+- [ ] Sprawdzić opcjonalną natywną historię rejestracji receptur jako dowód
+  roli wejść Cuttera. GT udostępnia `GTRecipe.stackTraces`, ale historia może
+  zniknąć przy kopiowaniu i jej zbieranie obejmuje całą paczkę. Oddzielny
+  eksperyment ma zmierzyć koszt inicjalizacji i pamięci. Nie włączamy tej
+  opcji w capture sprawdzającym klasy itemów ani nie zgadujemy ról po nazwach.
 - [x] Sprawdzić literaturę o landmarkach i planach zrelaksowanych pod kątem
   kierowania przez gałęzie składników celu. Odróżnić osiągalność pojedynczej
   ścieżki od spełnienia wszystkich wejść receptury i policzyć przygotowanie.

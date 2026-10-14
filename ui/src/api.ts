@@ -66,7 +66,15 @@ export interface Trace {
   cycles: string[][]; truncated: boolean; coverage: Coverage[]
   route: {status: 'found' | 'not_found' | 'incomplete' | 'same_resource'; strategy: 'shortest_known_dependency_path'; resource_ids: string[]; process_ids: string[]}
   paths: {resource_ids: string[]; process_ids: string[]}[]
-  search: {examined_processes: number; limit: number; truncated: boolean}
+  search: {
+    examined_processes:number;limit:number;truncated:boolean
+    terminal_artifacts?: {
+      policy:'allow'|'direct_targets_only';basis:'runtime_item_class_hierarchy';scope:'selected_consumed_spine_edges'
+      recognition_status:'not_requested'|'not_checked'|'captured_for_checked_resources'|'partial'
+      checked_edges:number;blocked_edges:number;resource_lookups:number;terminal_resources:number
+      unknown_resources:number;not_applicable_resources:number;charged_work:number
+    }
+  }
   limit_reasons: ('depth' | 'search_process_limit' | 'path_limit' | 'path_process_limit' | 'search_state_limit' | 'search_work_limit' | 'search_enumeration_limit' | 'search_variant_limit')[]
   tier_filter?: TierOptions & {active:boolean;excluded_unknown:number;excluded_out_of_range:number}
   recipe_tiers?: {process_id:string;status:'known'|'unknown'|'not_applicable';tier:number|null;name:string|null;scope:string;reason?:string}[]

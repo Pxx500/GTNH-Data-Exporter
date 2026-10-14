@@ -112,12 +112,14 @@ def create_app(dataset: Dataset, ui_dist: str | Path | None = None) -> FastAPI:
     def trace(start_id: str, target_id: str, max_depth: int = 12, max_processes: int = 300, max_paths: int = 8,
               max_extra_steps: int = 6, path_selection: str = 'diverse', required_resource_id: list[str] = Query(default=[]), excluded_resource_id: list[str] = Query(default=[]),
               excluded_group_id: list[str] = Query(default=[]),
-              min_tier: int | None = None, max_tier: int | None = None, unknown_tier_policy: str = 'exclude', view: str = 'full'):
+              min_tier: int | None = None, max_tier: int | None = None, unknown_tier_policy: str = 'exclude', view: str = 'full',
+              terminal_artifact_policy: str = Query(default='allow', description='direct_targets_only retains direct tool and part targets and required cofeeds, but blocks recognized tools and parts on paths to ordinary outputs. Recognition uses captured runtime class ancestry. Inspect search.terminal_artifacts for recognition limits.')):
         return dataset.trace_processes(start_id=start_id, target_id=target_id, max_depth=max_depth, max_processes=max_processes,
                                        max_paths=max_paths, max_extra_steps=max_extra_steps, path_selection=path_selection,
                                        required_resource_ids=required_resource_id, excluded_resource_ids=excluded_resource_id,
                                        excluded_group_ids=excluded_group_id,
-                                       min_tier=min_tier, max_tier=max_tier, unknown_tier_policy=unknown_tier_policy, view=view)
+                                       min_tier=min_tier, max_tier=max_tier, unknown_tier_policy=unknown_tier_policy, view=view,
+                                       terminal_artifact_policy=terminal_artifact_policy)
 
     @app.post('/api/recycling-plan')
     def recycling_plan(arguments: dict = Body(...)):

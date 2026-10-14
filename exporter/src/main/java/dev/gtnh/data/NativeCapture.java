@@ -30,6 +30,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -57,6 +58,7 @@ final class NativeCapture {
     private final SnapshotWriter writer;
     private final MaterialFacts materialFacts;
     private final Map<String, String> resourceIds = new HashMap<>();
+    private final Map<Item, JsonObject> itemTypes = new IdentityHashMap<>();
     private final Map<String, JsonArray> catalogSourceRefs = new HashMap<>();
     private final Map<String, String> oreGroups = new HashMap<>();
     private final Map<String, String> unifiedGroups = new HashMap<>();
@@ -231,11 +233,47 @@ final class NativeCapture {
                 "native_source_refs", sourceReferences(key, stack),
                 "provenance", object("owner", "native_registry"));
             if (stack instanceof ItemStack) {
+                record.add("item_type", itemType(((ItemStack) stack).getItem()));
                 record.add("ore_dictionary_membership", oreDictionaryMembership((ItemStack) stack));
             }
             writer.append("resources", record);
         }
         return id;
+    }
+
+    private JsonObject itemType(Item item) {
+        return itemTypes.computeIfAbsent(item, ignored -> {
+            Class<?> type = item.getClass();
+            JsonObject result = object("status", "failed", "basis", "runtime_item_class_hierarchy",
+                "scope", "item_object_not_configured_stack", "class_name", type.getName(),
+                "superclasses", new JsonArray(), "interfaces", new JsonArray());
+            try {
+                JsonArray superclasses = new JsonArray();
+                List<Class<?>> pending = new ArrayList<>();
+                for (Class<?> current = type; current != null; current = current.getSuperclass()) {
+                    if (current != type) superclasses.add(new com.google.gson.JsonPrimitive(current.getName()));
+                    Collections.addAll(pending, current.getInterfaces());
+                }
+                Set<Class<?>> interfaces = new HashSet<>();
+                Set<String> names = new TreeSet<>();
+                for (int index = 0; index < pending.size(); index++) {
+                    Class<?> current = pending.get(index);
+                    if (interfaces.add(current)) {
+                        names.add(current.getName());
+                        Collections.addAll(pending, current.getInterfaces());
+                    }
+                }
+                JsonArray interfaceNames = new JsonArray();
+                for (String name : names) interfaceNames.add(new com.google.gson.JsonPrimitive(name));
+                result.add("superclasses", superclasses);
+                result.add("interfaces", interfaceNames);
+                result.addProperty("status", "captured");
+            } catch (RuntimeException | LinkageError failure) {
+                result.addProperty("error_class", failure.getClass().getName());
+                result.addProperty("diagnostic", failure.getMessage());
+            }
+            return result;
+        });
     }
 
     static String resourceKey(String kind, String registry, Integer damage, JsonElement nbt) {

@@ -16,6 +16,7 @@ test('trace excludes selected captured groups by exact namespace while retaining
   const groups=[{id:'ore:nuggetIron',name:'nuggetIron',kind:'ore_dict',members:['a','b','c','d','e'],member_count:5},{id:'unified:nuggetIron',name:'nuggetIron',kind:'unified',members:['a','b','c'],member_count:3}]
   const recipe={...process,inputs:[{role:'consume',choices:[{resource_id:resource.id,amount:1,match:{mode:'exact'}}]},{role:'presence',choices:[{resource_id:side.id,amount:1,match:{mode:'exact'}}]}],outputs:[{resource_id:target.id,amount:1,chance:{numerator:1,denominator:1}}]}
   const traceCalls:URL[]=[]
+  let recognitionStatus='partial'
   vi.stubGlobal('fetch',vi.fn(async(input:string)=>{
     const url=new URL(input,'http://localhost')
     if(url.pathname==='/api/status')return response(status)
@@ -26,13 +27,15 @@ test('trace excludes selected captured groups by exact namespace while retaining
     if(url.pathname.startsWith('/api/groups/'))return response({snapshot_id:'test-snapshot',item:groups.find(group=>decodeURIComponent(url.pathname).endsWith(group.id))})
     if(url.pathname==='/api/trace'){
       traceCalls.push(url)
-      return response({branch_coverage:[],path_selection:'material',snapshot_id:'test-snapshot',start_id:resource.id,target_id:target.id,resources:[resource,target,side],processes:[recipe],edges:[],leaves:[],cycles:[],truncated:false,coverage:[],route:{status:'found',strategy:'shortest_known_dependency_path',resource_ids:[resource.id,target.id],process_ids:[recipe.id]},paths:[{resource_ids:[resource.id,target.id],process_ids:[recipe.id]}],search:{examined_processes:1,limit:1000,truncated:false},limit_reasons:[],group_exclusions:groups.filter(group=>url.searchParams.getAll('excluded_group_id').includes(group.id)).map(group=>({group_id:group.id,name:group.name,kind:group.kind,member_count:group.member_count}))})
+      return response({branch_coverage:[],path_selection:'material',snapshot_id:'test-snapshot',start_id:resource.id,target_id:target.id,resources:[resource,target,side],processes:[recipe],edges:[],leaves:[],cycles:[],truncated:false,coverage:[],route:{status:'found',strategy:'shortest_known_dependency_path',resource_ids:[resource.id,target.id],process_ids:[recipe.id]},paths:[{resource_ids:[resource.id,target.id],process_ids:[recipe.id]}],search:{examined_processes:1,limit:1000,truncated:false,terminal_artifacts:{policy:url.searchParams.get('terminal_artifact_policy'),basis:'runtime_item_class_hierarchy',scope:'selected_consumed_spine_edges',recognition_status:recognitionStatus,checked_edges:1,blocked_edges:0,resource_lookups:2,terminal_resources:0,unknown_resources:recognitionStatus==='partial'?2:0,not_applicable_resources:0,charged_work:2}},limit_reasons:[],group_exclusions:groups.filter(group=>url.searchParams.getAll('excluded_group_id').includes(group.id)).map(group=>({group_id:group.id,name:group.name,kind:group.kind,member_count:group.member_count}))})
     }
     throw new Error(`Unexpected route ${url.pathname}`)
   }))
   render(<App/>)
   await screen.findByText('Pack: Synthetic contract fixture')
   fireEvent.click(screen.getByRole('button',{name:'Trace'}))
+  expect(screen.getByLabelText('Tools and parts in paths')).toHaveValue('allow')
+  fireEvent.change(screen.getByLabelText('Tools and parts in paths'),{target:{value:'direct_targets_only'}})
   fireEvent.focus(screen.getByLabelText('Supplied start resource'));fireEvent.change(screen.getByLabelText('Supplied start resource'),{target:{value:'Test mold'}})
   fireEvent.click(await screen.findByRole('option',{name:/Test mold/}))
   fireEvent.focus(screen.getByLabelText('Target resource'));fireEvent.change(screen.getByLabelText('Target resource'),{target:{value:'Test output'}})
@@ -52,6 +55,8 @@ test('trace excludes selected captured groups by exact namespace while retaining
   expect(traceCalls[0].searchParams.getAll('excluded_group_id')).toEqual(groups.map(group=>group.id))
   expect(traceCalls[0].searchParams.getAll('excluded_resource_id')).toEqual(['side-input'])
   expect(traceCalls[0].searchParams.get('view')).toBe('compact')
+  expect(traceCalls[0].searchParams.get('terminal_artifact_policy')).toBe('direct_targets_only')
+  expect(screen.getByText(/Tool and part recognition is incomplete for this search/)).toHaveTextContent('2 inspected resources')
   fireEvent.click(screen.getByRole('button',{name:'Process Mold cast'}))
   expect(within(screen.getByRole('complementary')).getByText('Required presence')).toBeInTheDocument()
   fireEvent.change(screen.getByLabelText('Highlight path'),{target:{value:'0'}})
@@ -61,8 +66,10 @@ test('trace excludes selected captured groups by exact namespace while retaining
   expect(ore).toBeChecked()
   expect(unified).toBeChecked()
   expect(screen.getByLabelText('Highlight path')).toHaveValue('0')
+  expect(screen.getByLabelText('Tools and parts in paths')).toHaveValue('direct_targets_only')
   expect(screen.getByRole('article',{name:'Recipe Mold cast'})).toBe(tile)
   expect(within(screen.getByRole('complementary')).getByText('Required presence')).toBeInTheDocument()
+  recognitionStatus='captured_for_checked_resources'
   fireEvent.click(screen.getByRole('button',{name:'Remove group ore:nuggetIron'}))
   expect(ore).not.toBeChecked()
   expect(unified).toBeChecked()
@@ -70,6 +77,8 @@ test('trace excludes selected captured groups by exact namespace while retaining
   await waitFor(()=>expect(traceCalls).toHaveLength(2))
   expect(traceCalls[1].searchParams.getAll('excluded_group_id')).toEqual(['unified:nuggetIron'])
   expect(traceCalls[1].searchParams.getAll('excluded_resource_id')).toEqual(['side-input'])
+  expect(traceCalls[1].searchParams.get('terminal_artifact_policy')).toBe('direct_targets_only')
+  await waitFor(()=>expect(screen.queryByText(/Tool and part recognition is incomplete for this search/)).not.toBeInTheDocument())
 })
 
 test('analysis exposes distinct energy benchmark and target-from-basics modes with explicit profile semantics',async()=>{
@@ -157,6 +166,7 @@ test('labels synthetic data and forwards trace controls to Dataset while retaini
   expect(traceCalls[0].searchParams.get('min_tier')).toBe('1')
   expect(traceCalls[0].searchParams.get('max_tier')).toBe('3')
   expect(traceCalls[0].searchParams.get('unknown_tier_policy')).toBe('include')
+  expect(traceCalls[0].searchParams.get('terminal_artifact_policy')).toBe('allow')
   fireEvent.click(screen.getByRole('button',{name:'Process Mold cast'}))
   expect(within(screen.getByRole('complementary')).getByText('Required presence')).toBeInTheDocument()
   expect(within(screen.getByRole('complementary')).queryByText(/Chance 100%/)).not.toBeInTheDocument()
