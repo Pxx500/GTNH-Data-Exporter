@@ -163,6 +163,13 @@ operation for this session. The available task tools expose no such operation,
 so no unsupported control or automatic reconnection is claimed.
 [Official MCP documentation](https://learn.chatgpt.com/docs/extend/mcp?surface=cli)
 
+A later check through the helper's actual MCP connection returns the current
+policy with weight two, snapshot `779ea030-ae9c-40ea-8854-99a176f7cc42`, eight
+Water-to-Hydrogen paths, 713 admissions and direct-electrolysis best recipe
+`p138456`. Those values agree with the independent fresh HTTP check. This
+establishes that the integration serves the new policy through a fresh loaded
+connection. It does not establish that root's earlier connection refreshed.
+
 The larger semantic-map hypothesis remains separate. Grouping a material's
 forms can hide familiar recycling circuits at the overview level, but an
 ingot and a plate must stay distinct recipe ports. A quotient graph may guide
@@ -173,6 +180,59 @@ connectivity before proposing a runtime change. The native material-and-form
 alias projection is not promoted. It is separate from the coarser region idea
 with multiple exact form ports and lazy internal witnesses.
 
+The corrected alias diagnostic collapses 762 resources, reducing factor nodes
+from 446,751 to 445,989 while retaining all 896,878 arcs. It saves only 3,048
+CSR bytes and weakens 138 source bounds and 546 goal bounds. It does not
+strengthen existing concrete hop guidance. The focused Iron/Steel/Tungstensteel
+view does support familiar form walks. Root independently checked all ten
+successive and closing native matches in those three examples. The current
+eight soft-preference paths have five material-run/exact-port story signatures
+versus four for the cursor-only paths. This is an explanation convention, not
+an optimality metric or a reason to drop a concrete path. Full measurements
+and limits are in [FORM_MAP_RESEARCH.md](FORM_MAP_RESEARCH.md).
+
+The branch-only constituent follow-up is also not promoted. Ranking actual
+target candidates by positive additional native ItemData constituents correctly
+promotes Robot Arm IV through TungstenSteel, Steel and Iron. In all eight
+unrestricted/LV cases, those jobs were already represented. Returned paths,
+routes, exact represented jobs, work, admissions and hop reference stay equal.
+Only the presentation order of Volcanus branch records changes. All 70 paths
+and 346 steps across the sixteen runs pass canonical/native checks.
+Candidate preparation reads 1–204 records in 0.17–5.77 ms. Unrestricted
+Volcanus peak retained descriptors fall from 10,177 to 6,382, but measured
+working set does not decrease. This supplies no route-quality, coverage,
+physical-memory or speed improvement. Raw evidence remains in
+`exports/search-research-20261014/semantic/experiment_branch_report.md`.
+
+A separate diagnostic now checks downstream cofeed obligations. A recipe can
+require a side input that a later recipe in the spine produces. Distinguish
+an unavoidable captured AND obligation from an OR slot that merely permits
+such a resource. External initial supply can still make the spine legal.
+This is an explanation signal to investigate, not an impossibility rule or a
+reason to exclude regenerative networks.
+
+That bounded scan is complete. Strict later-spine slot overlaps fall from six
+to two across the eight paired cases. The soft preference removes both
+observed construction patterns: Forge Hammer `p200544` consumes a later IV Hull
+`r37930`, and Assembly Line Casing `p200250` consumes a later Robot Arm IV
+`r32547` in two AND slots. Optional overlaps remain four. The scanner verifies
+70 paths, 347 hops, 182 unique choices and 6,248 candidate matches without
+hitting its bounds or encountering unresolved matching.
+
+The remaining Hull chemistry illustrates why no generic exclusion is added.
+One recipe consumes Hydrochloric Acid later produced on the spine. Another
+consumes Hydrogen later reached on the spine, but the earlier Iron III
+Chloride recipe already has a Hydrogen coproduct. That earlier output is a
+structural supply witness, not proof of sufficient stock without normalized
+batches, all consumption and output chances. A Tin Alloy input permits either
+later-spine GregTech Tin Dust or outside-spine IC2 Tin Dust, so it is an
+optional overlap rather than an unavoidable native matching obligation.
+External initial stock also keeps the old construction spines legal. Raw
+slots and coproduct evidence are in
+`exports/search-research-20261014/semantic/experiment_obligation_report.md`.
+The result supports clearer obligation explanations, not automatic rejection
+or an unsupported claim of impossible or autonomous production.
+
 Further useful candidates are operation-aware route diversity and construction
 obligations. Distinct recipe IDs often describe the same material-processing
 story, while a coproduct can lead into a different story. A diversity signature
@@ -181,3 +241,13 @@ dropping ingredient branches. An assembly input already produced elsewhere
 in the selected spine is still an AND obligation, not proof of a complete
 build plan. These are hypotheses for measured experiments, not implemented
 guarantees.
+
+Direct GT++ owner capture is now verified in an isolated real-pack run.
+It adds native material/form declarations for 1,709 resources, with 1,646
+complete traversals and 63 missing direct CELL material references. Required
+Hastelloy gear and double-plate records retain their exact native child parts
+and unresolved accounting. No material-token routing change is made.
+The refreshed runtime uses GT `5.09.54.223`, outside the current `.221`
+accounting profile. Its isolated snapshot is therefore not promoted to the
+active dataset. Evidence and limitations are recorded in
+[GTPP_MATERIAL_METADATA_RESEARCH.md](GTPP_MATERIAL_METADATA_RESEARCH.md).

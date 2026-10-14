@@ -57,6 +57,29 @@ phase-identity candidate, with its tree, phases, accounting and evidence.
 Ambiguous identity is not resolved by name. Query accounting may establish a
 common vector only when all candidate bases, scales and vectors agree exactly.
 
+Item resources may additionally carry `material_facts.native_owner`. This is
+independent direct item or block owner evidence. Its source class and API,
+literal native material identity, form and declaration tree do not replace the
+GT ItemData association or change chemical accounting eligibility.
+
+For GT++ owners, material identity retains the native class, `gtpp` system,
+internal name and default local label. These are declaration fields, not
+resource IDs or authoritative GT5 material references. The form retains the
+native type and an OrePrefix only when the actual owner API supplies it.
+A nominal prefix amount describes that form's native declaration and does
+not provide a GT++ chemical quantity conversion.
+
+GT++ declaration edges carry `declared_parts`, an integer string from
+`MaterialStack.getPartsPerOneHundred`, with its explicit API quantity basis.
+These values may include native rounding or clamping and are not certified
+molar coefficients. `traversal_status` describes bounded traversal of the
+declaration tree. A terminal declaration is distinct from an elemental leaf.
+Missing references, cycles and traversal limits remain unresolved with reasons.
+Neither a completed traversal nor matching names establishes chemical identity,
+purity, source-atom transfer, resource interchangeability or obtainable stock.
+Existing accounting consumers continue to use the supported GT accounting
+profile and preserve unresolved GT++ accounting.
+
 ### Group
 
 `{id, kind, name, members, provenance}`

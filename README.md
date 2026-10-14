@@ -92,7 +92,7 @@ rejects a reused output directory. An old dump cannot count as a successful
 new run. Captures and generated indexes stay under Git-excluded `exports/`.
 The isolated client disables automatic focus-loss pausing in memory and waits
 for the native CoreMod login-policy handler to finish. The gate supports the
-verified CoreMod 2.9.88 protocol and observes its actual Forge handler, including
+verified CoreMod 2.9.89 protocol and observes its actual Forge handler, including
 the installed ModularUI2 pipeline naming. Unsupported registration fails
 before publication. Autorun requires a fresh isolated client.
 

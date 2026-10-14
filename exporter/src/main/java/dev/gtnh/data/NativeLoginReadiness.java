@@ -19,7 +19,7 @@ import java.util.Map;
 /** Observes the native CoreMod login policy being applied before a canonical capture. */
 final class NativeLoginReadiness extends ChannelInboundHandlerAdapter {
     private static final String OWNER = "dreamcraft";
-    private static final String VERSION = "2.9.88";
+    private static final String VERSION = "2.9.89";
     private static final String MESSAGE_TYPE = "com.dreammaster.network.msg.ZZClientOnlySyncMessage";
     private static final String NATIVE_HANDLER_TYPE = MESSAGE_TYPE + "$ZZClientOnlySyncMessageHandler";
     private final SimpleChannelHandlerWrapper<?, ?> nativeHandler;
@@ -40,7 +40,7 @@ final class NativeLoginReadiness extends ChannelInboundHandlerAdapter {
         if (channel == null || channel.attr(NetworkRegistry.CHANNEL_SOURCE).get() != Side.CLIENT
             || !OWNER.equals(channel.attr(NetworkRegistry.FML_CHANNEL).get()))
             throw new IllegalStateException("Native CoreMod client channel is unavailable");
-        // CoreMod 2.9.88 registers only this one client message on its channel.
+        // CoreMod 2.9.89 registers only this one client message on its channel.
         // ModularUI2 generates wrapper names, so protocol ownership identifies the target.
         String handlerName = null;
         SimpleChannelHandlerWrapper<?, ?> wrapper = null;
@@ -113,7 +113,7 @@ final class NativeLoginReadiness extends ChannelInboundHandlerAdapter {
             "method", "native_client_message_handler_returned",
             "message_type", MESSAGE_TYPE, "native_handler_type", NATIVE_HANDLER_TYPE,
             "pipeline_handler_name", pipelineHandlerName,
-            "registration_basis", "CoreMod 2.9.88 single client message wrapper",
+            "registration_basis", "CoreMod 2.9.89 single client message wrapper",
             "runtime_layout", "ModularUI2 2.3.92 generates pipeline wrapper names",
             "policy_application", "native_owner_handled_actual_message", "completed", completed,
             "status", failure != null ? "error" : completed ? "complete" : "pending",

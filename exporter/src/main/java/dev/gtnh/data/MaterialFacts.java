@@ -7,10 +7,14 @@ import com.google.gson.JsonObject;
 import gregtech.api.enums.Element;
 import gregtech.api.enums.GTValues;
 import gregtech.api.enums.Materials;
+import gregtech.api.enums.OrePrefixes;
 import gregtech.api.objects.ItemData;
 import gregtech.api.objects.MaterialStack;
 import gregtech.api.util.GTOreDictUnificator;
 import gregtech.api.util.GTRecipeBuilder;
+import gtPlusPlus.core.block.base.BlockBaseModular;
+import gtPlusPlus.core.item.base.BaseItemComponent;
+import gtPlusPlus.core.material.Material;
 import java.util.Arrays;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -19,6 +23,9 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import net.minecraft.block.Block;
+import net.minecraft.item.Item;
+import net.minecraft.item.ItemBlock;
 import net.minecraft.item.ItemStack;
 import net.minecraftforge.fluids.Fluid;
 import net.minecraftforge.fluids.FluidStack;
@@ -28,6 +35,8 @@ import net.minecraftforge.oredict.OreDictionary;
 final class MaterialFacts {
     private static final String PROFILE_VERSION = "5.09.54.221";
     private static final String FLUID_SOURCE = "Materials.getGtMaterialFromFluid + Materials.getAll public phase identity union";
+    private static final int NATIVE_DECLARATION_DEPTH = 32;
+    private static final int NATIVE_DECLARATION_NODES = 1024;
     private static final Set<String> SOLID_PREFIXES = new HashSet<>(Arrays.asList(
         "dust", "dustSmall", "dustTiny", "ingot", "ingotHot", "nugget", "block",
         "gem", "gemChipped", "gemFlawed", "gemFlawless", "gemExquisite", "plate", "plateDouble",
@@ -39,6 +48,13 @@ final class MaterialFacts {
     MaterialFacts(String nativeVersion) { this.nativeVersion = nativeVersion; }
 
     JsonObject item(ItemStack original) {
+        JsonObject facts = gtItem(original);
+        JsonObject owner = nativeOwner(original);
+        if (owner != null) facts.add("native_owner", owner);
+        return facts;
+    }
+
+    private JsonObject gtItem(ItemStack original) {
         try {
             ItemStack query = original.copy();
             query.stackSize = 1;
@@ -73,6 +89,103 @@ final class MaterialFacts {
         } catch (RuntimeException error) {
             return failure("GTOreDictUnificator.getItemData", error);
         }
+    }
+
+    private static JsonObject nativeOwner(ItemStack original) {
+        if (original == null) return null;
+        Item item = original.getItem();
+        Object owner = item;
+        Material material;
+        JsonObject form;
+        String source = null;
+        String sourceClass = null;
+        String scope = "native_item_owner";
+        try {
+            if (item instanceof BaseItemComponent) {
+                BaseItemComponent component = (BaseItemComponent) item;
+                material = component.componentMaterial;
+                source = "BaseItemComponent.componentMaterial + componentType";
+                sourceClass = BaseItemComponent.class.getName();
+                OrePrefixes prefix = component.componentType == null ? null : component.componentType.getGtOrePrefix();
+                form = object("native_class", BaseItemComponent.ComponentTypes.class.getName(),
+                    "native_type", component.componentType == null ? null : component.componentType.name(),
+                    "prefix", prefix == null ? null : prefix.getName(),
+                    "nominal_material_amount", prefix == null ? null : Long.toString(prefix.getMaterialAmount()),
+                    "amount_basis", prefix == null ? null : "OrePrefixes.getMaterialAmount");
+            } else if (item instanceof ItemBlock && Block.getBlockFromItem(item) instanceof BlockBaseModular) {
+                BlockBaseModular block = (BlockBaseModular) Block.getBlockFromItem(item);
+                owner = block;
+                material = block.getMaterialEx();
+                source = "BlockBaseModular.getMaterialEx + blockType";
+                sourceClass = BlockBaseModular.class.getName();
+                scope = "native_block_owner";
+                form = object("native_class", BlockBaseModular.BlockTypes.class.getName(),
+                    "native_type", block.blockType == null ? null : block.blockType.name());
+            } else {
+                return null;
+            }
+            JsonObject tree = nativeMaterial(material, new IdentityHashMap<>(), 0,
+                new int[] {NATIVE_DECLARATION_NODES});
+            boolean associated = material != null && !form.get("native_type").isJsonNull();
+            JsonObject result = object("status", associated ? "associated" : "unresolved", "source_api", source,
+                "source_class", sourceClass, "scope", scope, "item_class", item.getClass().getName(),
+                "owner_class", owner.getClass().getName(), "form", form, "material", tree);
+            if (!associated) result.addProperty("reason", material == null ? "Missing native owner material" : "Missing native owner form");
+            return result;
+        } catch (RuntimeException error) {
+            return object("status", "failed", "source_api", source, "source_class", sourceClass,
+                "scope", scope, "item_class", item.getClass().getName(), "owner_class", owner.getClass().getName(),
+                "failure", object("class", error.getClass().getName(), "message", error.getMessage()));
+        }
+    }
+
+    /** A complete traversal retains exposed declarations, not a chemical quantity profile. */
+    private static JsonObject nativeMaterial(Material material, Map<Material, Boolean> active, int depth, int[] remaining) {
+        if (remaining[0] == 0) return object("traversal_status", "unresolved", "reason", "Native declaration node limit");
+        remaining[0]--;
+        if (material == null) return object("traversal_status", "unresolved", "reason", "Missing native material");
+        JsonObject tree = object("native_class", material.getClass().getName(), "native_system", "gtpp",
+            "internal_name", material.getUnlocalizedName(), "default_local_name", material.getDefaultLocalName(),
+            "identity_basis", "literal_native_internal_name_not_global_unique_id");
+        String reason = null;
+        if (active.containsKey(material)) reason = "Native component cycle";
+        else if (depth >= NATIVE_DECLARATION_DEPTH) reason = "Native declaration depth limit";
+        if (reason != null) {
+            tree.addProperty("traversal_status", "unresolved");
+            tree.addProperty("reason", reason);
+            return tree;
+        }
+        List<gtPlusPlus.core.material.MaterialStack> declaration = material.getComposites();
+        if (declaration == null) {
+            tree.addProperty("traversal_status", "unresolved");
+            tree.addProperty("reason", "Missing native component list");
+            return tree;
+        }
+        active.put(material, true);
+        JsonArray components = new JsonArray();
+        boolean traversed = true;
+        for (gtPlusPlus.core.material.MaterialStack part : declaration) {
+            if (remaining[0] == 0) {
+                traversed = false;
+                reason = "Native declaration node limit";
+                break;
+            }
+            Material childMaterial = part == null ? null : part.getStackMaterial();
+            JsonObject child = nativeMaterial(childMaterial, active, depth + 1, remaining);
+            components.add(object("declared_parts", part == null ? null : Integer.toString(part.getPartsPerOneHundred()),
+                "quantity_basis", "gtpp_parts_per_one_hundred_api", "source_api", "MaterialStack.getPartsPerOneHundred",
+                "quantity_semantics", "Native integer getter result. Fractional declarations are not retained here and no molar coefficient is certified",
+                "material", child));
+            traversed &= "complete".equals(child.get("traversal_status").getAsString());
+        }
+        active.remove(material);
+        tree.add("components", components);
+        tree.addProperty("declared_component_count", declaration.size());
+        tree.addProperty("omitted_component_count", declaration.size() - components.size());
+        tree.addProperty("declaration_kind", declaration.isEmpty() ? "terminal" : "composite");
+        tree.addProperty("traversal_status", traversed ? "complete" : "unresolved");
+        if (!traversed) tree.addProperty("reason", reason == null ? "Native component traversal is unresolved" : reason);
+        return tree;
     }
 
     JsonObject fluid(FluidStack original) {
