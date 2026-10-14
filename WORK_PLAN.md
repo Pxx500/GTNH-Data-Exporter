@@ -533,11 +533,31 @@ etap. Bieżące pomiary i decyzje są w SEARCH_EXPERIMENTS.md.
   spłaszczone bez podstawy porównania. Jeden eksperyment zachowuje wagi,
   odzyskuje cztery bezpośrednie drogi dla wafla, ale gubi gałąź obwodu
   Volcanusa i prawie podwaja pracę LV Hull. Odrzucono go bez dalszego strojenia.
-- [ ] Sprawdzić, czy deklaracja dopasowania konkretnego wejścia z młotkiem
+- [x] Sprawdzić, czy deklaracja dopasowania konkretnego wejścia z młotkiem
   pozwala opisać jego kategorię narzędzia w starszym snapshotcie. Zweryfikować
   pięć kotwic jednego slotu, jedną natywną grupę i rzeczywisty kontrakt Forge.
   Oddzielić dowód kategorii dopasowania od dosłownego członkostwa, natywnego
   odczytu Ore IDs i faktycznego zużycia. Bez zmiany oceny przed tym dowodem.
+  Wszystkie pięć kotwic jest w grupie HardHammer. Wybrany wariant z NBT
+  pasuje do kotwicy r3688 przez rzeczywisty predykat ignorujący NBT.
+  Potwierdzono Forge 1614 i pasywny getter GT .221. Możliwa podstawa
+  declared_input_anchor_category jest kontekstowa, nie jest natywnym Ore IDs.
+- [x] Wybrać minimalny interfejs dowodu kategorii dopasowanego składnika
+  w istniejącym właścicielu. Sprawdzić dostępność kotwicy w przygotowanych
+  relacjach i koszt wyszukiwania. Zachować osobną podstawę informacji,
+  źródłowy proces, slot, wybór i grupę. Nie przesłaniać obecnego pustego,
+  błędnego ani niepoprawnego pola natywnego. Bez nowego magazynu danych.
+  Wybrano dowód kontekstowy z istniejących relacji. Gorąca ocena potrzebowałaby
+  dodatkowej operacji w obecnym matcherze. Użytkownik polecił nie skupiać się
+  na narzędziach. Wątek odłożony bez implementacji ani eksperymentu oceny.
+- [ ] Sprawdzić dokładnie powtarzające się wymagania produktu docelowego
+  w dziewięciu zapisanych przypadkach. Oddzielić różne receptury od tego
+  samego wymagania półproduktu. Zachować ich ilości, predykaty i pełne konteksty.
+  Nie powtarzać odrzuconego wyboru ośmiu tras z większej puli dwunastu.
+- [ ] Sprawdzić, jak dopuścić różne drogi wcześniejszego przetwarzania
+  tego samego półproduktu bez zwiększania limitów wyników ani pracy.
+  Wykorzystać istniejące kursory i planowanie gałęzi. Zachować istotną drogę
+  przez stal oraz gałęzie obwodu, casingu i pozostałe kontrole.
 - [x] Sprawdzić literaturę o landmarkach i planach zrelaksowanych pod kątem
   kierowania przez gałęzie składników celu. Odróżnić osiągalność pojedynczej
   ścieżki od spełnienia wszystkich wejść receptury i policzyć przygotowanie.

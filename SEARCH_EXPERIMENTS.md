@@ -1051,3 +1051,43 @@ treatment or default change follows. The positive held-out result is evidence
 of the local cause, not grounds to promote a globally worse heuristic. Final
 evidence is in `material-heldout/diagnosis/BASIS_PILOT_REPORT.md` and its nine
 case artifacts.
+
+## A contextual matching-category proof is available for the hammer input
+
+One slot and one native group are inspected without another search. The captured
+ore:craftingToolHardHammer group contains exactly the five anchors of p233032
+slot zero. Selected generated hammer r42238 is not a literal member and lacks
+the newer native Ore IDs field. It matches declared choice one, r3688, through
+the actual item, metadata and explicitly NBT-insensitive predicate.
+
+Verified Forge 1614 source and bytecode establish item/metadata membership keys
+without NBT or count. Exact .221 GT hierarchy source establishes the passive
+metadata getter for this tool. No native API, getter, tool-stat mutation or
+matching call is executed by the study. Thirteen reused source hashes and the
+actual Forge artifact are checked.
+
+This supports a distinct contextual declared_input_anchor_category explanation,
+retaining selected resource, process, slot, choice, anchor and native group.
+It is not literal membership or direct captured native Ore IDs. Present empty,
+failed or malformed native fields must not be overridden. It establishes no
+actual use, wear, material noncontribution or atom flow. The current path_details
+category_groups owner already holds the literal and native category conventions.
+A new basis would be a visible contract extension. No implementation or score
+change has been made. Interface and query-cost feasibility remain the next step.
+Evidence is in `exports/search-research-20261014/material-heldout/tool-match-proof/`.
+
+Interface feasibility chooses contextual input evidence over global resource
+inference. Canonical relations preserve anchors and choice indexes, while the
+prepared graph does not preserve their retrievable descriptors. Post-selection
+explanation can use existing resolved edges. A bounded scoring point check would
+need to deepen the current matcher before a hot-path experiment. No prototype
+or extension follows. The user asks to deprioritize tools, so this strand is
+deferred. Evidence is in `material-heldout/tool-match-design/`.
+
+The continuing focus is general upstream route diversity and distinct target
+requirements. Formal jobs can repeat the same boule or Computer Cube requirement
+across alternative endpoint recipes. Exact equivalence and its effect on result
+allocation are not yet measured. Native recipe variants, cofeeds and predicates
+must remain distinct and inspectable. Any new experiment must preserve the
+circuit branch and construction controls within the existing result and work
+caps. It must not repeat the rejected larger-pool selection experiment.
