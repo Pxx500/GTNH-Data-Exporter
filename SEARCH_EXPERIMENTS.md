@@ -932,3 +932,35 @@ This correction changes fidelity and accounting, not search budgets or ranking.
 The active snapshot, main served GUI and established MCP processes remain unchanged.
 Evidence is in `exports/search-research-20261014/eoh-native-declarations/` and
 `exports/search-research-20261014/output-order-semantics/eye-of-harmony/`.
+
+## Two bounded controls avoid unjustified recipe exclusions and score changes
+
+A read-only GTRecipe census covers 186917 records in 206 family, recipe-class
+and special-object-type groups. Twenty groups have a typed special object or
+a record with no positive consumed input. This is a review signal, not a proof
+of unresolved execution. Several display groups already carry fake flags.
+Eye of Harmony supplies the verified positive control.
+
+Only the strongest additional candidate, Fish Pond, receives source inspection.
+Exact .225 source and installed bytecode show standard ProcessingLogic and
+ParallelHelper execution of its declared output chance arrays. Three native
+recipes contain 49 outputs, all below certainty, with circuit presence selectors
+and 15 EU/t at nominal LV. Six shared-ledger checks retain fractional expected
+outputs and no guaranteed outputs. The indexed lookup reads three records.
+The protected database hash stays unchanged. No new exclusion is justified.
+Algae Pond and BacteriaVat remain uninspected signals, not invalidity findings.
+No blanket rule for presence-only, no-input or zero-EU recipes follows.
+Evidence is in `exports/search-research-20261014/custom-projection-census/`.
+
+The source-verified Temporal comb import also receives a finite ranking probe.
+Two exact canonical GT counterparts resolve through complete native identities,
+amounts and chances. The observed 32 plus 32 cross-capture order differences are
+not treated as a source-verified roster. Preparation costs 23.033 ms, eight
+identity lookups and two candidate process reads. Across eight saved regression
+requests neither verified recipe reaches predecessor processing or score
+evaluation. Current paths, target branch sets, complete recipes, non-hint details
+and charged counters equal the saved controls. Both native stores remain unchanged.
+No treatment is fabricated when there is no reachable effect. This result gives
+no benefit for that exact roster in these queries. It does not establish that
+output-position preference is harmless throughout the dataset.
+Evidence is in `exports/search-research-20261014/output-order-semantics/centrifuge/pilot/`.

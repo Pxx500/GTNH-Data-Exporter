@@ -499,6 +499,15 @@ etap. Bieżące pomiary i decyzje są w SEARCH_EXPERIMENTS.md.
   Wykonanie oraz poziom napięcia pozostają jawnie nierozwiązane. Wszystkie
   wcześniejsze tożsamości surowców i ich pola pozostają zgodne. Przechodzi
   183 testy Pythona. Nie zmieniono aktywnego snapshota ani głównego serwera.
+- [x] Sprawdzić ograniczony sygnał innych niestandardowych projekcji maszyn.
+  Census obejmuje 186917 rekordów GTRecipe i wskazuje 20 grup do oceny.
+  Kod oraz rzeczywiste wyniki Fish Pond potwierdzają standardową obsługę
+  losowych produktów. Nie ma podstaw do nowego wykluczenia. Pozostałe sygnały
+  pozostają niezweryfikowane. Brak zużywanych wejść sam w sobie nie jest błędem.
+- [x] Zmierzyć wpływ pozycji wyjścia w dwóch źródłowo potwierdzonych importach
+  receptury Temporal comb. Żadna z nich nie trafia do oceny w ośmiu zapisanych
+  zapytaniach. Nie wykonano pozornej zmiany ani nie uogólniono tego wyniku
+  na wszystkie receptury Centrifuge. Przygotowanie kosztuje osobno 23 ms.
 - [x] Sprawdzić literaturę o landmarkach i planach zrelaksowanych pod kątem
   kierowania przez gałęzie składników celu. Odróżnić osiągalność pojedynczej
   ścieżki od spełnienia wszystkich wejść receptury i policzyć przygotowanie.
