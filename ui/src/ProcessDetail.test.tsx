@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, expect, test, vi } from 'vitest'
 import { ProcessDetail } from './Details'
 import type { Process } from './api'
@@ -8,6 +8,65 @@ afterEach(() => {cleanup(); vi.unstubAllGlobals()})
 const manaProcess: Process = {id:'mana-recipe',family:'botania:mana_infusion',display_name:'Mana infusion',
   inputs:[],outputs:[],duration_ticks:null,eu_per_tick:null,amperage:null,executable:true,
   conditions:{total_mana:1000000,energy_unit:'mana',effective_duration:'collision_runtime_gate_unknown'},provenance:{}}
+
+test('a fetched EBF fluid identity supplies its name and millibucket quantity through one lookup',async()=>{
+  const fetch=vi.fn(async()=>new Response(JSON.stringify({snapshot_id:'native',item:{id:'r32743',kind:'fluid',display_name:'Oxygen',registry_name:'oxygen',metadata:null,nbt:null,provenance:{owner:'native_registry'}}})))
+  vi.stubGlobal('fetch',fetch)
+  const process:Process={id:'p34292',family:'gregtech:gt.recipe.blastfurnace',display_name:'Blast Furnace',inputs:[{role:'consume',choices:[{resource_id:'r32743',amount:1000,native_amount:1000,match:{mode:'exact',nbt_sensitive:true}}]}],outputs:[],duration_ticks:500,eu_per_tick:120,amperage:1,executable:true,conditions:{native_special_value:1000},provenance:{owner:'GTRecipe'}}
+  render(<ProcessDetail process={process} resources={new Map()}/>)
+  expect(await screen.findByText('Oxygen')).toBeVisible()
+  expect(screen.getByText(/^Amount 1[\s,.]?000$/)).toBeVisible()
+  expect(screen.getByText('mB')).toBeVisible()
+  expect(fetch).toHaveBeenCalledTimes(1)
+  const technical=screen.getByText('Technical data: full process record').closest('details')!.querySelector('pre')!
+  expect(JSON.parse(technical.textContent!).inputs[0].choices[0].amount).toBe(1000)
+})
+
+test('verified static GT crafting marks voltage as not applicable without treating null EU as zero energy',()=>{
+  const recipe:Process={...manaProcess,id:'p1030',family:'minecraft:crafting',display_name:'Static GT crafting',conditions:{recipe_voltage_applicability:'not_applicable_crafting_grid',native_class:'gregtech.api.util.GTShapedRecipe',dynamic_output:'resolved_static'},provenance:{owner:'CraftingManager'}}
+  const view=render(<ProcessDetail process={recipe}/>)
+  expect(screen.getByText('No machine voltage requirement')).toBeInTheDocument()
+  expect(screen.queryByText('Energy')).not.toBeInTheDocument()
+  view.rerender(<ProcessDetail process={{...recipe,conditions:{dynamic_output:'unresolved'}}}/>)
+  expect(screen.queryByText('No machine voltage requirement')).not.toBeInTheDocument()
+  expect(screen.queryByText('Energy')).not.toBeInTheDocument()
+  view.rerender(<ProcessDetail process={{...recipe,eu_per_tick:0}}/>)
+  expect(screen.queryByText('No machine voltage requirement')).not.toBeInTheDocument()
+  expect(screen.getByText('0 EU/t')).toBeInTheDocument()
+})
+
+test('technical data is collapsed and copyable while recipe conditions remain readable',async()=>{
+  const record={...manaProcess,conditions:{heat:1000,research:'Required research'},extension:{secret:'exact original field'},inputs:[{role:'tool',slot_id:'native-slot',choices:[{resource_id:null,amount:1,match:{mode:'exact'}}]}]}
+  const writeText=vi.fn().mockResolvedValue(undefined)
+  vi.stubGlobal('navigator',{clipboard:{writeText}})
+  render(<ProcessDetail process={record}/>)
+  expect(screen.queryByText('Choice fields')).not.toBeInTheDocument()
+  expect(screen.queryByText('Slot fields')).not.toBeInTheDocument()
+  const technical=screen.getByText('Technical data: full process record').closest('details')!
+  expect(technical).not.toHaveAttribute('open')
+  const conditions=screen.getByText('Conditions and research').closest('details')!
+  expect(conditions).not.toHaveAttribute('open')
+  expect(screen.getByText('Heat')).not.toBeVisible()
+  fireEvent.click(within(conditions).getByText('Conditions and research'))
+  expect(screen.getByText('Heat')).toBeVisible()
+  expect(screen.getByText(/^1[\s,.]?000$/)).toBeVisible()
+  fireEvent.click(within(technical).getByRole('button',{name:'Copy JSON',hidden:true}))
+  await screen.findByText('JSON copied')
+  expect(JSON.parse(writeText.mock.calls[0][0])).toEqual(record)
+})
+
+test('readable conditions omit routine native defaults but retain exceptional requirements and the complete record',()=>{
+  const conditions={enabled:true,fake:false,hidden:false,nbt_sensitive:false,requires_empty_outputs:false,native_special_value:0,native_description:null,special_items:null,recipe_voltage_tier_source:'GTUtility.getTier(mEUt)',recipe_voltage_tier_semantics:'nominal recipe voltage class, not machine capability',recipe_voltage:{tier:2,name:'MV',source:'GTUtility.getTier',semantics:'internal_voltage_classification'},coil_heat:1000,research:'unresolved',environment:'vacuum',unfamiliar_requirement:'native_unknown'}
+  render(<ProcessDetail process={{...manaProcess,conditions}}/>)
+  const panel=screen.getByText('Conditions and research').closest('details')!
+  expect(panel).not.toHaveAttribute('open')
+  fireEvent.click(within(panel).getByText('Conditions and research'))
+  for(const label of ['Enabled','Fake','Hidden','Nbt sensitive','Requires empty outputs','Native special value','Native description','Special items','Recipe voltage tier source','Recipe voltage tier semantics','Source','Semantics'])expect(within(panel).queryByText(label)).not.toBeInTheDocument()
+  for(const label of ['Coil heat','Research','Environment','Unfamiliar requirement'])expect(within(panel).getByText(label)).toBeVisible()
+  expect(within(panel).getByText('MV')).toBeVisible()
+  const full=screen.getByText('Technical data: full process record').closest('details')!.querySelector('pre')!
+  expect(JSON.parse(full.textContent!).conditions).toEqual(conditions)
+})
 
 test('shows the exact total mana cost with units without inventing EU or a processing rate', () => {
   const view=render(<ProcessDetail process={manaProcess}/>)

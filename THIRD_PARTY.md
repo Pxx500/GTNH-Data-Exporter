@@ -24,6 +24,7 @@ affected files.
 | React and React DOM | 19.3.0 | MIT |
 | React Flow | 12.12.0 | MIT |
 | Dagre | 3.1.1 | MIT |
+| html-to-image, graph PNG/SVG export | 1.11.11 | MIT |
 | Vite | 8.3.4 | MIT |
 | TypeScript | 7.0.2 | Apache-2.0 |
 | FastAPI | 0.143.0 | MIT |

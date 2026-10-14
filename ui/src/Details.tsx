@@ -6,7 +6,42 @@ export function Badge({children, tone = ''}: {children: React.ReactNode; tone?: 
   return <span className={`badge ${tone}`}>{children}</span>
 }
 export function JsonData({label, value}: {label: string; value: unknown}) {
-  return <details className="json-data"><summary>{label}</summary><pre>{JSON.stringify(value, null, 2) ?? 'Unknown'}</pre></details>
+  const [copyState,setCopyState]=useState('')
+  const json=JSON.stringify(value,null,2)??'Unknown'
+  async function copy(){
+    try{await navigator.clipboard.writeText(json);setCopyState('JSON copied')}
+    catch{setCopyState('Could not copy. Select the record text below and copy it.')}
+  }
+  return <details className="json-data"><summary>{label}</summary><button type="button" onClick={()=>void copy()}>Copy JSON</button>{copyState && <p role="status">{copyState}</p>}<pre tabIndex={0}>{json}</pre></details>
+}
+export function ConditionFacts({value,label='Conditions and research'}:{value:unknown;label?:string}) {
+  function compact(data:unknown,parent=''):unknown {
+    if(Array.isArray(data))return data.map(item=>compact(item,parent))
+    if(data===null || typeof data!=='object')return data
+    return Object.fromEntries(Object.entries(data as Record<string,unknown>).flatMap(([key,item])=>{
+      const routine=(key==='enabled' && item===true)
+        || (['fake','hidden','nbt_sensitive','requires_empty_outputs'].includes(key) && item===false)
+        || (key==='native_special_value' && item===0)
+        || (['native_description','special_items'].includes(key) && item===null)
+      const implementation=['recipe_voltage_tier_source','recipe_voltage_tier_semantics'].includes(key)
+        || (parent==='recipe_voltage' && ['source','semantics'].includes(key))
+      if(routine || implementation)return []
+      const result=compact(item,key)
+      if(result!==null && typeof result==='object' && Object.keys(result).length===0)return []
+      return [[key,result]]
+    }))
+  }
+  function facts(data:unknown):React.ReactNode {
+    if(data===null)return 'Unknown'
+    if(typeof data==='number')return data.toLocaleString()
+    if(typeof data==='boolean')return data?'Yes':'No'
+    if(Array.isArray(data))return <ul>{data.map((item,index)=><li key={index}>{facts(item)}</li>)}</ul>
+    if(typeof data==='object')return <dl className="condition-facts">{Object.entries(data as Record<string,unknown>).map(([key,item])=><div key={key}><dt>{key.replaceAll('_',' ').replace(/^./,letter=>letter.toUpperCase())}</dt><dd>{facts(item)}</dd></div>)}</dl>
+    return String(data).replaceAll('_',' ')
+  }
+  const readable=compact(value)
+  if(readable && typeof readable==='object' && Object.keys(readable).length===0)return null
+  return <details className="recipe-conditions"><summary>{label}</summary>{facts(readable)}</details>
 }
 export function RequestState({loading, error, retry}: {loading: boolean; error?: string; retry?: () => void}) {
   if (loading) return <p className="loading" role="status">Loading dataset records…</p>
@@ -16,19 +51,19 @@ export function RequestState({loading, error, retry}: {loading: boolean; error?:
 export function ActionHint({reason,ready,id}: {reason?:string;ready:string;id?:string}) {
   return <p id={id} className={`action-hint ${reason?'needs-input':'ready'}`} role="status">{reason??ready}</p>
 }
-export function ResourceRef({id, onSelect, resources}: {id: string; onSelect?: (id: string) => void; resources?: ReadonlyMap<string, Resource>}) {
+export function ResourceRef({id, onSelect, resources,amount}: {id: string; onSelect?: (id: string) => void; resources?: ReadonlyMap<string, Resource>;amount?:number|null}) {
   const known = resources?.get(id)
   const request = useRequest<Single<Resource>>(known ? null : query(`resources/${encodeURIComponent(id)}`))
   const resource = known ?? request.data?.item
-  return <span className="resource-ref" title={resource ? `${resource.registry_name}${resource.metadata == null ? '' : ` · metadata ${resource.metadata}`}${resource.nbt == null ? '' : ' · NBT'}` : id}>{onSelect ? <button className="text-button" onClick={() => onSelect(id)}>{resource?.display_name || resource?.registry_name || id}</button> : <strong>{resource?.display_name || resource?.registry_name || id}</strong>}<code>{resource?.registry_name || id}</code>{request.error && <small className="warning-text">Identity lookup failed: {request.error}</small>}</span>
+  return <span className="resource-ref" title={resource ? `${resource.registry_name}${resource.metadata == null ? '' : ` · metadata ${resource.metadata}`}${resource.nbt == null ? '' : ' · NBT'}` : id}>{onSelect ? <button className="text-button" onClick={() => onSelect(id)}>{resource?.display_name || resource?.registry_name || id}</button> : <strong>{resource?.display_name || resource?.registry_name || id}</strong>}<code>{resource?.registry_name || id}</code>{amount!==undefined && <span className="choice-meta"><Amount value={amount} resource={resource}/></span>}{request.error && <small className="warning-text">Identity lookup failed: {request.error}</small>}</span>
 }
 function GroupRef({id, onSelect, resources}: {id: string; onSelect?: (id: string) => void; resources?: ReadonlyMap<string, Resource>}) {
   const [open, setOpen] = useState(false)
   const request = useRequest<Single<Group>>(open ? query(`groups/${encodeURIComponent(id)}`) : null)
   return <details className="group" onToggle={event => setOpen(event.currentTarget.open)}><summary>Alternatives</summary><RequestState {...request} retry={request.reload}/>{open && request.data && <><p>{request.data.item.name} · {request.data.item.members.length} members</p><ul>{request.data.item.members.map(member => <li key={member}><ResourceRef id={member} onSelect={onSelect} resources={resources}/></li>)}</ul><JsonData label="Group record" value={request.data.item}/></>}</details>
 }
-function Amount({value}: {value: number | null | undefined}) {
-  return <span className="quantity">{value == null ? 'Amount unknown' : `Amount ${value.toLocaleString()}`}</span>
+function Amount({value,resource}: {value: number | null | undefined;resource?:Resource}) {
+  return <><span className="quantity">{value == null ? 'Amount unknown' : `Amount ${value.toLocaleString()}`}</span>{resource && <span className="quantity-unit">{resource.kind==='fluid'?'mB':resource.kind==='item'?'items':resource.kind}</span>}</>
 }
 function Chance({value, label = 'Chance'}: {value: Output['chance']; label?: string}) {
   if (value && value.numerator === value.denominator) return null
@@ -38,12 +73,17 @@ function Chance({value, label = 'Chance'}: {value: Output['chance']; label?: str
   return <Badge>{label} {text}</Badge>
 }
 export function OutputRows({outputs, onSelect, resources, onRecycle}: {outputs: Output[]; onSelect?: (id: string) => void; resources?: ReadonlyMap<string, Resource>;onRecycle?:(id:string)=>void}) {
-  return <div className="output-list">{outputs.map((output, index) => <div className="choice" key={index}><ResourceRef id={output.resource_id} onSelect={onSelect} resources={resources}/><div className="choice-meta"><Amount value={output.amount}/><Chance value={output.chance}/>{onRecycle && <button onClick={()=>onRecycle(output.resource_id)} aria-label={`Recycle output ${output.resource_id}`}>Recycle output</button>}</div><JsonData label="Output fields" value={output}/></div>)}</div>
+  return <div className="output-list">{outputs.map((output, index) => <div className="choice" key={index}><ResourceRef id={output.resource_id} onSelect={onSelect} resources={resources} amount={output.amount??null}/><div className="choice-meta"><Chance value={output.chance}/>{onRecycle && <button onClick={()=>onRecycle(output.resource_id)} aria-label={`Recycle output ${output.resource_id}`}>Recycle output</button>}</div></div>)}</div>
 }
 export function ProcessDetail({process, onSelect, resources, onRecycle}: {process: Process; onSelect?: (id: string) => void; resources?: ReadonlyMap<string, Resource>;onRecycle?:(id:string)=>void}) {
   const roles: Record<string, string> = {presence: 'Required presence', tool: 'Tool'}
   const conditions = process.conditions
   const native = conditions !== null && typeof conditions === 'object' ? conditions as Record<string, unknown> : undefined
+  const noMachineVoltage=native?.recipe_voltage_applicability==='not_applicable_crafting_grid'
+    && process.family==='minecraft:crafting' && process.executable===true && process.eu_per_tick===null
+    && native.native_class==='gregtech.api.util.GTShapedRecipe' && native.dynamic_output==='resolved_static'
+    && process.provenance!==null && typeof process.provenance==='object'
+    && 'owner' in process.provenance && process.provenance.owner==='CraftingManager'
   const mana = native?.energy_unit === 'mana' && typeof native.total_mana === 'number' && Number.isFinite(native.total_mana)
     ? native.total_mana : undefined
   const catalystBelow = native?.catalyst_below !== null && typeof native?.catalyst_below === 'object'
@@ -58,6 +98,7 @@ export function ProcessDetail({process, onSelect, resources, onRecycle}: {proces
     && conditions.dynamic_output === 'unresolved' && process.outputs.length > 0
   return <section className="process-detail">
     <div className="detail-title"><div><p className="eyebrow">{process.family}</p><h3>{process.display_name || process.id}</h3><code>{process.id}</code></div>{process.executable !== true && <Badge tone={process.executable === false ? 'warning' : 'muted'}>{process.executable === false ? 'Informational / fake' : 'Execution unknown'}</Badge>}</div>
+    {noMachineVoltage && <Badge>No machine voltage requirement</Badge>}
     {(mana !== undefined || process.duration_ticks != null || process.eu_per_tick != null || (process.amperage != null && process.amperage !== 1)) && <dl className="metrics">{mana !== undefined && <div><dt>Mana cost</dt><dd>{mana.toLocaleString(undefined, {maximumFractionDigits: 20})} mana</dd></div>}{process.duration_ticks != null && <div><dt>Duration</dt><dd>{process.duration_ticks.toLocaleString()} ticks</dd></div>}{process.eu_per_tick != null && <div><dt>Energy</dt><dd>{process.eu_per_tick.toLocaleString()} EU/t</dd></div>}{process.amperage != null && process.amperage !== 1 && <div><dt>Amperage</dt><dd>{process.amperage}</dd></div>}</dl>}
     {requiredCatalysts.length > 0 && <section className="slot"><h4>Required catalysts</h4>
       {catalystBelow?.position === 'one_block_below_pool' && <p>Catalyst position: one block below the mana pool.</p>}
@@ -70,9 +111,9 @@ export function ProcessDetail({process, onSelect, resources, onRecycle}: {proces
     {outputTemplates && <p className="notice warning">Runtime result is unresolved. Shown outputs are native display templates.</p>}
     <div className="recipe-io"><div className="recipe-inputs"><h4 title="All slots are required. Choose one alternative within each slot.">Inputs</h4>
     {process.inputs.length === 0 && <p className="empty-inline">No input slots captured.</p>}
-    <div className="slot-list">{process.inputs.map((slot, index) => <section className="slot" key={index}><div className="slot-heading"><strong>Slot {index + 1}</strong>{slot.role !== 'consume' && <Badge tone="presence">{roles[slot.role] || slot.role}</Badge>}{slot.consumption_chance !== undefined && <Chance value={slot.consumption_chance} label="Consumption chance"/>} {slot.choices.length > 1 && <small>{slot.choices.length} alternatives</small>}</div>{slot.choices.map((choice, choiceIndex) => <div className="choice" key={choiceIndex}>{choiceIndex > 0 && <span className="choice-or">OR</span>}{choice.resource_id !== null && <ResourceRef id={choice.resource_id} onSelect={onSelect} resources={resources}/>}<div className="choice-meta"><Amount value={choice.amount}/>{!['exact','unified','ore_dict'].includes(choice.match.mode) && <Badge>{choice.match.mode}</Badge>}{choice.match.nbt_sensitive === true && <Badge>NBT-sensitive</Badge>}{choice.consumption_chance !== undefined && <Chance value={choice.consumption_chance} label="Consumption chance"/>}</div>{choice.match.group_id && <GroupRef id={choice.match.group_id} onSelect={onSelect} resources={resources}/>}<JsonData label="Choice fields" value={choice}/></div>)}<JsonData label="Slot fields" value={slot}/></section>)}</div>
+    <div className="slot-list">{process.inputs.map((slot, index) => <section className="slot" key={index}><div className="slot-heading"><strong>Slot {index + 1}</strong>{slot.role !== 'consume' && <Badge tone="presence">{roles[slot.role] || slot.role}</Badge>}{slot.consumption_chance !== undefined && <Chance value={slot.consumption_chance} label="Consumption chance"/>} {slot.choices.length > 1 && <small>{slot.choices.length} alternatives</small>}</div>{slot.choices.map((choice, choiceIndex) => <div className="choice" key={choiceIndex}>{choiceIndex > 0 && <span className="choice-or">OR</span>}{choice.resource_id !== null && <ResourceRef id={choice.resource_id} onSelect={onSelect} resources={resources} amount={choice.amount}/>}<div className="choice-meta">{choice.resource_id===null && <Amount value={choice.amount}/>}{!['exact','unified','ore_dict'].includes(choice.match.mode) && <Badge>{choice.match.mode}</Badge>}{choice.match.nbt_sensitive === true && <Badge>NBT-sensitive</Badge>}{choice.consumption_chance !== undefined && <Chance value={choice.consumption_chance} label="Consumption chance"/>}</div>{choice.match.group_id && <GroupRef id={choice.match.group_id} onSelect={onSelect} resources={resources}/>}</div>)}</section>)}</div>
     </div><div className="recipe-outputs"><h4>{outputTemplates ? 'Output templates' : 'Outputs'}</h4><OutputRows outputs={process.outputs} onSelect={onSelect} resources={resources} onRecycle={onRecycle}/></div></div>
-    <JsonData label="Conditions and research" value={process.conditions}/><JsonData label="Provenance" value={process.provenance}/><JsonData label="Full process record, including extension fields" value={process}/>
+    <ConditionFacts value={process.conditions}/><JsonData label="Technical data: full process record" value={process}/>
   </section>
 }
 export function SourceDetail({source, environments, onSelect}: {source: Source; environments: Environment[]; onSelect?: (id: string) => void}) {

@@ -1,11 +1,13 @@
-import { useCallback, useEffect, useMemo, useRef } from 'react'
-import { Background, Controls, Handle, MiniMap, Panel, Position, ReactFlow, ReactFlowProvider, MarkerType, useNodesInitialized, useNodesState, useReactFlow } from '@xyflow/react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Background, Controls, Handle, MiniMap, Position, ReactFlow, ReactFlowProvider, MarkerType, useNodesInitialized, useNodesState, useReactFlow } from '@xyflow/react'
 import type { Edge, Node, NodeProps } from '@xyflow/react'
 import dagre from '@dagrejs/dagre'
 import type { Process, Resource, Trace } from './api'
 import { Badge, ProcessDetail } from './Details'
 import { quantity } from './AccountingDetails'
 import type { Rational } from './AccountingDetails'
+import {renderRecipeBoard} from './RecipeBoardImage'
+import type {BoardImageFormat} from './RecipeBoardImage'
 import '@xyflow/react/dist/style.css'
 
 export interface RecipeGraphData {recipes:{id:string;process:Process;paths?:number[];runs?:Rational}[];resources:Resource[];connections:{id:string;source:string;target:string;resourceId:string;paths?:number[];label?:string}[]}
@@ -16,7 +18,7 @@ function RecipeTile({id,data}: NodeProps<RecipeNode>) {
   return <article aria-label={`Recipe ${data.process.display_name || data.process.id}`} className={`recipe-tile ${data.muted ? 'path-muted' : ''}`}>
     <Handle type="target" position={Position.Top}/>
     <div className="recipe-tile-toolbar"><Badge tone="good">{data.paths.length > 1 ? `Shared by ${data.paths.length} paths` : data.paths.length ? `Path ${data.paths[0] + 1}` : 'Network recipe'}</Badge>{data.runs && <Badge>Runs {quantity(data.runs)}</Badge>}<button className="nodrag" aria-label={`Process ${data.process.display_name || data.process.id}`} onClick={() => data.inspect(id)}>Inspect details</button></div>
-    <div className="nodrag nowheel" onClick={event=>event.stopPropagation()}><ProcessDetail process={data.process} resources={data.resources} onSelect={data.inspectResource} onRecycle={data.recycle ? id=>data.recycle!(data.process.id,id) : undefined}/></div>
+    <div className="nodrag" onClick={event=>event.stopPropagation()}><ProcessDetail process={data.process} resources={data.resources} onSelect={data.inspectResource} onRecycle={data.recycle ? id=>data.recycle!(data.process.id,id) : undefined}/></div>
     <Handle type="source" position={Position.Bottom}/>
   </article>
 }
@@ -45,13 +47,19 @@ export function RecipeGraph(props:RecipeGraphProps) {
   return <ReactFlowProvider><Flow {...props}/></ReactFlowProvider>
 }
 function Flow({graph:recipeGraph,highlight,inspect,inspectResource,recycle,recycleProcesses}:RecipeGraphProps) {
+  const graphRoot=useRef<HTMLDivElement>(null)
+  const exportLock=useRef(false)
+  const [exporting,setExporting]=useState<BoardImageFormat|null>(null)
+  const [exportNotice,setExportNotice]=useState('')
+  const [exportError,setExportError]=useState('')
+  const [exportImage,setExportImage]=useState<{format:BoardImageFormat;image:Awaited<ReturnType<typeof renderRecipeBoard>>}|null>(null)
   const resources=useMemo(()=>new Map(recipeGraph.resources.map(resource=>[resource.id,resource])),[recipeGraph.resources])
   const initialNodes=useMemo(()=>recipeGraph.recipes.map(recipe=>({id:recipe.id,type:'recipe' as const,position:{x:0,y:0},dragHandle:'.recipe-tile-toolbar',
     data:{...recipe,paths:recipe.paths??[],resources,muted:false,inspect,inspectResource,recycle:recycleProcesses && !recycleProcesses.includes(recipe.process.id)?undefined:recycle}})),[recipeGraph,resources,inspect,inspectResource,recycle,recycleProcesses])
   const [nodes,setNodes,onNodesChange] = useNodesState<RecipeNode>(initialNodes)
   const loadedTrace = useRef(recipeGraph)
   const arrangedTrace = useRef<RecipeGraphData | null>(null)
-  useEffect(()=>{if(loadedTrace.current!==recipeGraph){loadedTrace.current=recipeGraph;setNodes(initialNodes)}},[recipeGraph,initialNodes,setNodes])
+  useEffect(()=>{if(loadedTrace.current!==recipeGraph){loadedTrace.current=recipeGraph;setNodes(initialNodes);setExportImage(null);setExportNotice('');setExportError('')}},[recipeGraph,initialNodes,setNodes])
   const initialized = useNodesInitialized()
   const {getNodes,fitView} = useReactFlow<RecipeNode>()
   const dimensions = nodes.map(node => `${node.id}:${node.measured?.width}:${node.measured?.height}`).join('|')
@@ -70,8 +78,28 @@ function Flow({graph:recipeGraph,highlight,inspect,inspectResource,recycle,recyc
   },[getNodes,setNodes,connections,fitView,initialNodes])
   useEffect(()=>{if(initialized && arrangedTrace.current!==recipeGraph && arrange()) arrangedTrace.current=recipeGraph},[initialized,dimensions,arrange,recipeGraph])
   useEffect(()=>{setNodes(current=>current.map(node=>({...node,data:{...node.data,muted:highlight!==null && !node.data.paths.includes(highlight)}})))},[highlight,setNodes])
-  return <ReactFlow nodes={nodes} edges={edges} onNodesChange={onNodesChange} nodeTypes={nodeTypes} minZoom={.1} maxZoom={2} nodesConnectable={false} onNodeClick={(_,node)=>inspect(node.id)} fitView ariaLabelConfig={{'controls.fitView.ariaLabel':'Fit all recipes','controls.zoomIn.ariaLabel':'Zoom in','controls.zoomOut.ariaLabel':'Zoom out'}}>
-    <Background gap={20}/><Controls/><MiniMap pannable zoomable nodeColor="#c0dfd3"/>
-    <Panel position="top-right"><button onClick={arrange}>Arrange recipes</button></Panel>
-  </ReactFlow>
+  const exportReady=initialized && nodes.length>0 && nodes.length===initialNodes.length
+  async function exportBoard(format:BoardImageFormat){
+    if(exportLock.current || !graphRoot.current || !exportReady)return
+    exportLock.current=true
+    setExporting(format)
+    setExportError('')
+    setExportNotice(`Exporting the whole board as ${format.toUpperCase()}…`)
+    try{
+      const image=await renderRecipeBoard(graphRoot.current,getNodes(),edges.map(edge=>edge.id),format)
+      setExportImage({format,image})
+      setExportNotice(`${format.toUpperCase()} ready: ${image.width.toLocaleString()} × ${image.height.toLocaleString()} px. Use the Download link to save it.`)
+    }catch(error){
+      const message=error instanceof Error?error.message:String(error)
+      setExportNotice('')
+      setExportError(`${message}${message.includes('Use SVG')?'':format==='png'?' Try SVG or retry after the board finishes loading.':' Retry after the board finishes loading.'}`)
+    }finally{
+      exportLock.current=false
+      setExporting(null)
+    }
+  }
+  return <div className="recipe-board">    <section aria-label="Recipe board actions" className="recipe-board-actions"><div className="recipe-board-buttons"><button onClick={arrange}>Arrange recipes</button><button disabled={!exportReady || !!exporting} onClick={()=>void exportBoard('png')}>Export whole board PNG</button><button disabled={!exportReady || !!exporting} onClick={()=>void exportBoard('svg')}>Export whole board SVG</button></div><p>Scroll the page normally. Ctrl+scroll or pinch zooms the graph. Drag the canvas to pan and a tile header to move it.</p><p>Export, then use the Download link to save. PNG uses 2× tile size. SVG suits larger boards and browser viewing.</p>{!exportReady && <p role="status">Wait for recipe tiles to finish loading before exporting.</p>}{exportNotice && <p role="status">{exportNotice}</p>}{exportImage && <div className="recipe-board-download"><a href={exportImage.image.dataUrl} download={`recipe-board.${exportImage.format}`}>Download {exportImage.format.toUpperCase()}</a><span>recipe-board.{exportImage.format}</span></div>}{exportError && <p className="warning-text" role="alert">{exportError}</p>}</section><div className="recipe-board-canvas"><ReactFlow ref={graphRoot} nodes={nodes} edges={edges} onNodesChange={onNodesChange} nodeTypes={nodeTypes} minZoom={.1} maxZoom={2} nodesConnectable={false} zoomOnScroll={false} panOnScroll={false} preventScrolling={false} zoomOnPinch zoomActivationKeyCode="Control" onNodeClick={(_,node)=>inspect(node.id)} fitView ariaLabelConfig={{'controls.fitView.ariaLabel':'Fit all recipes','controls.zoomIn.ariaLabel':'Zoom in','controls.zoomOut.ariaLabel':'Zoom out'}}>
+    <Background gap={20}/><Controls/><MiniMap pannable={false} zoomable={false} style={{pointerEvents:'none'}} nodeColor="#c0dfd3"/>
+
+  </ReactFlow></div></div>
 }

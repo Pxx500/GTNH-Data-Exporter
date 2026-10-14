@@ -15,7 +15,14 @@ records. Timings describe this captured scope and machine.
 Coverage is reported per source. An export is not a declaration that every
 recipe family or acquisition route in the pack has been reproduced.
 Custom crafting wrappers and non-GT machine integrations remain important
-coverage gaps. The first raw crafting catalog included 46,564 records with
+coverage gaps. A pinned 2026-10-14 capture retains the same catalog counts and
+resolves 11,822 static GT shaped outputs after checking their native NBT,
+electric-item, enchantment and item-update behavior. Supported crafting-grid
+recipes explicitly require no machine voltage. Tool returns and damage remain
+unresolved. Dynamic and unsupported crafting classes remain excluded from
+material paths. See [CRAFTING_OUTPUT_RESEARCH.md](CRAFTING_OUTPUT_RESEARCH.md)
+for the verified scope and independent NEI comparison.
+The first raw crafting catalog included 46,564 records with
 unresolved inputs. The collector now captures declared inputs for the exact
 GT shaped and shapeless classes. Their dynamic matching and runtime output
 transformations remain explicit gaps. Small-ore rules preserve joint native
@@ -27,8 +34,8 @@ A previous full-pack run verified declared inputs in all 34,881 GT shaped and
 2,702 GT shapeless records. That snapshot has 257,788 processes and 122,972
 resources. Its compressed streams total 10.46 MiB. Capture took about nine
 seconds and the full build/launch/capture/import pipeline took 153.18 seconds.
-Native display output templates remain inspectable, with a visible GUI
-notice, but cannot establish material paths until runtime outputs are resolved.
+Unresolved native display output templates remain inspectable, with a visible
+GUI notice, but cannot establish material paths.
 
 ## Stack
 
@@ -169,20 +176,58 @@ Trace requests use the selected resource IDs rather than the typed text.
 The trace finds several bounded material paths to the target. Require or
 exclude intermediate resources using autocomplete, limit the number of
 paths, and set how many extra steps may follow the shortest qualifying path.
-The default Diverse routes policy spreads paths across ingredients leading
-to the target, instead of filling the result with short recipe variants from
-one ingredient branch. Fewest steps first is also available. Trace defaults
+The GUI defaults to Main material flow. It uses prepared native-material hints
+to find one representative route per target ingredient branch, while preserving
+the complete recipes and their external side inputs. Diverse routes spreads
+additional alternatives across target ingredients. Fewest steps first is also
+available. CLI, HTTP and MCP keep their explicit `diverse` default. Trace defaults
 allow six extra steps within a total depth of 12. The GUI admits up to 150
 distinct processes across eight whole paths. These bounds remain editable.
 Filters run in Dataset before results are selected. Fewest steps does not
 mean best yield or minimum energy. No-route, identical-resource and search
 limits remain explicit. Every included recipe belongs to a returned path.
 
+New imports prepare a snapshot-bound flow sidecar automatically. For an existing
+index, run `gtnh-data rebuild-flow-index --database PATH_TO_INDEX.sqlite` once.
+Inspect readiness with `gtnh-data flow-index --database PATH_TO_INDEX.sqlite`.
+Preparation changes derived search data only. Material mode rejects missing or
+incompatible sidecars with an explicit rebuild message.
+
+MCP traces default to `view="compact"`, retaining complete selected recipes,
+declared choices and path resources with explicit omission counts for expanded
+matching candidates. Request `view="full"` for the expanded candidate graph.
+Dataset, HTTP and CLI retain the full default. CLI accepts `--view compact`.
+The [agent guide](python/src/gtnh_data/agent_guide.md) explains matching references
+and source-boundary evidence in both presentations.
+
 Each graph tile represents a whole recipe, with its input slots, required
 tools, outputs, quantities, chances and machine parameters together. Tiles
 connect through transitions belonging to the returned paths. Shared recipes
-appear once on a freely pannable and zoomable map. Drag tiles, fit the view,
-or arrange them automatically. Choose one path to highlight its steps.
+appear once on a freely pannable and zoomable map. Ordinary wheel scrolling
+scrolls the page. Hold Ctrl while scrolling, or pinch, to zoom the graph.
+The +/- controls also zoom. Drag the canvas to pan and a tile header to move
+it, fit the view, or arrange recipes automatically. The minimap is a static
+overview. Choose one path to highlight its steps.
+Click a recipe or material to inspect it beside the board. Missing identities
+and producing recipes load there without switching workspaces. Open in Library
+is a separate action. Returning to Trace keeps the result, camera, moved cards
+and filters. The inspector uses a scrolling body with a separate close header,
+and becomes a fixed drawer in a narrow viewport. Escape closes it and returns
+focus to the opener. Full records remain in collapsed technical sections with
+Copy JSON, while ordinary quantities include their units and exceptional
+chances appear as percentages.
+Use the controls above the canvas to export, then click Download PNG or
+Download SVG to save the prepared image. The link stays available without
+rendering the board again. Export whole board PNG includes every tile, link
+and label at twice the natural
+tile resolution, regardless of the live zoom or screen size. Export whole
+board SVG uses natural dimensions and suits very large boards. Exports keep
+the current arrangement, expanded sections and path highlighting, without
+moving the live camera. PNG is rejected above 16,384 pixels on either side or
+64 million total pixels rather than shrinking the text. Use SVG in that case.
+The SVG embeds HTML through foreignObject and is intended for modern browsers,
+so some vector editors may not render the recipe cards.
+
 Additional inputs and co-products stay inside each recipe, with identities
 and complete native records available in the inspector.
 Cards use their content size, wrap input slots into rows and place labeled

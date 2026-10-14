@@ -1,7 +1,7 @@
 import {useState} from 'react'
 import {cleanup,fireEvent,render,screen,waitFor,within} from '@testing-library/react'
 import {afterEach,expect,test,vi} from 'vitest'
-import type {BoundaryProfile,NetworkWitnessReport,Process,Resource} from './api'
+import type {AcquisitionAnalysis,BoundaryProfile,NetworkWitnessReport,Process,Resource} from './api'
 import {NetworkAnalysis} from './NetworkAnalysis'
 import {NetworkResult} from './NetworkResult'
 import {AcquisitionBadges} from './AcquisitionDetails'
@@ -13,6 +13,29 @@ const resources:Resource[]=['Water','Hydrogen','Other basic'].map((display_name,
 const profile:BoundaryProfile={id:'basics',name:'User basics',revision:2,base_resource_ids:['other'],scope:{},semantics:'assumed_external_feed_not_inventory_or_generation'}
 const process:Process={id:'benchmark',display_name:'Electrolyser',family:'test',inputs:[{role:'consume',choices:[{resource_id:'water',amount:1000,match:{mode:'exact'}}]}],outputs:[{resource_id:'hydrogen',amount:2000,chance:r(1)}],duration_ticks:20,eu_per_tick:8,amperage:1,executable:true,conditions:{},provenance:{}}
 const empty:NetworkWitnessReport={snapshot_id:'fixture',status:'infeasible',discovery:{resources,processes:{},variants:[],groups:[],search:{},exclusions:{},limit_reasons:[],coverage_complete:true},solutions:[],search:{complete:true,limit_reasons:[]}}
+
+test('routine producer badges do not clutter suggestions while missing evidence still warns',()=>{
+  const analysis={unification:{status:'canonical',preferred_resource_ids:[],group_ids:[],evidence:''},acquisition:{status:'eligible_producer',source_count:0,eligible_producer_count:20,unresolved_producer_count:0,coverage_complete:false,reason:'A captured recipe produces this resource'}}
+  const view=render(<AcquisitionBadges resource={{...resources[0],acquisition_analysis:analysis}}/>)
+  expect(screen.queryByText('Captured producer')).not.toBeInTheDocument()
+  view.rerender(<AcquisitionBadges resource={{...resources[0],acquisition_analysis:{...analysis,acquisition:{...analysis.acquisition,status:'no_known_acquisition'}}}}/>)
+  expect(screen.getByText('No captured acquisition evidence')).toBeInTheDocument()
+})
+
+test('world-origin badges keep mining candidates and processing hints distinct from captured source definitions',()=>{
+  const analysis:AcquisitionAnalysis={unification:{status:'canonical',preferred_resource_ids:[],group_ids:[],evidence:''},acquisition:{status:'known_source',source_count:1,eligible_producer_count:1,unresolved_producer_count:0,coverage_complete:false,reason:'Captured definition'},provenance:{world_source:{status:'generated_block_only',evidence_counts:{generated_ore_block:1},evidence:[],inventory_obtainable_proven:false},initial_processing:{status:'no_bounded_evidence',confidence:'unknown',max_steps:3,evidence:[]},renewable:{status:'unknown',reason:'Not established'},basic_suggestion:{suggested:false,requires_user_selection:true,reason:'User-defined boundary'}}}
+  const view=render(<AcquisitionBadges resource={{...resources[0],acquisition_analysis:analysis}}/>)
+  expect(screen.getByText('Generated ore block')).toBeInTheDocument()
+  expect(screen.queryByText('Captured world source')).not.toBeInTheDocument()
+  const candidate={...analysis,provenance:{...analysis.provenance!,world_source:{...analysis.provenance!.world_source,status:'mining_rule_candidate_only'},initial_processing:{...analysis.provenance!.initial_processing,status:'inferred',confidence:'heuristic'}}}
+  view.rerender(<AcquisitionBadges resource={{...resources[0],acquisition_analysis:candidate}}/>)
+  expect(screen.getByText('Mining drop candidate')).toBeInTheDocument()
+  expect(screen.getByText('Initial processing (inferred)')).toBeInTheDocument()
+  expect(screen.queryByText('Basic resource')).not.toBeInTheDocument()
+  view.rerender(<AcquisitionBadges resource={{...resources[0],acquisition_analysis:{...candidate,provenance:{...candidate.provenance,world_source:{...candidate.provenance.world_source,status:'captured_inventory_source'}}}}}/>)
+  expect(screen.getByText('Captured world source')).toBeInTheDocument()
+  expect(screen.queryByText('Mining drop candidate')).not.toBeInTheDocument()
+})
 
 test('human energy summaries round decimals and percentages while the full record retains exact fractions',()=>{
   const ledger={status:'complete',yield_mode:'guaranteed' as const,consumed:{},produced:{},net:{},presence:{},unsupported:[],assumptions:[]}
@@ -71,13 +94,20 @@ test('network cards show complete canonical predicates while connections use res
   const ledger={status:'complete',yield_mode:'guaranteed' as const,consumed:{water:r(1)},produced:{hydrogen:r(1)},net:{water:r(-1),hydrogen:r(1)},presence:{},unsupported:[],assumptions:[]}
   const canonical={...process,inputs:[{role:'consume',choices:[{resource_id:'water',amount:1000,match:{mode:'exact'}},{resource_id:'other',amount:7,match:{mode:'exact'}}]}]}
   const report:NetworkWitnessReport={...empty,status:'complete',discovery:{...empty.discovery,processes:{benchmark:canonical},variants:[{variant_id:'variant',process_id:'benchmark',process,selections:{'0':{choice_index:0,resource_id:'water'}}}]},solutions:[{executions:[{variant_id:'variant',process_id:'benchmark',runs:r(1),selections:{'0':{choice_index:0,resource_id:'water'}},ledger}],ledger,net_imports:{water:r(1)},net_coproducts:{},nominal_energy:{status:'unknown',total_eu:null,eu_per_target:null,unknown_processes:['Duration is unknown']},integer_batch_scale:1,startup:{required_start_stock:{water:r(1)},final_stock:{hydrogen:r(1)},feasible:true},witness_verified:true}]}
-  render(<NetworkResult report={report} onSelect={vi.fn()}/>)
+  const navigate=vi.fn()
+  render(<NetworkResult report={report} onSelect={navigate}/>)
   const tile=await screen.findByRole('article',{name:'Recipe Electrolyser'})
   expect(within(tile).getByText('OR')).toBeInTheDocument()
   expect(within(tile).getByText('Amount 7')).toBeInTheDocument()
   expect(screen.getAllByText('Unknown EU')).toHaveLength(2)
   expect(screen.getByText('Duration is unknown')).toBeInTheDocument()
   expect(screen.getByText(/does not establish a global optimum/)).toBeInTheDocument()
+  fireEvent.click(within(tile).getByRole('button',{name:'Water'}))
+  const inspector=screen.getByRole('complementary',{name:'Record inspector'})
+  expect(within(inspector).getByRole('heading',{name:'Water'})).toBeInTheDocument()
+  expect(navigate).not.toHaveBeenCalled()
+  fireEvent.click(within(inspector).getByRole('button',{name:'Close record inspector'}))
+  expect(screen.getByRole('article',{name:'Recipe Electrolyser'})).toBe(tile)
 })
 
 test('already-basic targets show assumed supplies without a fake recipe or no-solution message',async()=>{
@@ -94,7 +124,7 @@ test('acquisition badges distinguish native replacement evidence from partial no
   render(<AcquisitionBadges resource={{...resources[2],acquisition_analysis:{unification:{status:'noncanonical_unification_variant',preferred_resource_ids:['water'],group_ids:['native-group'],evidence:'captured_native_unification_anchor'},acquisition:{status:'no_known_acquisition',source_count:0,eligible_producer_count:0,unresolved_producer_count:0,coverage_complete:false,reason:'Captured data has no known source'}}}} basic/>)
   expect(screen.getByText('Basic resource')).toBeInTheDocument()
   expect(screen.getByText('Noncanonical variant')).toBeInTheDocument()
-  expect(screen.getByText('No known acquisition')).toBeInTheDocument()
+  expect(screen.getByText('No captured acquisition evidence')).toBeInTheDocument()
   expect(screen.queryByText('Unobtainable')).not.toBeInTheDocument()
   await waitFor(()=>expect(screen.getByText('Noncanonical variant').closest('[title]')).toHaveAttribute('title',expect.stringContaining('Water')))
 })

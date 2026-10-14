@@ -48,9 +48,10 @@ test('labels synthetic data and forwards trace controls to Dataset while retaini
   const targetResource={...resource,id:'result-id',display_name:'Test output'}
   const recipe={...process,inputs:[{role:'consume',choices:[{resource_id:resource.id,amount:1,match:{mode:'exact'}}]},...process.inputs],outputs:[{resource_id:targetResource.id,amount:1,chance:{numerator:1,denominator:1}}]}
   const traceCalls: URL[]=[]
+  let currentStatus=status
   vi.stubGlobal('fetch',vi.fn(async(input:string)=>{
     const url=new URL(input,'http://localhost')
-    if(url.pathname==='/api/status')return response(status)
+    if(url.pathname==='/api/status')return response(currentStatus)
     if(url.pathname==='/api/resources')return response(page(url.searchParams.get('q')==='Test output' ? [targetResource] : [resource]))
     if(url.pathname==='/api/environments')return response(page([]))
     if(url.pathname.startsWith('/api/resources/'))return response({snapshot_id:'test-snapshot',item:url.pathname.endsWith('result-id') ? targetResource : resource})
@@ -65,7 +66,7 @@ test('labels synthetic data and forwards trace controls to Dataset while retaini
   expect(screen.getByText('Pack: Synthetic contract fixture')).toBeInTheDocument()
   expect(screen.getByText('Capture: synthetic')).toBeInTheDocument()
   fireEvent.click(screen.getByRole('button',{name:/^Trace$/}))
-  expect(screen.getByLabelText('Route selection')).toHaveValue('diverse')
+  expect(screen.getByLabelText('Route selection')).toHaveValue('material')
   expect(screen.getByLabelText('Additional steps')).toHaveValue(6)
   expect(screen.getByLabelText('Maximum processes')).toHaveValue(150)
   const start=screen.getByLabelText('Supplied start resource')
@@ -97,6 +98,34 @@ test('labels synthetic data and forwards trace controls to Dataset while retaini
   fireEvent.click(screen.getByRole('button',{name:'Process Mold cast'}))
   expect(within(screen.getByRole('complementary')).getByText('Required presence')).toBeInTheDocument()
   expect(within(screen.getByRole('complementary')).queryByText(/Chance 100%/)).not.toBeInTheDocument()
+  fireEvent.change(screen.getByLabelText('Highlight path'),{target:{value:'0'}})
+  const tile=screen.getByRole('article',{name:'Recipe Mold cast'}).closest('.react-flow__node')!
+  const viewport=tile.closest('.react-flow__viewport') as HTMLElement
+  const originalPosition=(tile as HTMLElement).style.transform
+  const movableTile=tile as HTMLElement
+  movableTile.focus()
+  fireEvent.keyDown(tile,{key:'ArrowRight'})
+  await waitFor(()=>expect((tile as HTMLElement).style.transform).not.toBe(originalPosition))
+  const position=(tile as HTMLElement).style.transform
+  const originalCamera=viewport.style.transform
+  fireEvent.wheel(tile,{deltaY:-80,ctrlKey:true,clientX:100,clientY:100})
+  await waitFor(()=>expect(viewport.style.transform).not.toBe(originalCamera))
+  const camera=viewport.style.transform
+  fireEvent.click(within(screen.getByRole('region',{name:'Target-directed route'})).getByRole('button',{name:'Test output'}))
+  fireEvent.click(screen.getByRole('button',{name:'Open in Library'}))
+  fireEvent.click(screen.getByRole('button',{name:'Trace'}))
+  expect(screen.getByLabelText('Maximum depth')).toHaveValue(7)
+  expect(screen.getByLabelText('Highlight path')).toHaveValue('0')
+  expect(screen.getByRole('article',{name:'Recipe Mold cast'}).closest('.react-flow__node')).toBe(tile)
+  expect(tile.closest('.react-flow__viewport')).toBe(viewport)
+  expect((tile as HTMLElement).style.transform).toBe(position)
+  expect(viewport.style.transform).toBe(camera)
+  expect(traceCalls).toHaveLength(1)
+  currentStatus={...status,snapshot_id:'next-snapshot'}
+  fireEvent.click(screen.getByRole('button',{name:'Refresh'}))
+  await screen.findByText('next-snapshot')
+  expect(screen.getByLabelText('Maximum depth')).toHaveValue(12)
+  expect(screen.queryByLabelText('Highlight path')).not.toBeInTheDocument()
 })
 
 test('concrete intermediate tags forward repeated IDs and changing filters invalidates the displayed result', async () => {
