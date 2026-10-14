@@ -455,6 +455,14 @@ etap. Bieżące pomiary i decyzje są w SEARCH_EXPERIMENTS.md.
   przeglądarce grupa nuggetIron usuwa nuggety ze ścieżek, zachowując cztery
   trasy. Kompaktowy widok zmniejsza zasób danych z 1724 do 21 surowców,
   zachowując dziesięć pełnych receptur. Osobna instancja została zamknięta.
+- [x] Sprawdzić wybór ośmiu tras z tej samej zapisanej puli dwunastu.
+  Pokrycie rośnie z 10 do 11 gałęzi, ale selektor traci historię casingu i
+  dodaje udział młotka w produkcji płyty. Nie promujemy samej metryki pokrycia.
+  Koszt zebrania większej puli pozostaje osobny od taniego wyboru wyników.
+- [ ] Sprawdzić przyszłą możliwość zachowania natywnego pochodzenia GT++
+  na granicy fabryki, zanim utracona zostanie referencja do GT enumu.
+  Odróżnić pochodzenie od tożsamości chemicznej, jednostek form i czystości.
+  Na razie badanie źródeł bez instrumentacji ani uruchamiania gry.
 - [x] Sprawdzić wybieranie wyjść regionu na podstawie rzeczywistych gałęzi
   celu i przygotowanych odległości. Policzyć przygotowanie, konkretne kroki,
   walidację i pracę zapytania. Odrzucić rozwiązanie, jeśli wyjścia pozostaną

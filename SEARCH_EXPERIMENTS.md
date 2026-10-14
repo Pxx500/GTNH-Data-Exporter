@@ -685,3 +685,37 @@ retain their current argument semantics. Optional result metadata preserves
 supported earlier trace responses in the UI, without a capability fallback.
 Evidence, raw requests, browser proof and the candidate bundle are in
 `exports/search-research-20261014/group-filter-ux/`.
+
+## Fixed-pool coverage selection exposes a relevance tradeoff
+
+The saved twelve-path Volcanus pool permits a bounded offline comparison
+without another search. The same-pool best eight by native quality cover
+ten of fifteen exact target slots and four resource-sequence stories.
+Greedy newly covered slots inside equal penalty/hop tiers reaches eleven
+slots and five stories, preserving the same quality-tier vector. Exhaustive
+inspection of all 495 eight-path subsets confirms eleven as this pool's ceiling.
+Both Computer Cube branches remain, without a manual whitelist.
+
+The saved current eight also have five stories and ten covered slots, but
+retain the stainless-steel heat-vent and Volcanus-casing history. The greedy
+selector drops those and adds Single Use Hard Hammer to Double Hastelloy-N
+Plate. Its exact native hint places the selected input in craftingToolHardHammer
+and retains unresolved damage, breakage and container returns. This is a
+dependency witness, not plate-material provenance. The initial research label
+misidentified that plate as a heating coil. Exact resource inspection corrected
+the label before the final report. The metric improvement remains valid.
+
+Twenty-eight of eighty pool resources, including nine spine identities, lack
+material tokens. This unrestricted pool has no native recovery-hint or
+coproduct-position steps, so it cannot demonstrate protection of those absent
+controls. All sixty-two steps and complete records pass native verification.
+Offline selection and validation take about 0.067 seconds. The larger pool's
+historical discovery uses 2,118 admissions and 1,195 pops, versus 1,331 and
+781 for the saved eight. Selection does not erase that extra discovery work.
+
+Retain the positive coverage tie-break evidence, but do not promote it as a
+default relevance improvement. Coverage of every dependency branch differs
+from identifying where the starting material contributes to the product.
+Native input roles, declared composition and opaque components remain separate
+evidence dimensions. No policy changes follow from this single fixed pool.
+Evidence is in `exports/search-research-20261014/branch-selection/`.
