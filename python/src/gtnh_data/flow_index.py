@@ -466,7 +466,8 @@ def find_paths(dataset, canonical, start_id, target_id, max_depth, max_processes
                         next_score += 0 if materials[input_id] & source_materials else 1
                     choices.append((next_score, depth + 1 + distances[nodes[input_id]], pid, input_id))
                 if choices:
-                    choices.sort(key=lambda child: (child[0], child[1], child[3], child[2]))
+                    # Repeated AND slots retain one recipe witness and the same spine continuation.
+                    choices = sorted(set(choices), key=lambda child: (child[0], child[1], child[3], child[2]))
                     cursor_id = partial['created_cursors']
                     partial['created_cursors'] += 1
                     partial['sorted_candidates'] += len(choices)

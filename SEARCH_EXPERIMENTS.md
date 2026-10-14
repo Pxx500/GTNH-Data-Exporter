@@ -251,3 +251,40 @@ The refreshed runtime uses GT `5.09.54.223`, outside the current `.221`
 accounting profile. Its isolated snapshot is therefore not promoted to the
 active dataset. Evidence and limitations are recorded in
 [GTPP_MATERIAL_METADATA_RESEARCH.md](GTPP_MATERIAL_METADATA_RESEARCH.md).
+
+## Exact repeated-slot successor deduplication
+
+Repeated native ingredient slots can yield an identical spine child: the same
+score, hop bound, recipe and input resource, attached to the same parent
+history. The continuation does not choose a slot. Target ingredient jobs still
+retain their individual slot identities, and returned native recipes retain
+every AND slot and its quantity. Deduplication is local to that one successor
+list, with the previous deterministic sorting order.
+
+The eight paired native cases preserve all result fields outside search
+telemetry. All 35 paths and 173 steps pass canonical-record and native-matcher
+checks. Queue admissions fall by 17 for either casing query, 21 for unrestricted
+hull, 128 for LV hull, three for either double-plate query, 26 for unrestricted
+Volcanus, and 440 for LV Volcanus. LV Volcanus pops fall from 3,113 to 2,673.
+Examined processes and predecessor work stay equal except unrestricted
+Volcanus, which scans one additional process and two additional predecessor
+rows. No path or branch coverage gain is claimed on these native cases.
+
+Removed descriptors exceed saved admissions because many deferred choices
+would never enter the queue. The experiment still scans the original native
+predecessor rows and performs their candidate checks. Timing samples are mixed,
+including slower LV Volcanus, so these results establish fewer repeated states,
+not a latency or memory improvement.
+
+A public synthetic regression uses 21,000 repeated slots to expose exhaustion
+of the existing 20,000-admission cap. This is a deliberately large fixture,
+not an observed native recipe of that size. The original implementation returns
+an incomplete route. Deduplication finds the two-recipe dependency spine with
+six admissions and preserves the complete repeated-slot native recipe. The
+test failed before the change and passes after it. The full Python suite passes
+168 tests before the separate new accounting-version work.
+
+Raw scripts, paired outputs and measurements remain Git-excluded under
+`exports/search-research-20261014/successor-dedup/`. Production uses the measured
+deduplication inside the existing flow owner. No identity merging, new index,
+dependency, pruning rule or global limit change is introduced.

@@ -49,6 +49,24 @@ def recovery_fixture(root, *, explicit=True):
 
 
 class FlowIndexTests(unittest.TestCase):
+    def test_repeated_native_slots_do_not_exhaust_spine_budget(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            recipe = process('make', [slot(choice('recycled')) for _ in range(21000)] +
+                             [slot(choice('start'))], ['intermediate', 'recycled'])
+            finish = process('finish', [slot(choice('intermediate'))], ['target'])
+            dataset = Dataset.import_snapshot(snapshot(root / 'capture', resources=[
+                material('start', 'Other'), material('recycled', 'Metal'),
+                material('intermediate', 'Metal'), material('target', 'Metal')],
+                processes=[recipe, finish]), root / 'index.sqlite')
+            result = dataset.trace_processes(start_id='start', target_id='target',
+                                             path_selection='material', max_paths=1)
+            self.assertEqual(result['route']['status'], 'found')
+            self.assertEqual(result['paths'][0]['process_ids'], ['make', 'finish'])
+            records = {row['id']: row for row in result['processes']}
+            self.assertEqual(records['make'], recipe)
+            self.assertEqual(records['finish'], finish)
+
     def test_material_route_prefers_processing_over_composite_recovery(self):
         with tempfile.TemporaryDirectory() as temporary:
             dataset, recipes = recovery_fixture(Path(temporary))

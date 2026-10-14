@@ -349,3 +349,47 @@ szczegóły są dostępne na żądanie.
 - Końcowy Volcanus na świeżym snapshotcie zwrócił sześć ścieżek w 0,437 s,
   w tym stal → tungstensteel → Robot Arm IV. Reprezentuje 8/15 gałęzi,
   z limitem 20 000 kolejkowanych stanów. Ta granica pozostaje jawna.
+
+## Dalsze badania po zamknięciu pierwszego zakresu
+
+Użytkownik zlecił dalsze badania i poprawki. Wyniki powyżej opisują poprzedni
+etap. Bieżące pomiary i decyzje są w SEARCH_EXPERIMENTS.md.
+
+- [x] Wprowadzić częściowe rozwijanie następców bez usuwania konkretnych
+  receptur. Volcanus zwraca osiem ścieżek i obejmuje 10/15 gałęzi przy
+  wcześniejszych limitach. Zaoszczędzone przyjęcia do kolejki nie oznaczają
+  usunięcia kosztu skanowania kandydatów.
+- [x] Usunąć identyczne kontynuacje tego samego kroku powstałe przez
+  powtarzające się sloty. Wszystkie wyniki ośmiu przypadków pozostają takie
+  same. Volcanus z ograniczeniem LV rozpatruje 2673 zamiast 3113 stanów.
+  Pełna receptura nadal zawiera wszystkie sloty. Regresja dużej liczby
+  powtórzeń przechodzi, bez zwiększania limitu kolejki.
+- [x] Sprawdzić preferencję przetwarzania materiału przed konstruowaniem
+  komponentu wyłącznie po to, żeby go rozebrać. Miękka preferencja usuwa
+  zaobserwowane objazdy przez budowę narzędzi. Wymagany recykling pozostaje
+  legalny. Wszystkie 167 testów Pythona przechodzi.
+- [x] Sprawdzić aliasy materiał/formy, dodatkowe składniki przy ustawianiu
+  gałęzi i konkretne przejścia wewnątrz regionów. Same aliasy i kolejność
+  gałęzi nie poprawiają wyników. Regiony zachowują świadków, ale mają dużo
+  wyjść i wymagają sprawdzania historii. Nie promować tych prób do produkcji.
+- [x] Pozyskać bezpośrednie deklaracje materiałów i form GT++ oraz sprawdzić
+  je w prawdziwej paczce. Nowy odrębny dump ma 1709 deklaracji właściciela.
+  Nie utożsamiać tych deklaracji z bilansem chemicznym ani globalną
+  tożsamością materiału.
+- [ ] Sprawdzić typy przejść jako mapę znaczeń: zmiana formy, przetwarzanie
+  rudy, zmiana materiału, montaż, odzysk i nieznane. Porównać na tych samych
+  ośmiu przypadkach i limitach. Rozróżnić potrzebny krok od powrotnego
+  objazdu. Sprawdzić zachowanie gałęzi przez stal, konstrukcję komponentów,
+  produkty uboczne i wymagany recykling.
+- [ ] Sprawdzić wybieranie wyjść regionu na podstawie rzeczywistych gałęzi
+  celu i przygotowanych odległości. Policzyć przygotowanie, konkretne kroki,
+  walidację i pracę zapytania. Odrzucić rozwiązanie, jeśli wyjścia pozostaną
+  liczne albo dopracowanie świadków zużyje oszczędność.
+- [ ] Sprawdzić zgodność profilu ilości GT `.221` z faktycznie pobranym
+  `.223`. Nowy dump zachowuje nierozwiązane bilanse i pozostaje odrębny.
+  Użycie go do analiz chemicznych wymaga dowodów zgodności, bez osłabiania
+  kontroli i bez zerwania wsparcia dla działającego snapshota `.221`.
+
+Każda próba ma podać wynik negatywny, jeśli nie poprawia jakości lub pokrycia.
+Nie zwiększamy limitów, żeby ukryć brak kierunku wyszukiwania. Rozpoznanie
+materialnego obiegu nie upoważnia do usuwania receptur z audytu loopów.
