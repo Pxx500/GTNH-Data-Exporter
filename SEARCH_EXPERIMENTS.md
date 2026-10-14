@@ -356,3 +356,35 @@ The fresh pipeline takes 168.587 seconds, with about 15 seconds of native dump
 publication. Both protected indexes retain their hashes. No active dataset
 configuration is switched. Raw evidence is under
 `exports/search-research-20261014/accounting-223/`.
+
+## Target-directed region nomination rejected for integration
+
+Reverse concrete hop bounds to target ingredient jobs preserve all 18 saved
+continuations in the finite regional sample. Early regions still expose
+hundreds of boundary processes. On unrestricted Volcanus, Iron Dust retains
+316 of 710 boundary processes and explores 51 ports instead of 52. Steel
+retains 643 of 925 processes and still explores 56 ports. Later Tungstensteel
+Dust is selective: 70 of 822 processes and 29 ports instead of 56, with only
+six hops left. This local result does not establish overall savings.
+
+Across the eight cases, admissions fall from 703 to 672 and concrete relation
+checks save 291 operations. The extra selector performs 4,747 bound checks.
+Combined diagnostic query work rises from 148,469 to 151,977. Its 24 distinct
+reverse-job preparations scan 14,731,580 arcs and perform 6,091,880 admissions
+and pops in 3.944 seconds. These preparation costs are separate from the
+existing query caps. They prevent a same-budget speedup claim.
+
+All 64 actual target-slot jobs, 273 native candidate memberships and 181
+witness transitions pass verification. The evidence retains 34 full recipes,
+including AND and presence context. This sample has no required or excluded
+waypoints, so it does not establish a waypoint-sensitive regional algorithm.
+No end-to-end integration follows from this negative result. Raw scripts and
+measurements are in `exports/search-research-20261014/region-targeted/`.
+
+A separate native-fact check finds three NULL-sentinel primary declarations:
+Advanced Alloy, Carbon Plate and Iridium Reinforced Plate. Current token
+extraction treats that sentinel as a name. None of these exact resource IDs
+appears in the eight dedup paths, embedded resources or input-choice anchors,
+so they do not explain these benchmark results. A future typed projection
+should retain their unknown state rather than treating NULL as continuity.
+No speculative production fix is added for this finding.

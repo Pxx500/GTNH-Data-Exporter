@@ -388,10 +388,13 @@ etap. Bieżące pomiary i decyzje są w SEARCH_EXPERIMENTS.md.
   produkcyjny. Oprzeć je na grupach i deklaracjach receptury, bez zgadywania
   po nazwach. Nie zmieniać zużywanego narzędzia w nieznikającą obecność ani
   nie wywodzić pochodzenia atomów z samego udziału składnika.
-- [ ] Sprawdzić wybieranie wyjść regionu na podstawie rzeczywistych gałęzi
+- [x] Sprawdzić wybieranie wyjść regionu na podstawie rzeczywistych gałęzi
   celu i przygotowanych odległości. Policzyć przygotowanie, konkretne kroki,
   walidację i pracę zapytania. Odrzucić rozwiązanie, jeśli wyjścia pozostaną
   liczne albo dopracowanie świadków zużyje oszczędność.
+  Wyjścia początkowych regionów pozostają liczne. Oszczędność 291 sprawdzeń
+  relacji nie pokrywa 4747 nowych sprawdzeń granic ani przygotowania. Zachowano
+  wszystkie 18 badanych kontynuacji, ale nie promujemy tej selekcji do silnika.
 - [x] Sprawdzić zgodność profilu ilości GT `.221` z faktycznie pobranym
   `.223`. Nowy dump zachowuje nierozwiązane bilanse i pozostaje odrębny.
   Użycie go do analiz chemicznych wymaga dowodów zgodności, bez osłabiania
