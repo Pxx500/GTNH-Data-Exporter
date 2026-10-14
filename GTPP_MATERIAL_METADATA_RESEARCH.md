@@ -12,7 +12,7 @@ These are native semantic declarations. They do not establish physical purity, m
 
 ## Exact runtime and dependency evidence
 
-All native claims below refer to GT5 `5.09.54.221`, commit `0c2037baa0a0c145f4f2e021729cf5621a1850f5`. Local GT5 HEAD is newer, so it was used only for discovery. The additional seven exact-commit extracts match the cached source JAR byte for byte. The earlier report retains the other 27 inspected files.
+The initial source investigation uses GT5 `5.09.54.221`, commit `0c2037baa0a0c145f4f2e021729cf5621a1850f5`. Local GT5 HEAD is newer, so it was used only for discovery. The additional seven exact-commit extracts match the cached source JAR byte for byte. The earlier report retains the other 27 inspected files. Later runtime checks on `.223` are recorded separately below.
 
 [exporter/build.gradle](exporter/build.gradle:9) declares `com.github.GTNewHorizons:GT5-Unofficial:5.09.54.221:dev`. `javap -public` against that exact cached dev JAR confirms `BaseItemComponent.componentMaterial`, `componentType`, `ComponentTypes.getGtOrePrefix()`, `Material.getUnlocalizedName()`, `getInternalName()`, `getDefaultLocalName()`, `getComposites()`, `MaterialStack.getStackMaterial()`, `getPartsPerOneHundred()`, and `BlockBaseModular.getMaterialEx()` / `blockType`. All five inspected class checks returned exit 0 with empty stderr. The dev JAR SHA256 is `8919e3e1de0ed99fd9a9bf2977f97d501357def69014c358201b7a5ebf127441`.
 
@@ -118,7 +118,7 @@ A coherent proposal for the existing facts object is below. This is a shape illu
       "native_system": "gtpp",
       "internal_name": "HastelloyW",
       "default_local_name": "Hastelloy-W",
-      "identity_basis": "native_internal_name_with_collision_check",
+      "identity_basis": "literal_native_internal_name_not_global_unique_id",
       "traversal_status": "complete",
       "declaration_kind": "composite",
       "components": [
@@ -135,7 +135,7 @@ A coherent proposal for the existing facts object is below. This is a shape illu
 
 Each actual component entry should be `{declared_parts, quantity_basis, source_api, material}`, with `declared_parts` a decimal integer string, `quantity_basis: gtpp_parts_per_one_hundred_api`, and `source_api: MaterialStack.getPartsPerOneHundred`. Its `material` has the same identity/class fields and either recursively populated components or `declaration_kind: terminal`. A GT++ terminal has no invented `element`, density conversion, or GT5 reference. `traversal_status: complete` means only that all exposed declaration edges were visited without missing data, cycle, or budget truncation. It does not mean that the native getter retained the original fractional quantity or that chemical accounting is complete. Null/missing/cyclic/truncated cases set `traversal_status: unresolved` and carry a reason.
 
-This keeps native-specific traversal, identity collision checking, form extraction and quantity limitations behind `MaterialFacts.item(ItemStack)`. Any private object-identity memoization belongs to that existing owner. It does not require a separate public catalog or equality table. A future shared `Dataset` projection can read this evidence using class plus native-system/internal-name identity, separately retaining primary material, form and declared constituents. It should not require HTTP, CLI, UI, MCP, or flow callers to interpret GT++ classes or quantity conventions.
+This keeps native-specific traversal, form extraction and quantity limitations behind `MaterialFacts.item(ItemStack)`. Any private object-identity memoization belongs to that existing owner. It does not require a separate public catalog or equality table. A future shared `Dataset` projection can read this evidence using class plus native-system/internal-name identity, separately retaining primary material, form and declared constituents. It should not require HTTP, CLI, UI, MCP, or flow callers to interpret GT++ classes or quantity conventions.
 
 Public-contract inspection found these practical impacts:
 
@@ -228,7 +228,7 @@ trees contain 8,141 component-edge occurrences, not unique materials.
 
 This refreshed pack changes 51 mod records and 623 configuration/script
 digests. Resource count increases by two and process count by four. The GT
-accounting profile still supports only `5.09.54.221`, so all 118,719 resources
+accounting profile then supported only `5.09.54.221`, so all 118,719 resources
 in the new snapshot have unresolved accounting. Whole-pack equality and
 chemical support for the refreshed version are not established. The isolated
 capture is not promoted to the active GUI or MCP dataset.
@@ -240,3 +240,26 @@ native records, public inspection replies, audit and failed-run evidence are
 under the Git-excluded `exports/search-research-20261014/material-owner/`
 directory. Captured owner evidence is verified. Chemical accounting, a
 cross-owner reference bridge and improved search remain separate work.
+
+## Subsequent verified GT version support
+
+An explicit version extension now admits GT `.223` under the unchanged `.221`
+quantity profile. Fifteen relevant native source files and 22 actual runtime
+class files are byte-identical between these inspected releases. Root checked
+four critical class files directly from both JARs. The other accounting gates
+and purity limits remain unchanged.
+
+A fresh isolated capture `0d74a12d-9969-4055-b479-8e5573946098` retains the GT++
+owner evidence and supplies the new runtime eligibility observations. All
+4,695 complete canonical accounting identities match by kind, registry,
+metadata and typed NBT, with identical vectors and quantity bases. No previous
+persisted facts are mutated or retroactively promoted. Both Hastelloy items
+still reject chemistry inspection. Root directly verified these rejections
+and the Iron Dust, Water and Hydrogen vectors in the new snapshot.
+
+All 170 integrated Python tests and 30 Java tests pass. The fresh pipeline
+takes 168.587 seconds, with about 15 seconds of native dump publication.
+Protected indexes retain their hashes. The active GUI and MCP dataset stay
+on the canonical `.221` snapshot. Detailed source comparisons, actual native
+samples, all vector comparisons and audit evidence are in
+`exports/search-research-20261014/accounting-223/`.

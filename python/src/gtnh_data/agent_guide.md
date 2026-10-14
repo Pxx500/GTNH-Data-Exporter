@@ -247,6 +247,13 @@ filters native chemical accounting. A gain can consume external reagents.
 machines. Unknown material facts stay unsupported. Formula display text alone
 does not establish composition, purity or chemical conservation.
 
+The native quantity profile explicitly supports GT `5.09.54.221` and
+`5.09.54.223`, with the same `.221` interpretation profile. Read the actual
+snapshot and resource accounting status. A supported runtime version alone
+does not resolve persisted unknown facts, GT++ declarations, fluid-phase
+ambiguity or unsupported quantity bases. Use `inspect_chemistry` for the
+shared accounting decision rather than parsing display formulas yourself.
+
 ```json
 {"name":"analyze_statistics","arguments":{"scope":{"excluded_namespaces":["TConstruct","TGregworks"]},"max_findings":5,"max_signature_buckets":50000,"timeout_seconds":15}}
 ```

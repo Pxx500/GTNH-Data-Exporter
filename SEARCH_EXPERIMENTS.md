@@ -247,8 +247,8 @@ It adds native material/form declarations for 1,709 resources, with 1,646
 complete traversals and 63 missing direct CELL material references. Required
 Hastelloy gear and double-plate records retain their exact native child parts
 and unresolved accounting. No material-token routing change is made.
-The refreshed runtime uses GT `5.09.54.223`, outside the current `.221`
-accounting profile. Its isolated snapshot is therefore not promoted to the
+The first refreshed runtime uses GT `5.09.54.223`, outside the then-supported
+accounting versions. Its isolated snapshot is therefore not promoted to the
 active dataset. Evidence and limitations are recorded in
 [GTPP_MATERIAL_METADATA_RESEARCH.md](GTPP_MATERIAL_METADATA_RESEARCH.md).
 
@@ -288,3 +288,71 @@ Raw scripts, paired outputs and measurements remain Git-excluded under
 `exports/search-research-20261014/successor-dedup/`. Production uses the measured
 deduplication inside the existing flow owner. No identity merging, new index,
 dependency, pruning rule or global limit change is introduced.
+
+The integrated source later passes all 170 Python tests with the explicit
+accounting-version extension. Native direct Dataset validation confirms the
+deduplicated results. An attempted GUI process restart was rejected before
+execution by the tool policy, with only `blocked by policy` as its reason.
+The existing GUI process remains on its earlier loaded code. A direct Dataset
+check is not proof that the running GUI or an existing MCP connection refreshed.
+
+## Typed form-cost hypothesis rejected
+
+One point on every known same-material simple-form edge is not useful guidance.
+The frozen paired experiment passes five public regressions in its baseline
+and only four with the new score. The treatment restores the Anvil-to-machine
+salvage shortcut in place of necessary metallurgy. No contiguous return to an
+already visited native material/form signature appears in either saved set.
+The score therefore penalizes necessary processing, not an observed form loop.
+
+Both unrestricted Volcanus runs cover ten of fifteen jobs, but the treatment
+loses three Robot Arm jobs and one Computer Cube job. Its replacement plate
+branch uses an iron-derived single-use hammer while the native recipe already
+consumes two Hastelloy-N plates. This is a legal dependency edge through the
+selected input, not evidence that iron supplies the output plate's material.
+The LV treatment also restores the Assembly Line Casing recovery detour.
+Unknown transitions increase from 83 of 173 to 104 of 167 returned steps.
+All seventy paths and 340 steps retain valid native records and matches.
+
+Unrestricted Volcanus admissions increase from 1,357 to 3,038 and predecessor
+work from 11,031 to 11,785. The comparison uses the pre-deduplication freeze
+and does not describe current production throughput. No tuning or history-state
+implementation was added to rescue this negative score. The transition census
+can explain routes, but that alone does not establish better search. Raw
+evidence is in `exports/search-research-20261014/typed-transitions/`.
+
+The next narrower question is whether captured native ingredient groups and
+tool/remainder declarations establish input-use roles. Such evidence would
+distinguish a crafting tool from material feed without guessing from labels.
+Consumed tools must retain native consumption semantics. Unknown roles must
+remain unknown. This is an evidence investigation before another score change.
+
+## Exact GT accounting version extension
+
+GT `.223` now joins `.221` in an explicit native-version allowlist under the
+unchanged `.221` quantity profile. Fifteen relevant source files and 22 actual
+runtime classes are byte-identical between the inspected releases. Item,
+molten and formula quantities, prefix/NBT/wildcard exclusions, recycling and
+native-tree requirements, phase checks and candidate consensus remain intact.
+Unknown releases remain unsupported. This preserves the actively supported
+persisted `.221` data rather than replacing its profile.
+
+The earlier unresolved `.223` dump is retained without modification. Fresh
+snapshot `0d74a12d-9969-4055-b479-8e5573946098` contains 4,693 producer-eligible
+resources and 4,695 complete query results, including two equivalent-candidate
+cases. All 4,695 canonical complete identities match by kind, registry,
+metadata and typed NBT with equal native accounting vectors and quantity bases.
+This is scoped accounting equality, not whole-pack or recipe equality.
+GT++ Hastelloy declarations remain unsupported for chemistry.
+
+Tests failed first in the intended `.223` cases. The integrated suite passes
+170 Python tests, while compilation and all 30 Java tests pass. IntelliJ finds
+no new extension warning. Supplemental PMD retains 20 existing advisories with
+no processing/configuration error, separately from the combined runner's skip.
+Root independently reads four corresponding JAR classes and actual fresh
+Iron Dust, Water, Hydrogen and unsupported Hastelloy inspection replies.
+
+The fresh pipeline takes 168.587 seconds, with about 15 seconds of native dump
+publication. Both protected indexes retain their hashes. No active dataset
+configuration is switched. Raw evidence is under
+`exports/search-research-20261014/accounting-223/`.

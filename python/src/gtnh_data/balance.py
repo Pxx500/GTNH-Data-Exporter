@@ -5,6 +5,8 @@ from collections import defaultdict
 from collections import deque
 from math import lcm
 
+_NATIVE_ACCOUNTING_VERSIONS = ("5.09.54.221", "5.09.54.223")
+
 
 def _native_integer(value):
     if type(value) is int:
@@ -329,7 +331,7 @@ def inspect_chemistry(material_facts):
         if (not isinstance(facts, dict) or type(facts.get("schema_version")) is not int or facts["schema_version"] != 1
                 or facts.get("status") not in ("associated", "ambiguous")):
             raise ValueError("Native material association is missing or unsupported")
-        if facts.get("native_version") != "5.09.54.221" or facts.get("gt_material_unit") != "3628800":
+        if facts.get("native_version") not in _NATIVE_ACCOUNTING_VERSIONS or facts.get("gt_material_unit") != "3628800":
             raise ValueError("Native chemical accounting version/unit isn't source-proven")
         if facts["status"] == "ambiguous":
             candidates = facts["association"].get("candidates")

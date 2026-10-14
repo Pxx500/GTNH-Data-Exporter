@@ -186,6 +186,37 @@ class BalanceTests(unittest.TestCase):
         # Its child preference must not override the certified ordinary-fluid root basis.
         self.assertEqual(inspect_chemistry(facts(water))["vector"], {"H": Fraction(2, 3), "O": Fraction(1, 3)})
 
+    def test_explicit_native_versions_preserve_item_molten_and_formula_quantities(self):
+        water = compound("Water", [(2, element("H")), (1, element("O"))], "fluid_formula_unit")
+        cases = (
+            (facts(element("Fe"), Fraction(4)), {"Fe": Fraction(4)}),
+            (facts(element("Fe"), Fraction(1, 144)), {"Fe": Fraction(1, 144)}),
+            (facts(water, Fraction(1, 1000), "formula_units"), {"H": Fraction(1, 500), "O": Fraction(1, 1000)}),
+        )
+        for version in ("5.09.54.221", "5.09.54.223"):
+            for declaration, expected in cases:
+                with self.subTest(version=version, basis=declaration["accounting"]["basis"], expected=expected):
+                    native = deepcopy(declaration)
+                    native["native_version"] = version
+                    native["profile_version"] = "5.09.54.221"
+                    result = inspect_chemistry(native)
+                    self.assertEqual(result["status"], "complete")
+                    self.assertEqual(result["vector"], expected)
+                    self.assertEqual(native["chemistry_purity"], "not_certified")
+
+    def test_unknown_native_versions_and_units_remain_unsupported(self):
+        for version in (None, "5.09.54.220", "5.09.54.222", "5.09.54.224", "5.09.54.223-dev", "6.0"):
+            with self.subTest(version=version):
+                native = facts(element("Fe"))
+                native["native_version"] = version
+                self.assertEqual(inspect_chemistry(native)["status"], "unsupported")
+        for version in ("5.09.54.221", "5.09.54.223"):
+            with self.subTest(version=version, unit="144"):
+                native = facts(element("Fe"))
+                native["native_version"] = version
+                native["gt_material_unit"] = "144"
+                self.assertEqual(inspect_chemistry(native)["status"], "unsupported")
+
     def test_missing_facts_or_unknown_child_basis_cannot_certify_chemistry(self):
         p = {"one": recipe("one", [slot("a", 1)], [("b", 1, Fraction(1))])}
         chemical = chemical_ledger(net_ledger(p, {"one": 1}), {"a": facts(element("H"))})

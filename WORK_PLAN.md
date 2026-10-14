@@ -376,19 +376,30 @@ etap. Bieżące pomiary i decyzje są w SEARCH_EXPERIMENTS.md.
   je w prawdziwej paczce. Nowy odrębny dump ma 1709 deklaracji właściciela.
   Nie utożsamiać tych deklaracji z bilansem chemicznym ani globalną
   tożsamością materiału.
-- [ ] Sprawdzić typy przejść jako mapę znaczeń: zmiana formy, przetwarzanie
+- [x] Sprawdzić typy przejść jako mapę znaczeń: zmiana formy, przetwarzanie
   rudy, zmiana materiału, montaż, odzysk i nieznane. Porównać na tych samych
   ośmiu przypadkach i limitach. Rozróżnić potrzebny krok od powrotnego
   objazdu. Sprawdzić zachowanie gałęzi przez stal, konstrukcję komponentów,
   produkty uboczne i wymagany recykling.
+  Kara za samą zmianę formy daje regresję i nie trafia do produkcji. W badanych
+  trasach nie zaobserwowano powrotu do tej samej sygnatury formy, a kara usuwa
+  potrzebne kroki. Spis typów przejść pozostaje dowodem do dalszych badań.
+- [ ] Sprawdzić natywne role wejść, zwłaszcza narzędzie do craftingu i materiał
+  produkcyjny. Oprzeć je na grupach i deklaracjach receptury, bez zgadywania
+  po nazwach. Nie zmieniać zużywanego narzędzia w nieznikającą obecność ani
+  nie wywodzić pochodzenia atomów z samego udziału składnika.
 - [ ] Sprawdzić wybieranie wyjść regionu na podstawie rzeczywistych gałęzi
   celu i przygotowanych odległości. Policzyć przygotowanie, konkretne kroki,
   walidację i pracę zapytania. Odrzucić rozwiązanie, jeśli wyjścia pozostaną
   liczne albo dopracowanie świadków zużyje oszczędność.
-- [ ] Sprawdzić zgodność profilu ilości GT `.221` z faktycznie pobranym
+- [x] Sprawdzić zgodność profilu ilości GT `.221` z faktycznie pobranym
   `.223`. Nowy dump zachowuje nierozwiązane bilanse i pozostaje odrębny.
   Użycie go do analiz chemicznych wymaga dowodów zgodności, bez osłabiania
   kontroli i bez zerwania wsparcia dla działającego snapshota `.221`.
+  Dodano dokładną listę dwóch obsługiwanych wersji. Nowy odrębny capture
+  potwierdza identyczne wektory i podstawy ilości dla 4695 obsługiwanych
+  tożsamości. Wcześniejszy nierozwiązany dump `.223` nie został zmieniony.
+  Przechodzi 170 testów Pythona i 30 testów Javy.
 
 Każda próba ma podać wynik negatywny, jeśli nie poprawia jakości lub pokrycia.
 Nie zwiększamy limitów, żeby ukryć brak kierunku wyszukiwania. Rozpoznanie

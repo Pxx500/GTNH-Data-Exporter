@@ -80,6 +80,15 @@ purity, source-atom transfer, resource interchangeability or obtainable stock.
 Existing accounting consumers continue to use the supported GT accounting
 profile and preserve unresolved GT++ accounting.
 
+The unchanged native GT quantity profile is identified by `5.09.54.221` and
+explicitly supports runtime versions `5.09.54.221` and `5.09.54.223`.
+The relevant native source implementations and runtime classes were compared
+before extending this exact allowlist. `profile_version` identifies the
+interpretation, while `native_version` records the actual captured runtime.
+Other versions and unknown quantity bases remain unsupported. Accepting a
+runtime version does not make unresolved persisted facts eligible, certify
+purity or remove prefix, NBT, composition and fluid-phase requirements.
+
 ### Group
 
 `{id, kind, name, members, provenance}`
