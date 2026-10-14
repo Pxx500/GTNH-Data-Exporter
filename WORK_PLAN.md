@@ -1,0 +1,304 @@
+# Plan pracy: przygotowanie danych i lepsze wyszukiwanie receptur
+
+**Data:** 2026-10-14  
+**Status:** plan zaakceptowany. Implementacja rozpoczęta po sygnale użytkownika.
+
+## Cel
+
+Przygotować dataset GTNH przed zapytaniami tak, żeby wyszukiwanie znajdowało
+bardziej użyteczne dla developera trasy, obejmowało istotne gałęzie produktu
+docelowego i zużywało mniej pracy na eksplorację mało istotnych powiązań.
+
+Precomputation jest kierunkiem pracy. Wyspy receptur są hipotezą badawczą,
+a nie narzuconym algorytmem. Wybieramy rozwiązanie na podstawie literatury,
+własności naszego modelu receptur i porównań na rzeczywistych danych.
+
+## Zasady pracy po sygnale startu
+
+- Użytkownik zatwierdził start oraz samodzielne rozstrzyganie decyzji o małym ryzyku.
+- Praca trwa do ukończenia uzgodnionego zakresu albo do sygnału powrotu lub
+  przerwania od użytkownika. Poranek sam w sobie nie kończy pracy.
+- Główny agent koordynuje, szuka problemów, rozstrzyga decyzje i integruje wyniki.
+- Maksymalnie pięciu aktywnych subagentów. Bezczynny pomocnik nie rezerwuje slotu.
+  Pomocnik Luna max wykonuje proste, ograniczone zadania zbierania danych.
+  Złożone badania, projektowanie, programowanie i przegląd zostają z Sol 6.1 high
+  lub głównym agentem. Nie uruchamiamy agentów tylko po to, żeby wypełnić limit.
+- Zadania równoległe mają rozłączne odpowiedzialności za pliki i procesy.
+- Badanie metod, audyt pokrycia, zbieranie benchmarków i domknięcie GUI mogą
+  iść równolegle. Zmiany przygotowania indeksu i wyszukiwania mają wspólnego
+  właściciela, żeby agenci nie przebudowywali niezależnie tego samego silnika.
+- Poprawiamy potwierdzone problemy. Nie zamieniamy zadania w bezterminowy audyt.
+- Zmiany zapisujemy w lokalnych, tematycznych commitach. Publikacja pozostaje
+  osobną decyzją użytkownika.
+
+## Co wiemy na początku
+
+- Bieżący snapshot: `2830da9f-c040-4233-a778-036e4b27f3eb`.
+- Zawiera 118 717 zasobów, 186 528 grup i 259 781 procesów.
+- EBF występuje jako rodzina `gregtech:gt.recipe.blastfurnace`: 2033 procesy.
+  Pięć produkuje kanoniczny Steel Ingot. Przykładowa receptura z Iron Dust ma
+  120 EU/t, 500 ticków i wymaganie ciepła 1000. Jej klasa napięcia to MV.
+- Występuje też `gregtech:gt.recipe.primitiveblastfurnace`: 418 procesów,
+  w tym 46 produkujących ten Steel Ingot. Obecność nie dowodzi pełności eksportu.
+- `Dataset.import_snapshot` już tworzy indeks SQLite z tabelami inputów,
+  outputów, członkostwa grup i tożsamości zasobów. Rozwijamy istniejącego właściciela.
+- `Dataset._find_paths` już ma wyszukiwanie najkrótszej trasy, ograniczoną
+  eksplorację od źródła, odkrywanie wstecz od składników celu i cache w obrębie
+  zapytania. Nie zakładamy, że wyszukiwanie jest wyłącznie ślepym forward BFS.
+  Tryb diverse ma m.in. limit 10 000 odczytanych procesów, 40 000 stanów i
+  100 000 jednostek pracy rozwijania powiązań. Trzeba zmierzyć, co wyczerpuje te budżety.
+- Zgłoszony problem: trasa przez wodór jako produkt uboczny może wypierać
+  oczekiwaną drogę przez stal. Trzeba odtworzyć go dla dokładnego itemu docelowego.
+  LV Machine Casing, LV Machine Hull i gotowa maszyna mają różne wymagania.
+
+## Lista prac
+
+### 1. Baseline i przykłady definiujące oczekiwane zachowanie
+
+- [ ] Rozpoznać dokładne tożsamości materiałów i produktów w bieżącym snapshotcie.
+- [ ] Przygotować przypadki Iron Dust → LV Machine Casing, Iron Dust → LV Machine
+  Hull, Crushed Iron Ore → Double Iron Plate i Iron Dust → Volcanus Controller.
+- [ ] Dla każdego zapisać dostępne w dumpie sensowne drogi, wymagane składniki
+  poboczne oraz wyniki obecnego wyszukiwania. Nie wymyślać brakujących receptur.
+- [ ] Powtórzyć odpowiednie przykłady z jawnymi limitami LV i MV oraz bez limitu.
+- [ ] Dodać regresje dla OR, NBT, wymaganej obecności narzędzia, wariantów
+  kanonicznych i niekanonicznych oraz tras przechodzących przez cykle.
+- [ ] Zachować wodę → wodór i znany obieg regeneracyjny jako regresję audytu
+  energii. Nowe preferencje ścieżek materiałowych nie mogą ukryć takich obiegów.
+- [ ] Zmierzyć czas, unikalne odczytane procesy, rozwinięcia dopasowań i stanów,
+  powtarzaną pracę, osiągane limity oraz pokrycie gałęzi celu.
+- [ ] Porównać pierwsze zapytanie po uruchomieniu klienta z kolejnymi zapytaniami.
+  Nie ukrywać kosztu przygotowania indeksu albo rozgrzewania cache.
+
+**Wynik:** powtarzalny zestaw porównań z oczekiwaniami opartymi na danych.
+
+### 2. Porównanie istniejących metod i wybór kierunku
+
+- [ ] Przejrzeć pierwotne źródła dotyczące wyszukiwania kierowanego celem,
+  A* i dolnych oszacowań, przygotowania informacji o osiągalności, hierarchicznej
+  abstrakcji grafu oraz planowania w grafach AND/OR lub sieciach reakcji.
+- [ ] Wybrać do testu dwa lub trzy uzasadnione podejścia. Punktem odniesienia jest
+  obecny algorytm z istniejącymi indeksami, nie sztucznie osłabiony baseline.
+- [ ] Sprawdzić, ile daje lepsze wykorzystanie obecnych indeksów i współdzielenie
+  przygotowanych dopasowań między zapytaniami, zanim dodamy kolejną strukturę.
+- [ ] Osobno ocenić szybkość, dobór użytecznych tras i pokrycie alternatyw.
+  Szybszy algorytm, który gubi drogę przez stal, nie spełnia celu.
+- [ ] Zapisać wybraną metodę, źródła, odrzucone alternatywy i wyniki pomiarów.
+
+**Wynik:** uzasadniona decyzja, a nie implementacja pierwszego pomysłu.
+
+### 3. Eksperyment z wyspami i połączeniami na wyższym poziomie
+
+- [ ] Porównać grupowanie według cykli, materiałów lub rodzin przemian z innymi
+  metodami abstrakcji, jeśli badania wskazują, że warto je sprawdzić.
+- [ ] Zmierzyć rozmiary grup, udział największej grupy, liczbę przejść między
+  grupami i wpływ hubów takich jak woda, wodór oraz tlen.
+- [ ] Zachować konkretne receptury i zasoby stanowiące wejścia i wyjścia grup.
+  Sama sekwencja wyspa 1 → 2 → 4 nie dowodzi poprawnego chaina.
+- [ ] Weryfikować, czy wejście do wyspy prowadzi do właściwego wyjścia oraz czy
+  konkretne receptury mają spełnione wymagania AND i poprawne wybory OR.
+- [ ] Porównać efektywność wyszukiwania makro → mikro z baseline i innymi
+  kandydatami. Nie blokować legalnych przejść między grupami dla wygody modelu.
+- [ ] Przyjąć wyspy do produkcyjnego wyszukiwania tylko przy wykazanej korzyści.
+  Negatywny wynik eksperymentu jest poprawnym wynikiem badania.
+
+**Wynik:** decyzja, czy ta abstrakcja pomaga naszemu datasetowi.
+
+### 4. Przygotowany indeks przepływów
+
+- [ ] Wdrożyć wybrane przygotowanie po dumpie, poza głównym wątkiem gry.
+- [ ] Oprzeć je na istniejącym imporcie i właścicielu `Dataset`. Szczegóły
+  przechowywania ustalić po pomiarach, zaczynając od obecnego SQLite.
+- [ ] Przygotować potrzebne powiązania, dopasowania, cechy materiałowe,
+  informacje o cyklach, osiągalności lub przejściach między grupami.
+  Zakres wynika z wybranej metody, nie z chęci zapisywania wszystkiego.
+- [ ] Kontrolować koszt grup i alternatyw. Nie materializować wszystkich kombinacji
+  składników ani wszystkich możliwych chainów, jeśli wystarczy zapis symboliczny.
+- [ ] Zachować pełne receptury, ilości, szanse, AND/OR, NBT i warunki. Nie scalać
+  tożsamości przedmiotów tylko dlatego, że mają podobną nazwę lub wspólną grupę.
+- [ ] Oddzielić dane źródłowe od wyliczonych wskazówek. Niepewne informacje
+  pozostają niepewne, a hipotezy nie stają się warunkami wykonania receptury.
+- [ ] Powiązać indeks ze snapshotem i wersją analizy. Umożliwić jawne
+  przebudowanie bez ponownego uruchamiania Minecrafta i bez cichego mieszania wersji.
+- [ ] Zmierzyć czas przygotowania, rozmiar, pamięć, start klienta i wpływ na zapytania.
+
+**Wynik:** przebudowywalny indeks używany przez wspólny silnik zapytań.
+
+### 5. Użyteczne trasy i uczciwy opis ich zakresu
+
+- [ ] Używać przygotowanych danych również do wyboru kolejności eksploracji.
+  Sam ranking wyników po osiągnięciu limitu nie wystarczy.
+- [ ] Preferować istotny przepływ materiału od A do części konstrukcyjnych B,
+  jeśli potwierdzają go dane. Nie kodować wyjątków dla żelaza lub stali.
+- [ ] Oczekiwana droga przez stal ma pojawiać się bez ręcznego wpisywania stali
+  jako wymaganego materiału przejściowego. Takie wymuszenie nie naprawia heurystyki.
+- [ ] Zachować trasy przez produkty uboczne i opisać ich rolę. Nie oznaczać ich
+  jako błędnych tylko dlatego, że są mniej intuicyjne.
+- [ ] Pokazywać, które gałęzie produktu wyjaśnia wynik, jakie inne składniki są
+  potrzebne oraz gdzie wyszukiwanie lub wiedza się kończy.
+- [ ] Zachować znaczenie istniejących trybów i filtrów. Jeśli preferencja
+  materiałowa wymaga osobnego trybu, nazwać go jawnie zamiast zmieniać po cichu
+  definicję najkrótszej ścieżki.
+- [ ] Udostępnić tę samą logikę przez GUI, HTTP, CLI i MCP. Zaktualizować opisy
+  oraz przewodnik dla agentów, łącznie z przyczynami wyboru i ograniczeniami wyniku.
+
+**Wynik:** droga przez stal jest odnajdywana i odpowiednio prezentowana,
+a powiązanie przez wodór nie udaje wyjaśnienia stalowej części urządzenia.
+
+### 6. Pokrycie maszyn i warunków
+
+- [ ] Porównać odpowiednie rodziny i receptury z rejestrami działającej gry oraz
+  NEI. Oddzielić brak eksportu od błędu dopasowania, filtra, etykiety i wyszukiwania.
+- [ ] Zweryfikować EBF oraz podstawowe maszyny na ścieżkach z zestawu przykładów,
+  w tym ilości, alternatywy składników, napięcie i wymagania ciepła.
+- [ ] Poprawić potwierdzone luki potrzebne do tych przypadków i pokazać porównanie
+  przed i po. Sama obecność rodziny albo zgodność liczby rekordów nie wystarcza.
+- [ ] Jeśli potrzebny jest nowy dump, kontrolować wersje paczki i konfigurację.
+  Wyników z różnych wersji GTNH nie traktować jako porównania samego algorytmu.
+
+**Wynik:** potwierdzone pokrycie istotnych rodzin albo konkretna lista luk z dowodami.
+
+### 7. Czytelne informacje o dostępności materiałów
+
+- [ ] Usunąć rutynowy badge „Captured producer” z podpowiedzi wyszukiwania.
+  Obecnie oznacza co najmniej jedną zapisaną, interpretowalną recepturę z tym
+  materiałem na wyjściu. Nie sprawdza, czy da się zdobyć wszystkie jej składniki
+  i spełnić warunki, więc nie jest dowodem dostępności materiału w grze.
+- [ ] W szczegółach zachować tę informację pod zrozumiałą nazwą, np. „Receptury
+  produkcji w dumpie”, wraz z liczbą i przykładami receptur oraz ich warunkami.
+- [ ] W autocomplete wyróżniać informacje, które wpływają na wybór materiału,
+  np. wariant zastępowany przez unifikację, niejasne receptury lub brak znanej
+  drogi pozyskania. Rutynowe pozytywne informacje nie powinny zajmować osobnego
+  wiersza przy każdym wyniku.
+- [ ] Rozróżniać obecność receptury, znane źródło i pełną drogę pozyskania.
+  Braku dowodów w niepełnym dumpie nie przedstawiać jako pewnej niemożliwości
+  zdobycia itemu. Wyjaśnić ostrzeżenia i umożliwić sprawdzenie ich podstawy.
+- [ ] Sprawdzić podpowiedzi na GT Iron Dust i wariancie IC2. Ujednolicić znaczenie
+  statusów w GUI i dokumentacji MCP, zachowując dane o dowodach dla agentów.
+
+**Wynik:** lista wyników jest czytelniejsza, a oznaczenia pomagają wybrać właściwy
+materiał i nie sugerują dostępności, której analiza nie potwierdziła.
+
+### 8. Surowce pierwotne i pochodzenie ze świata gry
+
+- [ ] Rozdzielić fakt „ma źródło w świecie gry” od roli „surowiec podstawowy
+  w tym planie”. Obecne profile podstawowych surowców są deklaracją granicy
+  planowania, a nie potwierdzeniem pochodzenia albo dostępności w grze.
+- [ ] Oznaczać bezpośrednie źródła na podstawie eksportowanych definicji,
+  np. generacji złóż, dropów lub pozyskania płynów. Pokazywać rodzaj źródła,
+  wymiary i warunki oraz dowody. Receptura recyklingu nie odbiera tego oznaczenia.
+- [ ] Oddzielić generowany blok rudy od itemu otrzymywanego podczas wydobycia.
+  Sama obecność bloku w oregenie nie dowodzi, że gracz dostaje ten blok albo
+  konkretny crushed ore. Zachować rozróżnienie potwierdzonego dropu i kandydata
+  wywnioskowanego z reguły wydobycia.
+- [ ] Zbadać osobne oznaczenie „produkt wstępnego przetwarzania surowca”,
+  np. crushed ore. Wnioskować z rodzaju procesu i udokumentowanego pochodzenia,
+  z ograniczonym zakresem kroków. Nie rozszerzać tagu automatycznie na każdy
+  osiągalny produkt. Wyniki heurystyczne muszą mieć wyjaśnienie i poziom pewności.
+- [ ] Nie definiować pierwotności jako braku receptur ani braku cykli.
+  Odnawialność traktować osobno. Istnienie cyklu nie dowodzi odnawialności,
+  bo obieg może wymagać zużywanych składników i zapasu rozruchowego.
+- [ ] Korzystać z tych oznaczeń w wyszukiwaniu i jako podpowiedzi przy tworzeniu
+  profilu Target from basics. Użytkownik zatwierdza granicę planowania.
+  Nie przerywać automatycznie rozwijania receptur na każdym oznaczonym materiale.
+- [ ] Sprawdzić iron ore, jego rzeczywisty produkt wydobycia, crushed ore,
+  Iron Dust i niekanoniczny wariant IC2. Obecność w rejestrze lub recepturach
+  nie zastępuje dowodów aktywnego źródła w danej konfiguracji paczki.
+
+**Wynik:** oznaczenia wyjaśniają pochodzenie materiału, nawet gdy istnieją też
+drogi recyklingu. Granica planera pozostaje jawnym wyborem użytkownika.
+
+### 9. Inspekcja bez utraty planszy i czytelne szczegóły
+
+- [ ] Naprawić utratę stanu Trace przy przejściu do Library i powrocie.
+  Zachować wynik, filtry, pozycje kafelków, kamerę i wyróżnioną ścieżkę.
+  Inspekcja nie powinna uruchamiać nowego wyszukiwania ani resetować planszy.
+- [ ] Kliknięcie materiału lub receptury ma otwierać szczegóły przy planszy.
+  Dociągać rekord brakujący w lokalnym wyniku zamiast przenosić użytkownika
+  do Library. W obecnym kodzie lokalny materiał otwiera panel, ale brak lokalnego
+  rekordu i przycisk „Inspect in library” wywołują zmianę widoku.
+- [ ] Oddzielić „Pokaż szczegóły”, „Otwórz w Library” i „Użyj w nowym zapytaniu”.
+  Nazwa przycisku ma opisywać skutek. Jawne przejście do Library ma zapewniać
+  powrót do zachowanej planszy. Nie rozszerzać tego zadania na zapis sesji po restarcie.
+- [ ] Umieścić nagłówek i zamknięcie panelu poza przewijaną treścią, tak żeby
+  „Close” pozostawał widoczny przy długich rekordach i w wąskim widoku.
+  Zapewnić obsługę klawiaturą i powrót fokusu po zamknięciu.
+- [ ] Domyślnie pokazywać nazwę, ilość, jednostkę, niepewną szansę w procentach
+  i istotne warunki. Ukryć rutynowe 100%, surowe numerator/denominator oraz
+  wewnętrzne identyfikatory slotów. Nie usuwać informacji potrzebnych do
+  zrozumienia zużycia, narzędzi, alternatyw i warunków wykonania.
+- [ ] Przenieść fragmenty „Output fields” i podobne JSON-y z pojedynczych
+  składników do wyraźnego widoku danych technicznych, domyślnie ukrytego.
+  Zachować pełny rekord i możliwość jego skopiowania dla developera.
+- [ ] Przejść najważniejszy przepływ: wyszukanie → graf → szczegóły składnika
+  → receptury produkcji → powrót do grafu → zamknięcie panelu. Poprawić konkretne
+  niejasne etykiety, skutki akcji i powody blokady przycisków w tym przepływie.
+  Nie zamieniać tego zadania w pełne przeprojektowanie wszystkich ekranów.
+- [ ] Sprawdzić utrzymanie stanu po inspekcji i zmianie zakładki, brak skoków
+  nawigacji, widoczność zamknięcia podczas scrolla i zgodność danych technicznych
+  z czytelnymi ilościami oraz procentami.
+
+**Wynik:** można badać receptury i materiały bez utraty wyników oraz ustawienia
+planszy. Domyślny widok zawiera informacje potrzebne do pracy, a techniczne
+szczegóły są dostępne na żądanie.
+
+### 10. Domknięcie rozpoczętego GUI i końcowa weryfikacja
+
+- [ ] Dokończyć bieżące zmiany scrolla i eksportu planszy w osobnym commicie.
+  Kod przechodzi 51 testów GUI. Rzeczywisty PNG 4514 × 3992 px i SVG z 14 kafelkami,
+  17 połączeniami i 17 podpisami zostały już sprawdzone.
+- [ ] Potwierdzić końcowy scroll nad tłem i kafelkami oraz zoom Ctrl+scroll.
+- [ ] Sprawdzić zapis przez widoczny link pobierania. CUA nie potwierdził
+  zdarzenia pobrania, choć renderer zwrócił poprawne pliki. Nie przypisywać
+  ograniczenia narzędzia aplikacji bez dowodu.
+- [ ] Zweryfikować aktualny silnik na przykładach natywnych i odpowiednich
+  testach po zmianach. Sprawdzić zgodność wyników między interfejsami.
+- [ ] Przygotować jeden zbiorczy przegląd, poprawić potwierdzone problemy
+  w zakresie i wykonać skupiony przegląd poprawek.
+- [ ] Zakończyć raportem: wyniki pomiarów, poprawione zachowania, decyzja o wyspach,
+  potwierdzone luki i ograniczenia. Nie ogłaszać pełnego pokrycia całej gry.
+
+## Warunek ukończenia
+
+- Oczekiwane, istniejące w dumpie drogi z zestawu przykładów są znajdowane przy
+  pasujących filtrach, a gałęzie i dodatkowe wymagania są opisane zgodnie z danymi.
+- Wybrana metoda przygotowania i wyszukiwania ma porównanie przed i po pod
+  względem pracy, czasu, pamięci i jakości tras. Istotne regresje są wyjaśnione.
+- Wyspy zostały przyjęte na podstawie wyników albo odrzucone z udokumentowanym
+  powodem. Nie są obowiązkowym rezultatem implementacji.
+- Potwierdzone problemy potrzebne do uzgodnionych przykładów są poprawione.
+  Niewykonane wymagania nie stają się ukończone przez samo opisanie ich w raporcie.
+  Dalsze potrzeby odkryte poza zakresem zapisujemy do późniejszej decyzji użytkownika.
+- Inspekcja i powrót z Library zachowują planszę. Zamknięcie panelu pozostaje
+  dostępne podczas przewijania, a JSON nie zaśmieca domyślnego widoku składników.
+- Oznaczenia źródeł materiałów odróżniają dowody, heurystyki i granice profilu.
+  Recykling nie usuwa oznaczenia źródła w świecie gry.
+- Kod, dokumentacja i dowody są zapisane, a pozostałe ograniczenia są jawne.
+
+## Otwarte punkty do wspólnego dopracowania
+
+- Czy przykład z kablami dotyczy LV Machine Hull, czy konkretnej gotowej maszyny?
+  Zestaw testów obejmuje casing i hull, ale warto dopisać dokładny zgłoszony cel.
+  Brak tego doprecyzowania nie blokuje pozostałych przykładów ani badań.
+- Jaką poprawę na benchmarkach uznamy za wystarczającą? Progi ustalimy po
+  zebraniu baseline. Nie wpisujemy z góry obietnicy typu 100× szybciej.
+- Czy poza tym zakresem są jeszcze wymagania, które użytkownik chce dopisać?
+
+## Decyzje i postęp po starcie
+
+- Rozdzielono pięć odpowiedzialności: silnik i benchmarki, badanie algorytmów,
+  pokrycie maszyn, pochodzenie materiałów i przepływ GUI. Główny agent integruje
+  transporty, dokumentację i końcową weryfikację.
+- Przygotowane dane przepływu pozostają pochodną kanonicznego dumpa. Rozważono
+  dodatkowe tabele w istniejącym indeksie i osobny przebudowywalny sidecar.
+  Wybrano sidecar zarządzany przez Dataset, żeby zachować bazowy indeks bez zmian
+  i umożliwić niezależne wersjonowanie oraz atomowe odtworzenie analizy.
+- Nowa preferencja materiałowa otrzymuje jawny tryb `path_selection=material`.
+  Istniejące `shortest` i `diverse` zachowują swoje znaczenie. Pomiary zdecydują
+  o domyślnej opcji GUI. Receptury i ich warunki pozostają źródłem prawdy.
+- Pierwszy eksperyment wysp SCC daje jedną bardzo dużą grupę. Usunięcie wody,
+  wodoru i tlenu praktycznie jej nie rozbija. Trwa porównanie z przygotowaniem
+  symbolicznych dopasowań, a szczegóły zostaną zapisane w raporcie badania.
+- Bazowy scroll sprawdzony w rzeczywistej przeglądarce po wcześniejszej poprawce:
+  nad tłem i kafelkiem zmienia się pozycja strony, a kamera grafu pozostaje stała.
+  Dowody: `exports/graph-ux-proof-20261014/wheel-proof.json`.
