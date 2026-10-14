@@ -743,3 +743,26 @@ future upstream provenance getter on the native owner. Defer instrumentation
 pending an explicit integration decision and isolated pack lifecycle evidence.
 No dependency, configuration, code or capture changes follow from this study.
 Evidence is in `exports/search-research-20261014/gtpp-factory-provenance/`.
+
+## Literal tool exclusion exposes an NBT-specific category gap
+
+Two fresh canonical Volcanus queries keep the material policy and the same
+search caps, requesting sixteen returned paths. The baseline returns twelve
+paths covering fifteen target jobs. Excluding the five literal members of
+ore:craftingToolHardHammer removes both Single Use Hard Hammer stories, but
+replaces them with Iron Ingot to Iron Hammer Head to Hammer to Double
+Hastelloy-N Plate. Both results retain twelve paths and fifteen represented jobs.
+
+The replacement Hammer r42150 has registry gregtech:gt.metatool.01, metadata 12
+and typed native GT.ToolStats NBT specifying Iron and Wood. It has no captured
+ItemData association and no literal crafting-tool category hint. A different
+Hammer identity r3688 is registered in the selected group. This establishes a
+specific gap in descriptive category evidence, not an error in exact group
+filtering. Missing hints cannot certify material contribution.
+
+Expansion rows fall from 11483 to 10989 and admissions from 2118 to 2060, while
+examined processes rise from 2343 to 3000. No cap is reached. All native steps
+and full selected recipes pass verification, and both store fingerprints remain
+unchanged. No automatic tool ontology, wider group matching or search bias is
+introduced. Source research will check actual native membership and tool APIs.
+Evidence is in `exports/search-research-20261014/tool-route-filter/`.
