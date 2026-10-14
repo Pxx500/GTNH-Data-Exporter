@@ -4,6 +4,7 @@ import static dev.gtnh.data.Jsons.object;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
+import com.google.gson.JsonNull;
 import com.google.gson.JsonObject;
 import cpw.mods.fml.common.Loader;
 import cpw.mods.fml.common.ModContainer;
@@ -23,6 +24,7 @@ import java.io.IOException;
 import java.lang.reflect.Array;
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
@@ -35,6 +37,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.TreeMap;
 import java.util.UUID;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Item;
@@ -55,6 +58,12 @@ import tectech.util.ItemStackLong;
  * Source algorithms from LGPL GT are called through public APIs, not copied.
  */
 final class NativeCapture {
+    private static final int CALLSITE_TRACE_LIMIT = 4;
+    private static final int CALLSITE_FRAME_LIMIT = 64;
+    private static final int CALLSITE_FRAME_UTF16_LIMIT = 1024;
+    private static final int CALLSITE_RECIPE_BYTE_LIMIT = 16 * 1024;
+    private static final long CALLSITE_TOTAL_BYTE_LIMIT = 128L * 1024 * 1024;
+    private static final int CALLSITE_ISSUE_LIMIT = 32;
     private final SnapshotWriter writer;
     private final MaterialFacts materialFacts;
     private final Map<String, String> resourceIds = new HashMap<>();
@@ -62,6 +71,11 @@ final class NativeCapture {
     private final Map<String, JsonArray> catalogSourceRefs = new HashMap<>();
     private final Map<String, String> oreGroups = new HashMap<>();
     private final Map<String, String> unifiedGroups = new HashMap<>();
+    private final boolean captureRecipeCallsites = Boolean.getBoolean("gt.recipe.lookup.validate.capture_callsite");
+    private final Map<String, Long> callsiteStatuses = new TreeMap<>();
+    private final Map<String, Long> callsiteIssues = new TreeMap<>();
+    private long callsiteBytes;
+    private long callsiteFrames;
     private int processNumber;
     private int unknownMetadata;
 
@@ -393,17 +407,120 @@ final class NativeCapture {
                     conditions.addProperty("recipe_voltage_tier_status", "unresolved");
                     conditions.addProperty("recipe_voltage_tier_reason", "custom_machine_projection");
                 }
+                JsonObject provenance = object("owner", "GTRecipe", "map", map.unlocalizedName,
+                    "map_class", map.getClass().getName(), "recipe_class", recipe.getClass().getName(), "index", count);
+                if (captureRecipeCallsites) provenance.add("native_registration_callsites", recipeCallsites(recipe));
                 emitProcess("gregtech:" + map.unlocalizedName, StatCollector.translateToLocal(map.unlocalizedName),
                     inputs, outputs, recipe.mDuration, recipe.mEUt, map.getAmperage(),
-                    customMachineProjection ? null : recipe.mEnabled && !recipe.mFakeRecipe, conditions,
-                    object("owner", "GTRecipe", "map", map.unlocalizedName,
-                        "map_class", map.getClass().getName(), "recipe_class", recipe.getClass().getName(), "index", count));
+                    customMachineProjection ? null : recipe.mEnabled && !recipe.mFakeRecipe, conditions, provenance);
                 count++;
             }
             coverage("gregtech.map:" + map.unlocalizedName, "partial", count,
                 "All registered entries captured, including fake/disabled. Dynamic backend and machine-specific conditions remain native metadata");
         }
         coverage("gregtech.map_catalog", "complete", maps.size(), "Enumerated RecipeMap.ALL_RECIPE_MAPS");
+        if (captureRecipeCallsites) coverage("recipe.native_registration_callsites", "partial",
+            callsiteStatuses.values().stream().mapToLong(Long::longValue).sum(),
+            "Optional bounded native registration or copy callsite lists. Not execution or complete historical provenance",
+            object("source_api", "gregtech.api.util.GTRecipe.stackTraces", "scope", "GT_recipe_loop",
+                "statuses", callsiteStatuses, "issue_events", callsiteIssues,
+                "retained_raw_utf8_bytes", callsiteBytes, "retained_frames", callsiteFrames,
+                "limits", object("traces_per_recipe", CALLSITE_TRACE_LIMIT, "frames_per_trace", CALLSITE_FRAME_LIMIT,
+                    "frame_utf16_units", CALLSITE_FRAME_UTF16_LIMIT, "recipe_raw_utf8_bytes", CALLSITE_RECIPE_BYTE_LIMIT,
+                    "total_raw_utf8_bytes", CALLSITE_TOTAL_BYTE_LIMIT, "issue_details_per_recipe", CALLSITE_ISSUE_LIMIT)));
+    }
+
+    private JsonObject recipeCallsites(GTRecipe recipe) {
+        JsonObject result = object("source_api", "gregtech.api.util.GTRecipe.stackTraces",
+            "scope", "native_registration_or_copy_calls_not_execution", "status", "captured",
+            "observed_trace_count", null, "traces", new JsonArray(), "issues", new JsonArray(),
+            "omitted_issue_details", 0, "retained_raw_utf8_bytes", 0);
+        try {
+            List<?> traces = recipe.stackTraces;
+            if (traces == null) {
+                callsiteIssue(result, "missing", object("reason", "native_field_null"));
+            } else {
+                int traceCount = traces.size();
+                result.addProperty("observed_trace_count", traceCount);
+                for (int ti = 0; ti < Math.min(traceCount, CALLSITE_TRACE_LIMIT); ti++) {
+                    callsiteTrace(result, traces.get(ti), ti);
+                }
+                if (traceCount > CALLSITE_TRACE_LIMIT) callsiteIssue(result, "truncated",
+                    object("reason", "trace_limit", "native_trace_index", CALLSITE_TRACE_LIMIT,
+                        "omitted_trace_count", traceCount - CALLSITE_TRACE_LIMIT));
+            }
+        } catch (RuntimeException | LinkageError failure) {
+            callsiteIssue(result, "failed", object("reason", "read_failure", "error_class", failure.getClass().getName(),
+                "diagnostic", failure.getMessage()));
+        }
+        callsiteStatuses.merge(result.get("status").getAsString(), 1L, Long::sum);
+        return result;
+    }
+
+    private void callsiteTrace(JsonObject result, Object trace, int ti) {
+        JsonArray encodedFrames = new JsonArray();
+        JsonObject encodedTrace = object("native_trace_index", ti, "observed_frame_count", null, "frames", encodedFrames);
+        result.getAsJsonArray("traces").add(encodedTrace);
+        if (!(trace instanceof List<?> frames)) {
+            callsiteIssue(result, "malformed", object("reason", trace == null ? "null_trace" : "non_list_trace",
+                "native_trace_index", ti, "observed_type", trace == null ? null : trace.getClass().getName()));
+            return;
+        }
+        int frameCount = frames.size();
+        encodedTrace.addProperty("observed_frame_count", frameCount);
+        int retainedBytes = result.get("retained_raw_utf8_bytes").getAsInt();
+        try {
+            for (int fi = 0; fi < Math.min(frameCount, CALLSITE_FRAME_LIMIT); fi++) {
+                Object frame = frames.get(fi);
+                if (!(frame instanceof String text)) {
+                    encodedFrames.add(JsonNull.INSTANCE);
+                    callsiteIssue(result, "malformed", object("reason", frame == null ? "null_frame" : "non_string_frame",
+                        "native_trace_index", ti, "native_frame_index", fi,
+                        "observed_type", frame == null ? null : frame.getClass().getName()));
+                    continue;
+                }
+                if (text.length() > CALLSITE_FRAME_UTF16_LIMIT) {
+                    encodedFrames.add(JsonNull.INSTANCE);
+                    callsiteIssue(result, "truncated", object("reason", "frame_text_limit", "native_trace_index", ti,
+                        "native_frame_index", fi, "observed_utf16_units", text.length()));
+                    continue;
+                }
+                int bytes = text.getBytes(StandardCharsets.UTF_8).length;
+                boolean recipeLimit = retainedBytes + bytes > CALLSITE_RECIPE_BYTE_LIMIT;
+                boolean totalLimit = callsiteBytes + bytes > CALLSITE_TOTAL_BYTE_LIMIT;
+                if (recipeLimit || totalLimit) {
+                    encodedFrames.add(JsonNull.INSTANCE);
+                    int omitted = Math.min(frameCount, CALLSITE_FRAME_LIMIT) - fi;
+                    if (recipeLimit) callsiteIssue(result, "truncated", object("reason", "recipe_byte_limit",
+                        "native_trace_index", ti, "native_frame_index", fi, "omitted_frame_count", omitted));
+                    if (totalLimit) callsiteIssue(result, "truncated", object("reason", "total_byte_limit",
+                        "native_trace_index", ti, "native_frame_index", fi, "omitted_frame_count", omitted));
+                    break;
+                }
+                encodedFrames.add(new com.google.gson.JsonPrimitive(text));
+                retainedBytes += bytes;
+                callsiteBytes += bytes;
+                callsiteFrames++;
+            }
+            if (frameCount > CALLSITE_FRAME_LIMIT) callsiteIssue(result, "truncated",
+                object("reason", "frame_limit", "native_trace_index", ti,
+                    "native_frame_index", CALLSITE_FRAME_LIMIT, "omitted_frame_count", frameCount - CALLSITE_FRAME_LIMIT));
+        } finally {
+            result.addProperty("retained_raw_utf8_bytes", retainedBytes);
+        }
+    }
+
+    private void callsiteIssue(JsonObject result, String status, JsonObject issue) {
+        String current = result.get("status").getAsString();
+        if ("failed".equals(status) || "captured".equals(current)
+            || "malformed".equals(status) && "truncated".equals(current)) result.addProperty("status", status);
+        callsiteIssues.merge(issue.get("reason").getAsString(), 1L, Long::sum);
+        JsonArray issues = result.getAsJsonArray("issues");
+        if (issues.size() < CALLSITE_ISSUE_LIMIT) issues.add(issue);
+        else {
+            result.addProperty("omitted_issue_details", result.get("omitted_issue_details").getAsInt() + 1);
+            callsiteIssues.merge("issue_detail_limit", 1L, Long::sum);
+        }
     }
 
     private void assemblyLine() throws IOException {

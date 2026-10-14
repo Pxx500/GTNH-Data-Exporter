@@ -37,4 +37,7 @@ tasks.named('runFullPack') {
     if (providers.gradleProperty('dataNeiReference').getOrElse('false').toBoolean()) {
         extraJvmArgs.add('-Dgtnh.data.neiReference=true')
     }
+    if (providers.gradleProperty('dataNativeRecipeCallsites').getOrElse('false').toBoolean()) {
+        extraJvmArgs.add('-Dgt.recipe.lookup.validate.capture_callsite=true')
+    }
 }

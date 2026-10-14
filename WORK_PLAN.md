@@ -684,6 +684,14 @@ etap. Bieżące pomiary i decyzje są w SEARCH_EXPERIMENTS.md.
   zniknąć przy kopiowaniu i jej zbieranie obejmuje całą paczkę. Oddzielny
   eksperyment ma zmierzyć koszt inicjalizacji i pamięci. Nie włączamy tej
   opcji w capture sprawdzającym klasy itemów ani nie zgadujemy ról po nazwach.
+  Dodano osobny opcjonalny eksport i jedną próbę natywną. Kod i kodowanie
+  przechodzą sprawdzenia, ale limit 128 MiB kończy się przed Cutterem.
+  Cztery sprawdzane wafle nie mają użytecznych śladów, więc nie wdrażamy
+  klasyfikacji roli wejść. Brak podniesienia limitu i powtórki dumpa.
+  Porównanie wszystkich uporządkowanych receptur też nie daje pełnej zgodności.
+  Snapshot pozostaje badawczy. Pomiar pokazuje 8340537344 bajtów szczytowego
+  working set gry, bez pomiaru bazowego do obliczenia narzutu.
+  Kolejna hipoteza offline dotyczy współdzielenia powtarzanych śladów.
 - [x] Sprawdzić literaturę o landmarkach i planach zrelaksowanych pod kątem
   kierowania przez gałęzie składników celu. Odróżnić osiągalność pojedynczej
   ścieżki od spełnienia wszystkich wejść receptury i policzyć przygotowanie.

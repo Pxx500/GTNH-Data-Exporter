@@ -1379,3 +1379,44 @@ The GUI explains policy rejection and retains the selected filter. All 68 GUI
 tests, typecheck and candidate build pass. The combined Python working-tree
 suite passes too. The earlier nine native measurements remain the original
 baseline, without repeated queries, rebuilds or a new speedup claim.
+
+### Opt-in native registration provenance
+
+One optional native collection/export path is implemented through the existing
+GT provenance owner and full-pack launcher. It preserves bounded literal
+`GTRecipe.stackTraces`, with explicit missing/malformed/truncated/failed states.
+Collection and export require the explicit opt-in property. No NEI activation
+rule, lookup-validation enablement, reconstruction or semantic classifier is
+added. A public CLI regression is RED, then GREEN, with a default-off control.
+All 197 Python tests, 68 GUI tests and 32 Java tests pass. Java audits retain
+two scoped complexity metrics after one extraction, with no processing errors.
+
+The single native trial 8a3b3c60-d683-4170-a007-98c2544ab31c completes with exit
+0 in 252.50 orchestration seconds. Same-log startup milestones are 103 seconds
+versus the earlier 99, and capture/publication spans 17 seconds in each.
+These runs are not a controlled overhead estimate. Wall includes import,
+preparation and post-run integrity checks, with no exact import-only timer.
+The uniquely identified game process has OS peak working set 8340537344 bytes
+and sampled private maximum 9678991360 across 132 observations. Baseline peak
+memory and raw origins were not recorded, so there is no memory delta.
+
+Raw encoding and coverage pass. Of 186917 GT records, 40939 are captured and
+145978 truncated, with no missing/malformed/failed fields. 2067527 strings use
+134217700 raw UTF-8 bytes, 28 below the 128 MiB budget. The budget fills during
+Canner. All 9329 Cutter records lack retained strings. Each of the four full
+identity-matched wafer declarations has 48 observed frames but retains [null]
+with a total-byte-limit reason. Their source-role utility is negative. No limit
+was increased, no second capture was attempted and no role/ranking was promoted.
+
+Actual game versions and hashes match the ancestry baseline except the exporter.
+Resource identities and old fields match after local-ID alignment. Ordered GT
+recipe parity remains false, with 4423 unmatched occurrences on each side.
+Diagnostics separate native-index movement, object-text changes and ordered
+input/output candidates. They do not establish cause or parity. All 24 protected
+files remain unchanged. The snapshot stays an experimental local artifact.
+Acceptance and absolute measurements are in `native-callsite-design/`.
+
+The next fixed-corpus study measures exact string and ordered-trace repetition
+among retained data. Lossless sharing may fit more information in a byte budget.
+It cannot reconstruct omitted Cutter origins, establish all-corpus compression
+or remove native collection RAM. No new capture is part of that offline study.

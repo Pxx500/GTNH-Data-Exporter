@@ -39,6 +39,15 @@ Ordinary `runFullPack` does not activate capture. A JVM caller can instead set
 already exist. Failed output directories never have a published manifest and
 are retained for diagnostics. Parent automation owns game execution.
 
+For an optional registration-provenance trial, add
+`-PdataNativeRecipeCallsites=true`, or use `--native-recipe-callsites` with
+`scripts/export_full_pack.py`. This requests native GT callsite collection
+before recipes are constructed and retains bounded raw stacks in process
+provenance. It does not enable lookup validation or interpret ingredient roles.
+Collection runs across native GT recipe construction. The export's byte limits
+do not bound initialization or game memory. Runs without this option omit the
+new provenance field. See the exact field and limits in [FORMAT.md](../FORMAT.md).
+
 Add `-PdataNeiReference=true` to the autorun invocation for a paired NEI
 validation reference. The equivalent JVM property is
 `gtnh.data.neiReference=true`. This mode waits for `NEIClientConfig.isLoaded()`

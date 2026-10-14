@@ -248,6 +248,39 @@ entity-age gates and item pre-hooks remain runtime conditions. Unknown recipe
 subclasses and unresolved pre-hooks do not inherit base matching or guaranteed
 execution. Duration and EU rates remain unknown.
 
+#### Optional GT registration callsites
+
+When explicitly requested, GT-map process provenance carries
+`native_registration_callsites` from `GTRecipe.stackTraces`. Its scope is
+`native_registration_or_copy_calls_not_execution`. Native strings and array
+order are retained. `observed_trace_count` describes the original outer list.
+Each retained trace has its original `native_trace_index`,
+`observed_frame_count` and ordered `frames`.
+
+Status is `missing`, `captured`, `malformed`, `truncated` or `failed`.
+Native null is missing. A non-null empty list is captured with no origins.
+Captured means the observed lists were retained completely, not complete
+historical provenance. Copies can replace original registration evidence.
+No exporter calls `reloadOwner` to reconstruct an origin. An omitted field
+means this optional metadata was not captured, not that native origins are absent.
+
+Malformed or omitted frames retain a null position and bounded ordinal issues.
+Limits are four traces per recipe, 64 frames per trace, 1024 UTF-16 units per
+frame, 16 KiB retained raw UTF-8 text per recipe and 128 MiB across the GT loop.
+At most 32 issue details are retained per recipe, with an omitted-detail count.
+Record byte counts describe retained raw text, not total JSON size.
+The separate `recipe.native_registration_callsites` coverage entry reports
+status counts, issue-event counts, retained bytes/frames and all fixed limits.
+These exporter limits do not bound native initialization or memory consumption.
+
+The option `--native-recipe-callsites` forwards
+`-PdataNativeRecipeCallsites=true` through the existing full-pack launcher.
+It sets `gt.recipe.lookup.validate.capture_callsite=true` on the game JVM
+before recipe construction. Export also requires that explicit property.
+The option does not enable lookup validation or use NEI configuration as an
+export activation rule. No role, chemistry or runtime execution interpretation
+follows from these raw registration or copy stacks alone.
+
 ### Source
 
 `{id, kind, display_name, outputs, environment_ids, status, conditions,

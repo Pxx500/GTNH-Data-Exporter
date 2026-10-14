@@ -18,6 +18,7 @@ def main() -> int:
     parser.add_argument("--java-home", type=Path, help="Build JDK required by GTNHGradle")
     parser.add_argument("--python", type=Path, help="Python with gtnh-data installed")
     parser.add_argument("--nei-reference", action="store_true", help="Also capture a separate NEI handler reference for validation")
+    parser.add_argument("--native-recipe-callsites", action="store_true", help="Collect bounded native GT recipe registration callsites")
     args = parser.parse_args()
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     output = (args.output or root / "exports" / f"{stamp}-{uuid.uuid4().hex[:8]}").resolve()
@@ -37,6 +38,8 @@ def main() -> int:
     command.extend(["runFullPack", "-PdataAutorun=true", f"-PdataOutputDir={output}"])
     if args.nei_reference:
         command.append("-PdataNeiReference=true")
+    if args.native_recipe_callsites:
+        command.append("-PdataNativeRecipeCallsites=true")
     print(f"Capturing new snapshot at {output}", flush=True)
     result = subprocess.run(command, cwd=root / "exporter", check=False)
     if result.returncode:
