@@ -538,3 +538,43 @@ paths preserve verified native transitions and complete recipe context.
 Canonical DB and sidecar metadata remain unchanged. GUI defaults and API limits
 are not silently changed. Reproduction and complete results are in
 `exports/search-research-20261014/current-profile/output-limit-summary.json`.
+
+## Native catalog and machine identities for opaque components
+
+The existing NativeCapture owner now prepares independent GT and GT++ raw
+catalog maps before emitting resources. Both use the same exact registry,
+metadata and typed-NBT resource key, ignoring count. All matching symbols are
+retained without creating catalog-only resources. GT++ uses one checked private
+ItemStack field because its public getter can write the unification cache.
+Layout or access failure discards that catalog's partial map and emits failed
+coverage. No getter fallback, normalization or generic reflection layer is added.
+
+Machine resources also retain the actual registered template class and metadata
+identifier through the native accessor. The reference explicitly says that
+the resolver ignores NBT. These facts identify native owners and symbols. They
+do not certify semantic use, stock, configured capability, chemical quantities
+or source-atom contribution.
+
+One new `.225` capture, `4f42f0e1-b7a0-478b-9440-57113b3d961c`, verifies LV Casing,
+LV Hull, Robot Arm IV, Computer Cube, Volcanus Casing and Volcanus references.
+GT prepares 3,023 raw anchors across 3,009 identities, and GT++ prepares 614
+anchors. Referenced resources receive 2,872 GT anchors, 576 GT++ anchors and
+3,093 machine template references. There are 3,433 catalog-tagged resources.
+
+All 118,719 resource identities match the previous `.225` capture. There are
+no added or removed identities. Every other resource field is equal after
+excluding only snapshot-local IDs and native_source_refs. All six collections
+survive import exactly. Root separately checks the six raw gzip records against
+fresh Dataset getter replies and independently recomputes both protected DB
+hashes. The active `.221` capture and accepted `.223` data remain unchanged.
+`.225` chemistry remains unsupported.
+
+Compilation and 32 Java tests pass. The exact identity tests characterize NBT
+type and ordering distinctions. Layout/access failure is source-reviewed, not
+claimed as injected runtime coverage. IntelliJ completes. The combined runner
+skips PMD because of nested-wrapper detection, while the supplemental file
+scan completes with metric advisories and no processing/configuration errors.
+The actual capture continues after a Context Mode timeout and its retained
+logs confirm successful exit. Only one capture is launched. No active dataset
+or service is switched. Evidence is in
+`exports/search-research-20261014/native-use-identities/`.

@@ -109,6 +109,15 @@ Use `get_group` only when the matching group matters, since some groups are
 large. For sources, follow `parameters.generated_source_id` directly with
 `get_source`, rather than enumerating the source catalog.
 
+New captures may retain `native_source_refs` in `get_resource` records. Catalog
+anchors identify an exact registered stack and its native enum symbol. Machine
+references identify a registered template whose resolver ignores NBT. These
+are source facts for investigating opaque components, not inferred functional
+roles, atom contribution, available stock or configured machine capability.
+Check capture coverage before interpreting missing references. The active
+immutable snapshot may predate this collector. Do not invent references from
+the resource's display name or copy IDs between captures.
+
 Page results retain honest `total`, `offset` and `limit`. Ask for later pages
 only when the question needs them. There is no server-side `fields` projection
 parameter. Keep a compact working summary and retain IDs for detail calls.

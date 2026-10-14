@@ -424,6 +424,14 @@ etap. Bieżące pomiary i decyzje są w SEARCH_EXPERIMENTS.md.
 - [x] Sprawdzić możliwość ścisłego bilansu GT++ na podstawie nowych deklaracji.
   Brakuje niezależnej podstawy ilości i tożsamości pierwiastków. Nominalne
   ilości form pozostają informacją o przetwarzaniu, bez certyfikacji chemii.
+- [x] Zachować natywne odwołania do katalogów GT i GT++ oraz szablonów maszyn.
+  Dopasować surowe wpisy po pełnej tożsamości bez normalizacji i nowych itemów.
+  Sprawdzić layout prywatnego pola GT++ i jawnie raportować błąd kolektora.
+  Potwierdzić sześć badanych komponentów w jednym odrębnym eksporcie.
+  Wszystkie sześć przykładów ma poprawne odwołania. Zgodnych jest 118719
+  tożsamości i wszystkie wcześniejsze pola surowców. Nie powstały nowe itemy
+  wyłącznie z katalogu. Przechodzą 32 testy Javy, a chronione bazy mają te same
+  hashe. Te dane nie nadają jeszcze automatycznie ról semantycznych.
 - [x] Sprawdzić wybieranie wyjść regionu na podstawie rzeczywistych gałęzi
   celu i przygotowanych odległości. Policzyć przygotowanie, konkretne kroki,
   walidację i pracę zapytania. Odrzucić rozwiązanie, jeśli wyjścia pozostaną

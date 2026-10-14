@@ -41,6 +41,26 @@ Lists retain `element_type_id`, including the native type of an empty list.
 NBT `long` values use decimal strings so JavaScript clients preserve all
 64 bits. Other finite numeric tag values use JSON numbers.
 
+Resources may carry `native_source_refs`, retaining native registered catalog
+anchors and machine template references. A `catalog_anchor` names its native
+`owner`, enum `symbol`, access `basis` and `identity_scope`. Matching uses the
+exact registry, metadata and typed NBT, ignoring count. All matching symbols
+are retained. Catalog preparation does not create resources by itself.
+
+GT ItemList anchors use its raw registered-stack accessor. GT++ anchors use a
+single layout-checked read of the private instance `mStack` field, retaining
+`field` and `declared_type`. The public normalized getter is not used. Catalog
+failures discard that catalog's partial results and emit explicit failed
+coverage. Other successfully prepared catalogs remain independent.
+
+A `machine_template` names the native template owner, `meta_id`, actual
+`template_class` and `ItemMachines.getMetaTileEntity` access basis. Its scope
+explicitly states that the native resolver ignores NBT. It identifies a
+registered template, not the stack's configured capabilities or an observed
+world machine. Neither reference kind establishes semantic use, material
+composition, chemical accounting or obtainable stock. An empty list or older
+snapshot without references does not establish the absence of a native role.
+
 Resources can also carry `material_facts` schema 1. These facts retain the
 actual GT version, accounting profile, source API, associations, prefix/native
 material amounts, component trees, density fields, element/isotope data and

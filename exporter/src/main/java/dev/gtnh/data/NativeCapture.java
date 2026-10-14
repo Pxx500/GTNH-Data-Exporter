@@ -9,14 +9,20 @@ import cpw.mods.fml.common.Loader;
 import cpw.mods.fml.common.ModContainer;
 import gregtech.api.enums.Materials;
 import gregtech.api.enums.GTValues;
+import gregtech.api.enums.ItemList;
+import gregtech.api.interfaces.metatileentity.IMetaTileEntity;
 import gregtech.api.recipe.RecipeMap;
 import gregtech.api.recipe.RecipeMetadataKey;
 import gregtech.api.util.GTOreDictUnificator;
 import gregtech.api.util.GTRecipe;
 import gregtech.api.util.GTUtility;
 import gregtech.api.util.recipe.Sievert;
+import gregtech.common.blocks.ItemMachines;
+import gtPlusPlus.xmod.gregtech.api.enums.GregtechItemList;
 import java.io.IOException;
 import java.lang.reflect.Array;
+import java.lang.reflect.Field;
+import java.lang.reflect.Modifier;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
@@ -46,6 +52,7 @@ final class NativeCapture {
     private final SnapshotWriter writer;
     private final MaterialFacts materialFacts;
     private final Map<String, String> resourceIds = new HashMap<>();
+    private final Map<String, JsonArray> catalogSourceRefs = new HashMap<>();
     private final Map<String, String> oreGroups = new HashMap<>();
     private final Map<String, String> unifiedGroups = new HashMap<>();
     private int processNumber;
@@ -57,6 +64,7 @@ final class NativeCapture {
     }
 
     void capture() throws IOException {
+        prepareSourceReferences();
         oreDictionary();
         gregTech();
         assemblyLine();
@@ -76,6 +84,83 @@ final class NativeCapture {
             "Other non-GT machine recipes beyond bounded EnderIO, Forestry Centrifuge and Botania Mana Infusion adapters remain unsupported");
         coverage("other-acquisition", "unsupported", 0,
             "Mob drops, trades, other-mod worldgen, mining drop distributions and saved deposits are not captured");
+    }
+
+    private void prepareSourceReferences() throws IOException {
+        Map<String, JsonArray> gtCatalog = new HashMap<>();
+        boolean gtPrepared = true;
+        try {
+            for (ItemList entry : ItemList.values()) {
+                if (entry.hasBeenSet()) addCatalogAnchor(gtCatalog, entry.getInternalStack_unsafe(),
+                    object("kind", "catalog_anchor", "owner", ItemList.class.getName(), "symbol", entry.name(),
+                        "basis", "existing_registered_stack", "identity_scope", "exact_registry_metadata_typed_nbt_ignoring_count"));
+            }
+        } catch (RuntimeException | LinkageError failure) {
+            gtCatalog.clear();
+            gtPrepared = false;
+            coverage("resource.native_source_refs.gregtech_catalog", "failed", 0,
+                "Native GT catalog preparation failed. No partial anchors retained",
+                object("error_class", failure.getClass().getName(), "diagnostic", failure.getMessage()));
+        }
+        if (gtPrepared) publishCatalog("resource.native_source_refs.gregtech_catalog", gtCatalog);
+
+        Map<String, JsonArray> gtppCatalog = new HashMap<>();
+        boolean gtppPrepared = true;
+        try {
+            Field stackField = GregtechItemList.class.getDeclaredField("mStack");
+            if (stackField.getDeclaringClass() != GregtechItemList.class || stackField.getType() != ItemStack.class
+                || stackField.getModifiers() != Modifier.PRIVATE)
+                throw new IllegalStateException("GregtechItemList.mStack does not match the private ItemStack instance layout");
+            stackField.setAccessible(true);
+            for (GregtechItemList entry : GregtechItemList.values()) {
+                if (entry.hasBeenSet()) addCatalogAnchor(gtppCatalog, (ItemStack) stackField.get(entry),
+                    object("kind", "catalog_anchor", "owner", GregtechItemList.class.getName(), "symbol", entry.name(),
+                        "basis", "layout_checked_private_field_read", "field", "mStack", "declared_type", ItemStack.class.getName(),
+                        "identity_scope", "exact_registry_metadata_typed_nbt_ignoring_count"));
+            }
+        } catch (ReflectiveOperationException | RuntimeException | LinkageError failure) {
+            gtppCatalog.clear();
+            gtppPrepared = false;
+            coverage("resource.native_source_refs.gtpp_catalog", "failed", 0,
+                "Native GT++ catalog preparation failed. No partial anchors retained",
+                object("owner", GregtechItemList.class.getName(), "field", "mStack", "declared_type", ItemStack.class.getName(),
+                    "error_class", failure.getClass().getName(), "diagnostic", failure.getMessage()));
+        }
+        if (gtppPrepared) publishCatalog("resource.native_source_refs.gtpp_catalog", gtppCatalog);
+    }
+
+    private void addCatalogAnchor(Map<String, JsonArray> catalog, ItemStack stack, JsonObject reference) {
+        if (GTUtility.isStackInvalid(stack)) return;
+        String registry = Item.itemRegistry.getNameForObject(stack.getItem());
+        if (registry == null) return;
+        String key = resourceKey("item", registry, stack.getItemDamage(), TypedNbt.encode(stack.getTagCompound()));
+        catalog.computeIfAbsent(key, ignored -> new JsonArray()).add(reference);
+    }
+
+    private void publishCatalog(String domain, Map<String, JsonArray> catalog) throws IOException {
+        long anchors = 0;
+        for (Map.Entry<String, JsonArray> entry : catalog.entrySet()) {
+            JsonArray references = catalogSourceRefs.computeIfAbsent(entry.getKey(), ignored -> new JsonArray());
+            for (JsonElement reference : entry.getValue()) references.add(reference);
+            anchors += entry.getValue().size();
+        }
+        coverage(domain, "complete", anchors,
+            "Prepared raw registered catalog anchors without emitting resources. Exact identity ignores count",
+            object("identities", catalog.size(), "scope", "registered_catalog_anchors_not_obtainable_stock"));
+    }
+
+    private JsonArray sourceReferences(String key, Object stack) {
+        JsonArray result = new JsonArray();
+        JsonArray catalog = catalogSourceRefs.get(key);
+        if (catalog != null) for (JsonElement reference : catalog) result.add(reference);
+        if (stack instanceof ItemStack) {
+            ItemStack itemStack = (ItemStack) stack;
+            IMetaTileEntity template = ItemMachines.getMetaTileEntity(itemStack);
+            if (template != null) result.add(object("kind", "machine_template", "owner", "GregTechAPI.METATILEENTITIES",
+                "meta_id", itemStack.getItemDamage(), "template_class", template.getClass().getName(),
+                "basis", "ItemMachines.getMetaTileEntity", "identity_scope", "native_machine_item_metadata_template_nbt_ignored"));
+        }
+        return result;
     }
 
     JsonObject manifest(Path gameDirectory, String worldName, long worldSeed) throws IOException {
@@ -128,7 +213,7 @@ final class NativeCapture {
     }
 
     private String resource(String kind, String registry, Integer damage, JsonElement nbt, String label, Object stack) throws IOException {
-        String key = kind + "|" + registry + "|" + damage + "|" + nbt;
+        String key = resourceKey(kind, registry, damage, nbt);
         String id = resourceIds.get(key);
         if (id == null) {
             id = "r" + resourceIds.size();
@@ -138,9 +223,14 @@ final class NativeCapture {
             writer.append("resources", object("id", id, "kind", kind, "registry_name", registry,
                 "metadata", damage, "nbt", nbt, "display_name", label,
                 "material_facts", facts,
+                "native_source_refs", sourceReferences(key, stack),
                 "provenance", object("owner", "native_registry")));
         }
         return id;
+    }
+
+    static String resourceKey(String kind, String registry, Integer damage, JsonElement nbt) {
+        return kind + "|" + registry + "|" + damage + "|" + nbt;
     }
 
     private String displayName(ItemStack stack, String registry) {
