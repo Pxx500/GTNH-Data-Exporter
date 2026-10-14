@@ -766,3 +766,27 @@ and full selected recipes pass verification, and both store fingerprints remain
 unchanged. No automatic tool ontology, wider group matching or search bias is
 introduced. Source research will check actual native membership and tool APIs.
 Evidence is in `exports/search-research-20261014/tool-route-filter/`.
+
+## Equal native material does not permit cross-form dominance
+
+The current search already blocks repeated exact resource and recipe identities.
+The saved native Volcanus witness requires Iron Dust to Steel Ingot to Steel
+Dust to Tungstensteel Dust. Steel Dust r7439 and Steel Ingot r11342 have identical
+complete native primary material descriptors. In backward search their actual
+cumulative costs are both one, at depths five and six. A material-only key would
+reject the necessary ingot continuation as dominated.
+
+Mixer p171532 accepts the dust port and rejects the ingot port. Macerator
+p155691 is the required bridge and correctly receives no recovery penalty.
+The shorter dust history is a subset of the ingot history, so adding a visited
+history subset check does not rescue the material-only comparison. Fuel, ash
+chance, tungsten cofeed and presence circuit remain in the verified full records.
+
+Equal descriptors are useful descriptive grouping evidence. They do not prove
+interchangeable recipe ports. Safe pruning would need a concrete costed port
+simulation preserving requirements, history, cofeeds and audit context. Reject
+blanket cross-form dominance without a runtime experiment. Nineteen canonical
+lookups and 115 logical work units verify seven native steps in about 0.039
+seconds. No actual query work or results change. Alternative routes were not
+searched, so no whole-query coverage-loss estimate is claimed.
+Evidence is in `exports/search-research-20261014/form-cycle-dominance/`.

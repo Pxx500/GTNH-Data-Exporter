@@ -467,12 +467,23 @@ etap. Bieżące pomiary i decyzje są w SEARCH_EXPERIMENTS.md.
   kopiuje komponentów ani normalizacji ilości. Bezpośrednie konstrukcje W/N
   pozostają poza tym miejscem. Brakuje konfiguracji i zależności kompilacji
   hooka oraz dowodu instalacji przed inicjalizacją. Instrumentację odkładamy.
-- [ ] Sprawdzić, czy dominacja stanów według materiału i formy może ograniczyć
+- [x] Sprawdzić, czy dominacja stanów według materiału i formy może ograniczyć
   zbędne obiegi bez utraty wymaganych składników, historii i pełnych receptur.
   Nie powtarzać odrzuconej kary za formy ani usuwać loopów z audytu balansu.
+  Natywny kontrprzykład wymaga przejścia Steel Ingot do Steel Dust przed
+  mikserem. Materiał obu form jest identyczny, ale tylko dust pasuje do wejścia.
+  Dominacja według samego materiału ucina ten potrzebny most. Odrzucono ją.
 - [ ] Sprawdzić opisowe rozróżnienie przemiany materiału od udziału narzędzia
   i zależności pobocznej. Użyć istniejących deklaracji, zachować niepewność
   i nie nazywać podobieństwa składu dowodem pochodzenia atomów.
+- [ ] Zachować rzeczywiste dopasowanie kategorii OreDictionary dla itemów,
+  również wariantów narzędzi z NBT. Użyć sprawdzonego natywnego getOreIDs,
+  oddzielić te dane od dosłownych członków grup i ograniczeń wyszukiwania.
+  Potwierdzić jeden odrębny dump, adnotacje, starsze obsługiwane snapshoty
+  oraz opis podstawy rozpoznania w GUI i MCP. Nie zmieniać oceny tras.
+- [ ] Sprawdzić literaturę o landmarkach i planach zrelaksowanych pod kątem
+  kierowania przez gałęzie składników celu. Odróżnić osiągalność pojedynczej
+  ścieżki od spełnienia wszystkich wejść receptury i policzyć przygotowanie.
 - [x] Sprawdzić wybieranie wyjść regionu na podstawie rzeczywistych gałęzi
   celu i przygotowanych odległości. Policzyć przygotowanie, konkretne kroki,
   walidację i pracę zapytania. Odrzucić rozwiązanie, jeśli wyjścia pozostaną
