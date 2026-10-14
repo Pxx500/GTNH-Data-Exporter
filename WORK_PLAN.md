@@ -550,14 +550,23 @@ etap. Bieżące pomiary i decyzje są w SEARCH_EXPERIMENTS.md.
   Wybrano dowód kontekstowy z istniejących relacji. Gorąca ocena potrzebowałaby
   dodatkowej operacji w obecnym matcherze. Użytkownik polecił nie skupiać się
   na narzędziach. Wątek odłożony bez implementacji ani eksperymentu oceny.
-- [ ] Sprawdzić dokładnie powtarzające się wymagania produktu docelowego
+- [x] Sprawdzić dokładnie powtarzające się wymagania produktu docelowego
   w dziewięciu zapisanych przypadkach. Oddzielić różne receptury od tego
   samego wymagania półproduktu. Zachować ich ilości, predykaty i pełne konteksty.
   Nie powtarzać odrzuconego wyboru ośmiu tras z większej puli dwunastu.
+  Wafle mają osiem formalnych zadań i pięć dokładnych klas wymagań.
+  Volcanus ma piętnaście zadań i dziewięć klas. W odrzuconym eksperymencie
+  obwód znika z klas 7/9 do 6/9, choć formalne pokrycie nadal wynosi 10/15.
+  Potwierdzono 43 wywołania matchera i 3906 kandydatów. Ilości 1/2 nie są
+  łączone. Równość zbiorów dla exact/unified dotyczy tylko tego snapshota.
 - [ ] Sprawdzić, jak dopuścić różne drogi wcześniejszego przetwarzania
   tego samego półproduktu bez zwiększania limitów wyników ani pracy.
   Wykorzystać istniejące kursory i planowanie gałęzi. Zachować istotną drogę
   przez stal oraz gałęzie obwodu, casingu i pozostałe kontrole.
+  Jedna próba zachowuje odrębne historie i kursory każdego zadania.
+  Przy powtórzonym prefiksie pozwala na jedną dalszą ukończoną drogę.
+  Grupowanie ogranicza do identycznych deklaracji slotów. Limity i ocena
+  pozostają bez zmian. Dominacja stanów może już wcześniej odrzucić alternatywę.
 - [x] Sprawdzić literaturę o landmarkach i planach zrelaksowanych pod kątem
   kierowania przez gałęzie składników celu. Odróżnić osiągalność pojedynczej
   ścieżki od spełnienia wszystkich wejść receptury i policzyć przygotowanie.

@@ -1091,3 +1091,28 @@ allocation are not yet measured. Native recipe variants, cofeeds and predicates
 must remain distinct and inspectable. Any new experiment must preserve the
 circuit branch and construction controls within the existing result and work
 caps. It must not repeat the rejected larger-pool selection experiment.
+
+The bounded saved-result census confirms the exact requirement redundancy.
+Wafer has eight formal jobs but five snapshot-scoped requirement classes.
+Its four boule jobs have the same accepted resource, consumed amount, chance
+and NBT semantics, and repeat three upstream prefixes. Volcanus has fifteen
+jobs but nine classes. Baseline covers seven classes, while the rejected
+basis treatment covers six, despite both reporting 10/15 formal jobs. The lost
+class is the complete five-resource LuV-circuit requirement. Exact and unified
+Computer Cube choices accept the same singleton here. Original declarations
+remain distinct. Consume-one and consume-two gear, arm and plate slots are
+not merged. Forty-three bounded matcher calls return 3906 candidates without
+another search or store change. Evidence is in
+`exports/search-research-20261014/target-branch-diversity/`.
+
+Source review shows that first completion, including duplicate completion,
+clears a job and releases its remaining cursors. The next finite pilot keeps
+all independent heaps, dominance states and endpoint histories. For identical
+canonical ingredient declarations, it can skip an already represented exact
+upstream prefix and resume at most one further completion. It creates no larger
+pool and changes no score or cap. Native endpoint history cannot be rebound
+between variants because coproducts can affect upstream legality. Existing
+dominance may already remove the useful alternative. Formal endpoint coverage
+and distinct requirement coverage must therefore remain separate. No production
+benefit has been established. Design evidence is in
+`exports/search-research-20261014/upstream-route-diversity/`.
