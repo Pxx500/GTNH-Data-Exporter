@@ -57,6 +57,14 @@ every trace. New imports prepare this data automatically. A rebuild needs
 the imported dump, not a running game. An incompatible index is not silently
 used as if it belonged to the current snapshot or analysis version.
 
+Material search uses partial successor expansion. Each admitted cursor entry
+is one concrete child path and counts against `queued_states`. Its next sibling
+is admitted when that entry is processed. Deferred descriptors are not already
+explored paths. Inspect `search.partial_expansion` for their current and peak
+counts, candidate validations and cursor lifecycle. A small heap does not mean
+those descriptors or their work disappeared. `path_limit` and missing target
+branches still prevent a completeness claim.
+
 Voltage bounds restrict captured recipe voltage requirements. Verified static
 GT shaped crafting-grid declarations can report tier status `not_applicable`
 with a null tier. They need no machine voltage and pass those bounds. This is

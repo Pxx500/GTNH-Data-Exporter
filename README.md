@@ -193,6 +193,13 @@ Inspect readiness with `gtnh-data flow-index --database PATH_TO_INDEX.sqlite`.
 Preparation changes derived search data only. Material mode rejects missing or
 incompatible sidecars with an explicit rebuild message.
 
+Material search expands large matching fanouts incrementally. A sorted cursor
+admits one concrete successor at a time while retaining the other eligible
+descriptors. This prevents one branch from exhausting the queue budget before
+other target ingredients are considered. Limits remain unchanged. Every child
+admission and resume is counted, and `search.partial_expansion` reports deferred
+candidates separately from queued path states.
+
 MCP traces default to `view="compact"`, retaining complete selected recipes,
 declared choices and path resources with explicit omission counts for expanded
 matching candidates. Request `view="full"` for the expanded candidate graph.

@@ -251,6 +251,11 @@ def find_paths(dataset, canonical, start_id, target_id, max_depth, max_processes
               'expansion_work': 0, 'work_limit': 100000, 'enumeration_work': 0, 'enumeration_limit': 100000,
               'queued_states': 0, 'peak_queue': 0, 'truncated': False, 'prepared_index': prepared_status,
               'prepared_lookup_hits': 0, 'distance_pruned_states': 0, 'loaded_process_records': 0}
+    partial = {'created_cursors': 0, 'cursor_admissions': 0, 'cursor_resumes': 0, 'cursor_pops': 0,
+               'released_cursors': 0, 'candidate_validations': 0, 'sorted_candidates': 0,
+               'deferred_candidates': 0, 'peak_deferred_candidates': 0,
+               'retained_candidates': 0, 'peak_retained_candidates': 0}
+    search['partial_expansion'] = partial
     paths, reasons, branches = [], set(), []
     if required & excluded or start_id in excluded or target_id in excluded:
         return route, paths, search, [], [], branches
@@ -318,7 +323,7 @@ def find_paths(dataset, canonical, start_id, target_id, max_depth, max_processes
         target_entries = predecessors(target_id)
         for pid, si, input_id, position in target_entries:
             key = pid, si
-            job = jobs.setdefault(key, {'pid': pid, 'slot': si, 'candidates': set(), 'heap': [], 'seen': {}, 'paths': []})
+            job = jobs.setdefault(key, {'pid': pid, 'slot': si, 'candidates': set(), 'heap': [], 'seen': {}, 'paths': [], 'cursors': {}})
             job['candidates'].add(input_id)
             if distances[nodes[input_id]] + 1 > max_depth:
                 search['distance_pruned_states'] += 1
@@ -331,10 +336,48 @@ def find_paths(dataset, canonical, start_id, target_id, max_depth, max_processes
         scope = max_depth
         reference_bounds = set()
 
+        def release_cursor(job, cursor_id):
+            cursor = job['cursors'].pop(cursor_id)
+            partial['retained_candidates'] -= len(cursor['choices'])
+            partial['deferred_candidates'] -= len(cursor['choices']) - cursor['next']
+            partial['released_cursors'] += 1
+
+        def clear_job(job):
+            job['heap'].clear()
+            for cursor_id in list(job['cursors']):
+                release_cursor(job, cursor_id)
+
+        def enqueue_cursor(job, cursor_id):
+            if search['queued_states'] >= search['state_limit']:
+                reasons.add('search_state_limit')
+                return False
+            cursor = job['cursors'][cursor_id]
+            score, bound, pid, input_id = cursor['choices'][cursor['next']]
+            if cursor['next']:
+                partial['cursor_resumes'] += 1
+            cursor['next'] += 1
+            # One heap entry is one concrete child. Deferred choices share the parent history.
+            heappush(job['heap'], (score, bound, cursor['resources'] + (input_id,),
+                                  cursor['processes'] + (pid,), cursor_id))
+            search['queued_states'] += 1
+            partial['cursor_admissions'] += 1
+            partial['deferred_candidates'] -= 1
+            search['peak_queue'] = max(search['peak_queue'], len(job['heap']))
+            return True
+
         def advance(job):
             turns = 0
             while job['heap'] and turns < 64:
-                score, _, rr, pp = heappop(job['heap'])
+                entry = heappop(job['heap'])
+                score, _, rr, pp = entry[:4]
+                if len(entry) == 5:
+                    cursor_id = entry[4]
+                    cursor = job['cursors'][cursor_id]
+                    partial['cursor_pops'] += 1
+                    if cursor['next'] < len(cursor['choices']):
+                        enqueue_cursor(job, cursor_id)
+                    else:
+                        release_cursor(job, cursor_id)
                 depth = len(pp)
                 turns += 1
                 search['examined_states'] += 1
@@ -355,30 +398,38 @@ def find_paths(dataset, canonical, start_id, target_id, max_depth, max_processes
                     continue
                 if job.get('objective') == 'hops':
                     reference_bounds.add((rid, scope - depth))
+                choices = []
                 for pid, _, input_id, position in predecessors(rid, scope - depth):
+                    partial['candidate_validations'] += 1
                     if input_id in rr or pid in pp:
                         continue
                     if distances[nodes[input_id]] + depth + 1 > scope:
                         search['distance_pruned_states'] += 1
                         continue
-                    if search['queued_states'] >= search['state_limit']:
-                        reasons.add('search_state_limit')
-                        break
                     if job.get('objective') == 'hops':
                         next_score = depth + 1 + distances[nodes[input_id]]
                     else:
                         next_score = score + penalty(input_id, rid, position)
                         # Material overlap guides ties before a branch spends its budget.
                         next_score += 0 if materials[input_id] & source_materials else 1
-                    heappush(job['heap'], (next_score, depth + 1 + distances[nodes[input_id]], rr + (input_id,), pp + (pid,)))
-                    search['queued_states'] += 1
-                    search['peak_queue'] = max(search['peak_queue'], len(job['heap']))
+                    choices.append((next_score, depth + 1 + distances[nodes[input_id]], pid, input_id))
+                if choices:
+                    choices.sort(key=lambda child: (child[0], child[1], child[3], child[2]))
+                    cursor_id = partial['created_cursors']
+                    partial['created_cursors'] += 1
+                    partial['sorted_candidates'] += len(choices)
+                    partial['retained_candidates'] += len(choices)
+                    partial['deferred_candidates'] += len(choices)
+                    partial['peak_retained_candidates'] = max(partial['peak_retained_candidates'], partial['retained_candidates'])
+                    partial['peak_deferred_candidates'] = max(partial['peak_deferred_candidates'], partial['deferred_candidates'])
+                    job['cursors'][cursor_id] = {'resources': rr, 'processes': pp, 'choices': choices, 'next': 0}
+                    enqueue_cursor(job, cursor_id)
                 if reasons & {'search_process_limit', 'search_work_limit', 'search_state_limit'}:
                     return None
             return None
 
         reference = {'heap': [(distances[nodes[target_id]], 0, (target_id,), ())] if distances[nodes[target_id]] <= max_depth else [],
-                     'seen': {}, 'objective': 'hops'}
+                     'seen': {}, 'objective': 'hops', 'cursors': {}}
         reference_path = None
         target_distance = distances[nodes[target_id]]
         if max_depth < target_distance < 0xffffffff:
@@ -406,7 +457,8 @@ def find_paths(dataset, canonical, start_id, target_id, max_depth, max_processes
                                    'depth_limit': scope}
         if reference_path is None and not reference['heap']:
             for job in jobs.values():
-                job['heap'].clear()
+                clear_job(job)
+        clear_job(reference)
 
         ordered = sorted(jobs.values(), key=lambda job: (
             not any(materials[rid] & source_materials for rid in job['candidates']), job['pid'], job['slot']))
@@ -419,13 +471,13 @@ def find_paths(dataset, canonical, start_id, target_id, max_depth, max_processes
                 signature = tuple(path['process_ids']), tuple(path['resource_ids'])
                 if signature in signatures:
                     job['paths'].append(signatures[signature])
-                    job['heap'].clear()
+                    clear_job(job)
                     continue
                 if len(admitted | set(path['process_ids'])) > max_processes:
                     reasons.add('path_process_limit')
                     continue
                 job['paths'].append(path)
-                job['heap'].clear()
+                clear_job(job)
                 paths.append(path)
                 signatures[signature] = path
                 admitted.update(path['process_ids'])
@@ -459,6 +511,8 @@ def find_paths(dataset, canonical, start_id, target_id, max_depth, max_processes
         search.update(examined_processes=len(examined), loaded_process_records=len(admitted), truncated=bool(reasons),
                       pending_states=sum(len(job['heap']) for job in ordered),
                       selection_policy='one_material_relevant_spine_per_target_ingredient_branch')
+        partial['pending_cursors'] = sum(len(job['cursors']) for job in ordered)
+        partial['pending_cursor_entries'] = sum(len(entry) == 5 for job in ordered for entry in job['heap'])
         return route, paths, search, sorted(reasons), duplicates, branches
 
 

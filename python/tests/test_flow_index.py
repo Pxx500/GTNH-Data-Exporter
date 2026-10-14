@@ -18,6 +18,29 @@ def material(id, name, components=()):
 
 
 class FlowIndexTests(unittest.TestCase):
+    def test_large_ingredient_group_keeps_both_target_branch_spines(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            members = [f'variant-{i:04d}' for i in range(2000)]
+            groups = [{'id': 'wide', 'kind': 'ore_dict', 'name': 'reachableVariants',
+                       'members': members, 'provenance': {}}]
+            wide = process('wide-a', [slot(choice(members[0], mode='ore_dict', group='wide')) for _ in range(12)], ['a'])
+            final = process('final', [slot(choice('a')), slot(choice('b'))], ['target'])
+            recipes = [process(f'producer-{i:04d}', [slot(choice('start'))], [id]) for i, id in enumerate(members)]
+            recipes.extend([wide, process('simple-b', [slot(choice('start'))], ['b']), final])
+            rows = [material(id, 'Base') for id in ['start', 'a', 'b', 'target', *members]]
+            dataset = Dataset.import_snapshot(snapshot(root / 'capture', resources=rows, groups=groups,
+                                                      processes=recipes), root / 'index.sqlite')
+
+            result = dataset.trace_processes(start_id='start', target_id='target', path_selection='material', view='compact')
+
+            self.assertEqual(result['route']['status'], 'found')
+            self.assertEqual({path['resource_ids'][-2] for path in result['paths']}, {'a', 'b'})
+            self.assertTrue(all(branch['status'] == 'represented' for branch in result['branch_coverage']))
+            records = {record['id']: record for record in result['processes']}
+            self.assertEqual(records['wide-a'], wide)
+            self.assertEqual(records['final'], final)
+
     def test_compact_retains_declared_group_anchor_outside_resolved_members(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
