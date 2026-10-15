@@ -2289,3 +2289,42 @@ declared-input-presentation/ui-dist. Collapsed summaries perform no resource
 requests. Existing interpreted rendering remains covered. All four files of the
 main UI bundle match the previous acceptance manifest. No live GUI activation,
 API, solver, recipe model or storage change occurred.
+
+### Still templates remain distinct from executable batch yields
+
+Still now extends the existing Forestry owner with exact-version/manager/base
+class gates and passive getter copies. Raw fluid templates retain amounts and
+typed NBT even when a canonical output cannot be emitted. Registered positive
+templates with representable int32 scalar products support numeric per-unit
+output lookup with chance null. No scaled yield or energy is credited. Both
+dynamic accounting flags and execution physics stay unresolved. NativeCapture's
+two source-reference catalog catch statuses now use the supported error value.
+A bounded literal inventory finds 43 complete literal coverage-status arguments,
+all in the consumer's accepted set. Computed expressions remain outside that
+inventory, and actual catch exceptions were not induced.
+
+Compile and all 41 Java tests pass. Hostless tests protect unknown/null/class
+guards without fabricating Forge registry setup. IntelliJ completes with 77
+advisories. Combined PMD is explicitly skipped by the existing nested-root check.
+Supplemental PMD completes on the two changed owners with 60 advisories and no
+processing/configuration errors. A preparatory classpath-selection mistake is
+retained separately and corrected to production main outputs before PMD runs.
+No source change or extra review cycle is required by the final findings.
+
+One 184.937-second capture/import produces snapshot
+33be2c98-5938-4301-8321-9ff466a859ec with three exact Still declarations and
+260636 processes. Actual templates are biomass 10 to bioethanol 3 with 100
+cycles, short.mead 10 to mead 5 with 100, and resin 5 to turpentine 3 with 25.
+These names are captured registry identities. All six template NBT values are
+null. Every chance and executable value remains null. Five public reads and
+four ledger refusals pass. The selected record is raw-equal through declared
+input and output-only lookup. Matched input lookup reports three unresolved
+family records. Expected accounting does not credit a numeric template.
+
+All 96 protected files, four absence gates, frozen inputs/receipts, main UI and
+both fresh stores remain unchanged. Prior family counts agree without a body
+equivalence claim. Ten config/script digests differ. Tagged, invalid scalar,
+custom class and source-reference catch branches remain unobserved. There is
+no independent original-catalog observer, accepted-tank-yield proof or live
+GUI/MCP activation. Evidence is in forestry-still-audit/ and
+forestry-still-acceptance/. No retry, reimport or extra public call occurred.

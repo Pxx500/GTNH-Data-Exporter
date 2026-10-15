@@ -15,6 +15,8 @@ import forestry.api.recipes.ICarpenterRecipe;
 import forestry.api.recipes.IDescriptiveRecipe;
 import forestry.api.recipes.ISqueezerManager;
 import forestry.api.recipes.ISqueezerRecipe;
+import forestry.api.recipes.IStillManager;
+import forestry.api.recipes.IStillRecipe;
 import forestry.api.recipes.RecipeManagers;
 import forestry.factory.recipes.CentrifugeRecipe;
 import forestry.factory.recipes.CentrifugeRecipeManager;
@@ -23,11 +25,15 @@ import forestry.factory.recipes.CarpenterRecipe;
 import forestry.factory.recipes.CarpenterRecipeManager;
 import forestry.factory.recipes.SqueezerRecipe;
 import forestry.factory.recipes.SqueezerRecipeManager;
+import forestry.factory.recipes.StillRecipe;
+import forestry.factory.recipes.StillRecipeManager;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import net.minecraft.item.ItemStack;
+import net.minecraftforge.fluids.Fluid;
+import net.minecraftforge.fluids.FluidRegistry;
 import net.minecraftforge.fluids.FluidStack;
 
 /** Native Forestry catalogs with family-specific interpretation limits. */
@@ -40,8 +46,9 @@ final class ForestryCapture {
         centrifuge();
         squeezer();
         carpenter();
+        still();
         capture.coverage("forestry.other_factories", "unsupported", 0,
-            "Only the native Centrifuge catalog and static Squeezer and Carpenter declarations are captured");
+            "Only the native Centrifuge catalog and static Squeezer, Carpenter and Still declarations are captured");
     }
 
     private void centrifuge() throws IOException {
@@ -350,6 +357,172 @@ final class ForestryCapture {
                 "uninterpreted_class_records", uninterpretedClasses, "unresolved_pattern_records", unresolvedPatterns,
                 "unresolved_input_records", index,
                 "unresolved_output_records", unresolvedOutputs, "missing_identity_records", missingIdentities, "capture_errors", errors));
+    }
+
+    private void still() throws IOException {
+        ModContainer owner = Loader.instance().getIndexedModList().get("Forestry");
+        String version = owner == null ? null : owner.getVersion();
+        IStillManager manager = RecipeManagers.stillManager;
+        if (!"4.11.39".equals(version) || manager == null || manager.getClass() != StillRecipeManager.class) {
+            capture.coverage("forestry:still", "unsupported", 0, "Verified Forestry 4.11.39 native Still manager is unavailable",
+                object("native_version", version, "registry_class", manager == null ? null : manager.getClass().getName()));
+            return;
+        }
+        ArrayList<IStillRecipe> recipes;
+        try {
+            recipes = new ArrayList<>(manager.recipes());
+        } catch (RuntimeException error) {
+            capture.coverage("forestry:still", "error", 0, "Native Still catalog could not be read",
+                object("native_version", version, "error_class", error.getClass().getName(), "message", error.getMessage()));
+            return;
+        }
+        Map<String, Integer> classes = new LinkedHashMap<>();
+        int index = 0;
+        int declared = 0;
+        int templateOutputs = 0;
+        int uninterpretedClasses = 0;
+        int invalidFacts = 0;
+        int errors = 0;
+        for (IStillRecipe recipe : recipes) {
+            String nativeClass = recipe == null ? null : recipe.getClass().getName();
+            classes.merge(nativeClass == null ? "null" : nativeClass, 1, Integer::sum);
+            JsonObject conditions = object("native_class", nativeClass, "native_version", version,
+                "dynamic_inputs", "unresolved", "dynamic_output", "unresolved");
+            JsonArray outputs = new JsonArray();
+            try {
+                StillDeclaration declaration = stillDeclaration(recipe, version);
+                conditions = declaration.conditions;
+                conditions.addProperty("native_registry_class", manager.getClass().getName());
+                if (!declaration.known) uninterpretedClasses++;
+                JsonArray nativeInputs = new JsonArray();
+                if (declaration.known) {
+                    JsonObject inputTemplate = conditions.getAsJsonObject("native_input_template");
+                    JsonObject outputTemplate = conditions.getAsJsonObject("native_output_template");
+                    if (declaration.input != null) {
+                        String inputId = capture.fluid(declaration.input);
+                        inputTemplate.addProperty("resource_id", inputId);
+                        nativeInputs.add(object("native_origin", "recipe_fluid_template", "role", "consume",
+                            "quantity_scope", "native_per_unit_template_not_work_batch_debit", "choices", Jsons.array(object(
+                                "resource_id", inputId, "amount", declaration.input.amount,
+                                "declared_match", object("mode", "exact", "nbt_sensitive", true),
+                                "match", object("mode", "native_unknown")))));
+                    }
+                    if (declaration.output != null) {
+                        String outputId = capture.fluid(declaration.output);
+                        outputTemplate.addProperty("resource_id", outputId);
+                        if (outputId != null && declaration.input != null
+                            && "valid_positive_int32_products".equals(conditions.get("native_scalar_status").getAsString())) {
+                            outputs.add(object("resource_id", outputId, "amount", declaration.output.amount, "chance", null,
+                                "native_output_semantics", "declared_per_unit_template_not_cycle_yield"));
+                        }
+                    }
+                    if (declaration.input == null || declaration.output == null
+                        || !"valid_positive_int32_products".equals(conditions.get("native_scalar_status").getAsString())) invalidFacts++;
+                    declared++;
+                }
+                conditions.add("native_inputs", nativeInputs);
+            } catch (RuntimeException error) {
+                errors++;
+                conditions.add("capture_error", object("phase", "native_still_declarations", "class", error.getClass().getName(),
+                    "message", error.getMessage()));
+            }
+            if (outputs.size() != 0) templateOutputs++;
+            capture.emitProcess("forestry:still", "Forestry Still", new JsonArray(), outputs, null, null, null, null,
+                conditions, object("owner", "RecipeManagers.stillManager.recipes", "index", index++, "native_class", nativeClass,
+                    "native_version", version, "order_stability", "within_run_only"));
+        }
+        capture.coverage("forestry:still", "partial", index,
+            "Passive per-unit fluid templates only. Buffered batch debits, accepted tank output, timing and energy remain unresolved",
+            object("native_version", version, "registry_class", manager.getClass().getName(), "native_recipe_classes", classes,
+                "declared_records", declared, "template_output_records", templateOutputs, "interpreted_records", 0,
+                "uninterpreted_class_records", uninterpretedClasses, "invalid_fact_records", invalidFacts,
+                "unresolved_input_records", index, "unresolved_output_records", index, "capture_errors", errors));
+    }
+
+    /** Reads verified declarations, not the controller's buffered inventory or accepted output. */
+    static StillDeclaration stillDeclaration(IStillRecipe recipe, String version) {
+        JsonObject conditions = object("native_class", recipe == null ? null : recipe.getClass().getName(), "native_version", version,
+            "material_projection", "declaration_only_not_complete_material_transaction",
+            "dynamic_inputs", "unresolved", "dynamic_output", "unresolved", "registry_order", "within_run_only",
+            "selection", "retain_matching_cached_recipe_else_first_matching_hashset_entry",
+            "input_matching", "fluid_identity_exact_nbt_and_at_least_input_template_amount",
+            "output_quantity_scope", "declared_per_unit_template_not_cycle_yield",
+            "buffering", "batch_input_drained_in_hasWork_and_persisted_before_completion",
+            "output_space_check", "unscaled_template_only_scaled_fill_acceptance_not_verified",
+            "container_handling", "separate_periodic_fluid_container_transactions_not_recipe_coproducts",
+            "effective_duration", "machine_owned_unknown", "effective_energy", "machine_owned_unknown",
+            "machine_context", "power_redstone_speed_difficulty_tanks_and_persisted_input_buffer");
+        String reason = !"4.11.39".equals(version) ? "unsupported_native_version" : recipe == null ? "null_native_recipe"
+            : recipe.getClass() != StillRecipe.class ? "uninterpreted_native_subclass" : null;
+        if (reason != null) {
+            conditions.addProperty("declaration_status", reason);
+            return new StillDeclaration(false, null, null, conditions);
+        }
+        int cycles = recipe.getCyclesPerUnit();
+        FluidStack input = recipe.getInput();
+        FluidStack output = recipe.getOutput();
+        conditions.addProperty("native_cycles_per_unit", cycles);
+        conditions.addProperty("native_work_tick_interval_game_ticks", 5);
+        conditions.add("native_batch_arithmetic", object("type", "java_signed_int32_multiplication",
+            "input_debit", "cycles_per_unit * input_template.amount", "attempted_output", "cycles_per_unit * output_template.amount",
+            "work_ticks", "cycles_per_unit_before_speed_modifier", "energy", "200 * cycles_per_unit_before_machine_modifiers",
+            "overflow", "wraps_in_native_controller", "output_acceptance", "tank_fill_return_value_ignored"));
+        JsonObject inputTemplate = new JsonObject();
+        JsonObject outputTemplate = new JsonObject();
+        conditions.add("native_input_template", inputTemplate);
+        conditions.add("native_output_template", outputTemplate);
+        FluidStack inputCopy = stillTemplate(input, inputTemplate);
+        FluidStack outputCopy = stillTemplate(output, outputTemplate);
+        String scalarStatus = "nonpositive_or_missing_native_scalar";
+        if (cycles > 0 && input != null && output != null && input.amount > 0 && output.amount > 0) {
+            try {
+                // Validate representability without replacing the recorded native wraparound law.
+                Math.multiplyExact(cycles, input.amount);
+                Math.multiplyExact(cycles, output.amount);
+                Math.multiplyExact(200, cycles);
+                scalarStatus = "valid_positive_int32_products";
+            } catch (ArithmeticException overflow) {
+                scalarStatus = "native_int32_product_overflow";
+            }
+        }
+        conditions.addProperty("native_scalar_status", scalarStatus);
+        conditions.addProperty("declaration_status", "captured_exact_native_class");
+        return new StillDeclaration(true, inputCopy, outputCopy, conditions);
+    }
+
+    private static FluidStack stillTemplate(FluidStack stack, JsonObject template) {
+        if (stack == null) {
+            template.addProperty("status", "missing");
+            return null;
+        }
+        template.addProperty("amount", stack.amount);
+        template.add("nbt", TypedNbt.encode(stack.tag));
+        try {
+            Fluid fluid = stack.getFluid();
+            String registryName = fluid == null ? null : FluidRegistry.getFluidName(fluid);
+            template.addProperty("registry_name", registryName);
+            template.addProperty("native_fluid_class", fluid == null ? null : fluid.getClass().getName());
+            template.addProperty("status", registryName == null ? "unregistered" : "registered");
+            return registryName == null ? null : stack.copy();
+        } catch (RuntimeException error) {
+            template.addProperty("status", "error");
+            template.add("capture_error", object("class", error.getClass().getName(), "message", error.getMessage()));
+            return null;
+        }
+    }
+
+    static final class StillDeclaration {
+        final boolean known;
+        final FluidStack input;
+        final FluidStack output;
+        final JsonObject conditions;
+
+        StillDeclaration(boolean known, FluidStack input, FluidStack output, JsonObject conditions) {
+            this.known = known;
+            this.input = input;
+            this.output = output;
+            this.conditions = conditions;
+        }
     }
 
     private JsonElement carpenterCell(Object value, JsonArray choices, JsonObject conditions) throws IOException {

@@ -108,7 +108,7 @@ final class NativeCapture {
         coverage("recipe-semantics", "partial", writer.count("processes"),
             "Dynamic native matching, machine-specific metadata and custom crafting remain unresolved. Uninterpreted metadata: " + unknownMetadata);
         coverage("other-mod-recipes", "unsupported", 0,
-            "Other non-GT machine recipes beyond bounded EnderIO, Forestry Centrifuge and static Squeezer/Carpenter declarations, Botania Mana Infusion/Runic Altar and Petal Apothecary declarations, and Space Pumping catalog adapters remain unsupported");
+            "Other non-GT machine recipes beyond bounded EnderIO, Forestry Centrifuge and static Squeezer/Carpenter/Still declarations, Botania Mana Infusion/Runic Altar and Petal Apothecary declarations, and Space Pumping catalog adapters remain unsupported");
         coverage("other-acquisition", "unsupported", 0,
             "Mob drops, trades, other-mod worldgen, mining drop distributions and saved deposits are not captured");
     }
@@ -179,7 +179,7 @@ final class NativeCapture {
         } catch (RuntimeException | LinkageError failure) {
             gtCatalog.clear();
             gtPrepared = false;
-            coverage("resource.native_source_refs.gregtech_catalog", "failed", 0,
+            coverage("resource.native_source_refs.gregtech_catalog", "error", 0,
                 "Native GT catalog preparation failed. No partial anchors retained",
                 object("error_class", failure.getClass().getName(), "diagnostic", failure.getMessage()));
         }
@@ -202,7 +202,7 @@ final class NativeCapture {
         } catch (ReflectiveOperationException | RuntimeException | LinkageError failure) {
             gtppCatalog.clear();
             gtppPrepared = false;
-            coverage("resource.native_source_refs.gtpp_catalog", "failed", 0,
+            coverage("resource.native_source_refs.gtpp_catalog", "error", 0,
                 "Native GT++ catalog preparation failed. No partial anchors retained",
                 object("owner", GregtechItemList.class.getName(), "field", "mStack", "declared_type", ItemStack.class.getName(),
                     "error_class", failure.getClass().getName(), "diagnostic", failure.getMessage()));

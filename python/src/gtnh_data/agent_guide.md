@@ -150,6 +150,13 @@ trigger and water refill transaction. Runes are consumed in Petal recipes.
 Do not convert either declaration into an executable chain or ledger, substitute
 a generic seed group, or assume a bucket of water per craft.
 
+For `forestry:still`, output lookup can return numeric native per-unit templates
+with unknown chance. Read `native_output_semantics` and the conditions before
+using that number. It is not a guaranteed batch yield. Buffered input, cycles,
+machine modifiers and partial product-tank acceptance remain unresolved.
+Declared ingredient lookup and raw inspection are supported when captured,
+while null executable status prevents ordinary operation accounting.
+
 Material search uses partial successor expansion. Each admitted cursor entry
 is one concrete child path and counts against `queued_states`. Its next sibling
 is admitted when that entry is processed. Deferred descriptors are not already

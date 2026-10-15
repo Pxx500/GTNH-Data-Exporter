@@ -8,6 +8,7 @@ import static org.junit.Assert.assertTrue;
 import com.google.gson.JsonObject;
 import forestry.api.recipes.ICarpenterRecipe;
 import forestry.api.recipes.IDescriptiveRecipe;
+import forestry.api.recipes.IStillRecipe;
 import forestry.core.recipes.ShapedRecipeCustom;
 import forestry.factory.recipes.CarpenterRecipe;
 import java.util.Arrays;
@@ -19,6 +20,39 @@ import net.minecraftforge.fluids.FluidStack;
 import org.junit.Test;
 
 public class ForestryCaptureTest {
+    @Test
+    public void stillUnknownRecipesAndVersionsNeverProbeNativeGetters() {
+        IStillRecipe unsafe = new IStillRecipe() {
+            @Override public int getCyclesPerUnit() { throw new AssertionError("cycles getter called"); }
+            @Override public FluidStack getInput() { throw new AssertionError("input getter called"); }
+            @Override public FluidStack getOutput() { throw new AssertionError("output getter called"); }
+        };
+        for (String version : Arrays.asList("4.11.39", "4.11.40", null)) {
+            ForestryCapture.StillDeclaration declaration = ForestryCapture.stillDeclaration(unsafe, version);
+            assertFalse(declaration.known);
+            assertNull(declaration.input);
+            assertNull(declaration.output);
+            assertEquals("unresolved", declaration.conditions.get("dynamic_inputs").getAsString());
+            assertEquals("unresolved", declaration.conditions.get("dynamic_output").getAsString());
+            assertEquals("4.11.39".equals(version) ? "uninterpreted_native_subclass" : "unsupported_native_version",
+                declaration.conditions.get("declaration_status").getAsString());
+        }
+    }
+
+    @Test
+    public void stillNullRecipeRemainsAnUnresolvedDeclarationWithoutInventedQuantities() {
+        ForestryCapture.StillDeclaration declaration = ForestryCapture.stillDeclaration(null, "4.11.39");
+        assertFalse(declaration.known);
+        assertNull(declaration.input);
+        assertNull(declaration.output);
+        assertEquals("null_native_recipe", declaration.conditions.get("declaration_status").getAsString());
+        assertFalse(declaration.conditions.has("native_cycles_per_unit"));
+        assertFalse(declaration.conditions.has("native_input_template"));
+        assertFalse(declaration.conditions.has("native_output_template"));
+        assertEquals("declaration_only_not_complete_material_transaction",
+            declaration.conditions.get("material_projection").getAsString());
+    }
+
     @Test
     public void carpenterDeclarationsRetainPatternCountsNbtAndPackaging() {
         ItemStack ingredient = new ItemStack(new Item(), 7, 32767);

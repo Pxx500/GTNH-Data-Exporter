@@ -1211,3 +1211,24 @@ materialnego obiegu nie upoważnia do usuwania receptur z audytu loopów.
   błędne wpisy pozostają widoczne, a kontroler ma osobną sekcję. Zwinięte karty
   nie wykonują zapytań o zasoby. Przechodzi 87 testów GUI, typecheck i osobny
   build. Cztery pliki głównego UI pozostają zgodne. Bez aktywacji strony.
+
+- [x] Domknąć deklaracyjny eksport Still w istniejącym ForestryCapture.
+  Zachować rzeczywiste szablony płynów i cykle, osobno od skalowanego batcha.
+  Wyjście kanoniczne opisuje tylko dodatni, zarejestrowany szablon per-unit,
+  z nieznaną szansą i null execution. Nieznane lub nieprawidłowe fakty pozostają
+  diagnostyką. Zachować ograniczenie niepełnej kontroli miejsca w zbiorniku.
+  Przy okazji poprawić dwa starsze statusy failed na error w obsłudze błędów
+  natywnych katalogów referencji GT i GT++. Nie wymuszać tych wyjątków w grze.
+  Kompilacja i 41 testów Javy przechodzi. Hostless testy potwierdzają odmowę
+  wywołania obcych getterów, a dodatnie szablony płynów wymagają odbioru runtime.
+  Po audycie jeden capture/import, pięć odczytów i cztery odmowy bilansu.
+  IntelliJ i osobny PMD zakończyły analizę, ze znanym pominięciem wspólnego
+  PMD. Brak potwierdzonego błędu wymagającego poprawki. Jeden przebieg trwał
+  184,94 s. Snapshot 33be2c98-5938-4301-8321-9ff466a859ec zawiera trzy
+  dokładne deklaracje Still i 260636 procesów. Wszystkie pięć odczytów
+  oraz cztery odmowy przechodzi. Zgodne 96 chronionych plików, cztery bramki
+  nieobecności, główny UI, zamrożone wejścia i oba nowe indeksy.
+  Dziesięć digestów konfiguracji różni się. Liczby wcześniejszych rodzin
+  są zgodne, bez twierdzenia o równości wszystkich ich rekordów.
+  Brak obserwacji tagowanych płynów, nieprawidłowych skalarów, obcych klas,
+  wyjątków katalogu referencji i faktycznego wypełniania zbiornika.

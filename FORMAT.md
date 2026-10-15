@@ -252,6 +252,27 @@ outputs retain their amounts. Executability, duration, EU/t and amperage stay
 null. Native Forestry work ticks and coefficients remain metadata. Unknown
 outer or grid classes are diagnostic without invoking their overridden getters.
 
+`forestry:still` retains passive per-unit FluidStack templates from the verified
+Forestry 4.11.39 manager and exact base recipe. Raw input/output amounts, typed
+NBT, registry status and cycles remain under `native_input_template`,
+`native_output_template` and `native_cycles_per_unit` in conditions. Literal
+input references also use `conditions.native_inputs`, with native template
+scope and unresolved effective matching. Interpreted inputs remain empty.
+
+For registered templates with positive, representable native scalar products,
+the top-level output retains the getter's exact per-unit amount, `chance: null`
+and `native_output_semantics: declared_per_unit_template_not_cycle_yield`.
+Invalid or unavailable facts stay in metadata without a canonical output row.
+`native_scalar_status` records the check. This does not replace native Java
+signed-int multiplication with an arbitrary-precision execution model.
+
+The controller buffers a scaled input batch and attempts a scaled output fill.
+Its output-space check uses only the unscaled template and does not establish
+full batch receipt. Separate container handling and machine modifiers remain
+runtime context. Dynamic input/output accounting, execution, duration, EU/t and
+amperage stay unresolved. An output template supports lookup without supporting
+an executable ledger, guaranteed yield or a fixed energy conversion.
+
 Eye of Harmony has a native machine declaration behind its GT display recipe.
 The GT arrays remain a captured projection. They do not establish execution
 quantities, guaranteed yield or recipe voltage. Its process has `executable: null`,
