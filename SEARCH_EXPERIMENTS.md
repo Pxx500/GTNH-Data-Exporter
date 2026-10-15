@@ -1706,3 +1706,34 @@ above. These observations leave soft query-conditioned normalization open,
 but do not yet define its scalar, cost or quality objective well enough for
 a fixed-budget pilot. No penalty, exclusion or additional preparation was
 implemented. Evidence is in hub-direction-study/.
+
+### Unresolved producers retain distinct native boundaries
+
+The earlier Casing profile finds an unresolved producer for 2160 of 2179
+resources. A bounded follow-up selects five IDs from those recorded positives.
+Six read-only SELECTs retrieve five resources and seven producer records,
+at most two producers per resource. Their causes include dynamic GT crafting,
+an uninterpreted universal crafting recipe and a native unregistered door
+input. None of these seven declarations is explicitly fake or disabled.
+This sample does not identify the dominant cause of all positive flags.
+
+The Boolean tests for any unresolved canonical producer. It neither replaces
+picker acquisition counts nor claims an item is unobtainable. Global coverage
+is separate too: 172 entries share the reason that all registered map entries
+were captured while dynamic backend and machine conditions remain metadata.
+Their partial status is not evidence of missing registered recipe records.
+
+Iron Dust producer p150070 retains an ItemDoor input with metadata zero,
+null NBT, amount one and native_unknown matching. Its native reverse registry
+lookup is null. Prior NEI context already records the same failed shape among
+five door-object failures. Local MalisisDoors replacement code explains how
+old GT stacks can outlive a replaced registry entry without their delegates
+being redirected. That source is 1.19.11-GTNH at b0d85584, while the saved
+runtime pins 1.19.12-GTNH. It supports the known mechanism, not exact-version
+proof for this individual object. A delegate name alone cannot establish the
+replacement as the original recipe's native input.
+
+No identity fallback, predicate weakening, Java diagnostic, build or capture
+was added. Protected artifact hashes remain. Evidence is in
+unresolved-boundary-study/ and the existing runtime-selected-projections-botania/
+NEI presentation context.

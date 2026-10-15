@@ -851,6 +851,22 @@ etap. Bieżące pomiary i decyzje są w SEARCH_EXPERIMENTS.md.
   konkretnej reguły odróżniającej objazd przez wodór od potrzebnego reagenta.
   Nie wykonano pilota ani nie odrzucono wszystkich możliwych miękkich priorytetów.
   Poprawiono starszą etykietę p138456: Large Chemical Reactor, nie elektroliza.
+- [x] Wyjaśnić szeroki znacznik nierozwiązanego producenta na ograniczonej
+  próbce rzeczywistych dodatnich wyników. Pięć zasobów i siedem deklaracji
+  pokazuje różne powody niepewności. Sześć odczytów SQL, bez skanu i powtórki
+  trace. Nie jest to dowód dominującej przyczyny wszystkich 2160 wyników.
+  Kryterium dotyczy istnienia dowolnej deklaracji, nie niedostępności itemu.
+  Osobno 172 globalne wpisy partial potwierdzają przechwycenie wszystkich
+  wpisów mapy, przy nieinterpretowanym zachowaniu maszyny. Nie osłabiono flag.
+- [x] Zweryfikować natywną tożsamość wejścia Iron Door w p150070 przed zmianą
+  eksportera. Odwrotny lookup zwraca null. Wcześniejszy audyt NEI opisuje już
+  pięć drzwi pozostawionych poza rejestrem po podmianie MalisisDoors.
+  Sprawdzić ten dowód przed dodaniem diagnostyki delegata albo nowym capture.
+  Zapisany kontekst NEI potwierdza tę samą wadliwą postać ItemDoor/meta0/nullNBT.
+  Lokalny kod podmiany zmienia wpis rejestru i Items, bez map receptur GT.
+  Nie przepina referentu delegata starego itemu. Wersja lokalna 1.19.11,
+  capture 1.19.12, więc nie jest to ścisły dowód wersji konkretnego obiektu.
+  Zachowano native_unknown. Odstąpiono od diagnostyki, zmian Javy i capture.
 - [x] Sprawdzić literaturę o landmarkach i planach zrelaksowanych pod kątem
   kierowania przez gałęzie składników celu. Odróżnić osiągalność pojedynczej
   ścieżki od spełnienia wszystkich wejść receptury i policzyć przygotowanie.
