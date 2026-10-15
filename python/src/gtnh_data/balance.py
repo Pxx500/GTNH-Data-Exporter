@@ -92,22 +92,32 @@ def _empty(yield_mode):
                                  "Certain outputs and maximum possible input consumption"]}
 
 
-def native_projection_issue(process):
-    """Describe recognized native models without a supported operation ledger."""
+def _native_projection_model(process):
+    """Identify exact captured native models independently of accounting policy."""
     conditions = process.get("conditions", {})
     provenance = process.get("provenance", {})
     special = conditions.get("special_items")
     if (provenance.get("owner") == "GTRecipe"
             and process.get("family") == "gregtech:gt.recipe.eyeofharmony"
             and isinstance(special, dict) and special.get("type") == "tectech.recipe.EyeOfHarmonyRecipe"):
-        return {"status": "unsupported_accounting", "native_model": "tectech.recipe.EyeOfHarmonyRecipe",
-                "reason": "Eye of Harmony custom-machine projection has unresolved execution quantities, yield and voltage",
-                "voltage_unresolved": True}
+        return "tectech.recipe.EyeOfHarmonyRecipe"
     metadata = conditions.get("native_metadata")
     if (provenance.get("owner") == "GTRecipe" and provenance.get("map") == "gt.recipe.spaceMining"
             and isinstance(metadata, dict) and any(isinstance(value, dict)
                 and value.get("type") == "gtnhintergalactic.recipe.SpaceMiningData" for value in metadata.values())):
-        return {"status": "unsupported_accounting", "native_model": "gtnhintergalactic.recipe.SpaceMiningData",
+        return "gtnhintergalactic.recipe.SpaceMiningData"
+    return None
+
+
+def native_projection_issue(process):
+    """Describe recognized native models without a supported operation ledger."""
+    model = _native_projection_model(process)
+    if model == "tectech.recipe.EyeOfHarmonyRecipe":
+        return {"status": "unsupported_accounting", "native_model": model,
+                "reason": "Eye of Harmony custom-machine projection has unresolved execution quantities, yield and voltage",
+                "voltage_unresolved": True}
+    if model == "gtnhintergalactic.recipe.SpaceMiningData":
+        return {"status": "unsupported_accounting", "native_model": model,
                 "reason": "Space Mining operation quantities are unmodeled. Captured output amounts and weights "
                           "are not a supported per-operation yield model.",
                 "voltage_unresolved": False}

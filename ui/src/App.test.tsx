@@ -1,7 +1,7 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, expect, test, vi } from 'vitest'
 import App from './App'
-import type { Process, Resource } from './api'
+import type { Process, Resource, Trace } from './api'
 
 afterEach(() => {cleanup(); vi.unstubAllGlobals()})
 const resource: Resource = {id:'resource/opaque:1',kind:'item',registry_name:'test:mold',display_name:'Test mold',metadata:0,nbt:null,provenance:{}}
@@ -50,26 +50,36 @@ test.each([
 })
 
 test.each([
-  {label:'changed',changed:true,included:true},
-  {label:'unchanged',changed:false,included:true},
-  {label:'absent',changed:false,included:false},
-])('Cutter ordering note is scoped to the $label trace result',async({changed,included})=>{
+  {label:'changed Cutter',kind:'cutter',changed:true,included:true,acquisitionChanged:false,cutterChanged:true},
+  {label:'unchanged Cutter',kind:'cutter',changed:false,included:true,acquisitionChanged:false,cutterChanged:false},
+  {label:'absent',kind:'cutter',changed:false,included:false,acquisitionChanged:false,cutterChanged:false},
+  {label:'changed acquisition',kind:'acquisition',changed:true,included:true,acquisitionChanged:true,cutterChanged:undefined},
+  {label:'unchanged acquisition',kind:'acquisition',changed:false,included:true,acquisitionChanged:false,cutterChanged:undefined},
+  {label:'acquisition after Cutter',kind:'acquisition',changed:true,included:true,acquisitionChanged:true,cutterChanged:true},
+  {label:'Cutter with stable acquisition order',kind:'acquisition',changed:true,included:true,acquisitionChanged:false,cutterChanged:true},
+  {label:'unchanged composed order',kind:'acquisition',changed:false,included:true,acquisitionChanged:true,cutterChanged:true},
+  {label:'neutral material order',kind:'neutral',changed:false,included:true,acquisitionChanged:false,cutterChanged:undefined},
+])('retained-path ordering note is scoped to the $label trace result',async({kind,changed,included,acquisitionChanged,cutterChanged})=>{
   const target={...resource,id:'result-id',display_name:'Test output'}
   const item={...resource,id:'cutter-item',display_name:'Cutter input'}
   const fluid={...resource,id:'cutting-fluid',display_name:'Cutting fluid',registry_name:'fixture:cutting_fluid',kind:'fluid',metadata:null}
   const input=(resource_id:string)=>({role:'consume',choices:[{resource_id,amount:1,match:{mode:'exact'}}]})
   const output=(resource_id:string)=>({resource_id,amount:1,chance:{numerator:1,denominator:1}})
-  const itemMaker={...process,id:'make-item',display_name:'Item preparation',inputs:[input(resource.id)],outputs:[output(item.id)]}
-  const fluidMaker={...process,id:'make-fluid',display_name:'Fluid preparation',inputs:[input(resource.id)],outputs:[output(fluid.id)]}
-  const cutter={...process,id:'cutter',display_name:'Cutter',family:'gregtech:gt.recipe.cuttingsaw',inputs:[input(item.id),input(fluid.id)],outputs:[output(target.id)]}
+  const itemMaker={...process,id:'make-item',display_name:'Item preparation',family:kind==='acquisition' && acquisitionChanged?'gtnhintergalactic:space_mining':'test',inputs:[input(resource.id)],outputs:[output(item.id)]}
+  const fluidMaker={...process,id:'make-fluid',display_name:'Fluid preparation',family:kind==='acquisition' && !acquisitionChanged?'gtnhintergalactic:space_mining':'test',inputs:[input(resource.id)],outputs:[output(fluid.id)]}
+  const cutter={...process,id:'cutter',display_name:'Cutter',family:kind==='neutral'?'fixture:ordinary':'gregtech:gt.recipe.cuttingsaw',inputs:[input(item.id),input(fluid.id)],outputs:[output(target.id)]}
   const paths=[{resource_ids:[resource.id,item.id,target.id],process_ids:[itemMaker.id,cutter.id]},{resource_ids:[resource.id,fluid.id,target.id],process_ids:[fluidMaker.id,cutter.id]}]
+  if(kind==='acquisition' && acquisitionChanged)paths.reverse()
+  const cutterPreference={changed:cutterChanged??false,eligible_paths:2,classification_visits:{paths:2,recipes:1,slots:2,choices:2,outputs:1}}
+  const acquisitionVisits={paths:2,process_references:4,processes:3,manifest_mods:1}
+  const ordering:Trace['path_ordering']=!included?undefined:kind==='neutral'?{policy:'unchanged_material_order',scope:'retained_material_paths',changed:false,eligible_paths:0,classification_visits:acquisitionVisits,original_path_indices:[0,1]}:kind==='cutter'?{policy:'cutter_consumed_item_first',scope:'comparable_retained_final_cutter_paths',...cutterPreference,original_path_indices:changed?[1,0]:[0,1]}:{policy:'native_acquisition_after_retained_alternatives',scope:'retained_material_paths',changed,acquisition_changed:acquisitionChanged,eligible_paths:2,acquisition_paths:1,unknown_role_paths:0,source_evidence:{status:'verified',mod_id:'gtnhintergalactic',version:'fixture',source:'fixture source',sha256:'a'.repeat(64)},acquisition_process_ids:[acquisitionChanged?itemMaker.id:fluidMaker.id],classification_visits:acquisitionVisits,original_path_indices:changed?[1,0]:[0,1],...(cutterChanged===undefined?{}:{cutter_preference:cutterPreference})}
   vi.stubGlobal('fetch',vi.fn(async(input:string)=>{
     const url=new URL(input,'http://localhost')
     if(url.pathname==='/api/status')return response(status)
     if(url.pathname==='/api/environments')return response(page([]))
     if(url.pathname==='/api/resources')return response(page(url.searchParams.get('q')==='Test output'?[target]:[resource]))
     if(url.pathname.startsWith('/api/resources/'))return response({snapshot_id:'test-snapshot',item:decodeURIComponent(url.pathname).endsWith(target.id)?target:resource})
-    if(url.pathname==='/api/trace')return response({branch_coverage:[],path_selection:'material',snapshot_id:'test-snapshot',start_id:resource.id,target_id:target.id,resources:[resource,item,fluid,target],processes:[itemMaker,fluidMaker,cutter],edges:[],leaves:[],cycles:[],truncated:false,coverage:[],route:{status:'found',strategy:'shortest_known_dependency_path',...paths[0]},paths,search:{examined_processes:3,limit:1000,truncated:false},limit_reasons:[],path_ordering:included?{policy:'cutter_consumed_item_first',scope:'comparable_retained_final_cutter_paths',changed,eligible_paths:2,classification_visits:{paths:2,recipes:1,slots:2,choices:2,outputs:1},original_path_indices:changed?[1,0]:[0,1]}:undefined})
+    if(url.pathname==='/api/trace')return response({branch_coverage:[],path_selection:'material',snapshot_id:'test-snapshot',start_id:resource.id,target_id:target.id,resources:[resource,item,fluid,target],processes:[itemMaker,fluidMaker,cutter],edges:[],leaves:[],cycles:[],truncated:false,coverage:[],route:{status:'found',strategy:'shortest_known_dependency_path',...paths[0]},paths,search:{examined_processes:3,limit:1000,truncated:false},limit_reasons:[],path_ordering:ordering})
     throw new Error(`Unexpected route ${url.pathname}`)
   }))
   render(<App/>)
@@ -83,8 +93,11 @@ test.each([
   fireEvent.click(screen.getByRole('button',{name:'Trace dependencies'}))
   await screen.findByRole('article',{name:'Recipe Cutter'})
   const text='For comparable Cutter recipes, paths through the consumed item are shown first. Fluid routes remain available.'
-  if(changed)expect(screen.getByText(text)).toBeVisible()
+  if(changed && !acquisitionChanged && cutterChanged)expect(screen.getByText(text)).toBeVisible()
   else expect(screen.queryByText(text)).not.toBeInTheDocument()
+  const acquisitionText='Space Mining acquisition paths are shown after alternatives already found in this search.'
+  if(kind==='acquisition' && changed && acquisitionChanged)expect(screen.getByText(acquisitionText)).toBeVisible()
+  else expect(screen.queryByText(acquisitionText)).not.toBeInTheDocument()
   expect(screen.getByRole('option',{name:'Path 2 · 2 steps'})).toBeInTheDocument()
 })
 

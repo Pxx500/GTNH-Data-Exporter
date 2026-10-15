@@ -93,15 +93,32 @@ upgrading, then explicitly rebuild if status is incompatible.
 Rebuilding derived data does not reload running code.
 
 Material presentation lists retained paths through the consumed item first
-within comparable final Cutter transformations. Inspect optional `path_ordering`
+within comparable final Cutter transformations. Inspect `path_ordering`
 for the applied policy, classification visits and permutation from new path
 positions to original positions. Route, branch indices and path details already
-follow that order. Other families and selectors retain their order.
+follow that order. This Cutter preference does not reorder other families.
 This is a declared mechanical continuity preference. Fluids can contribute
 material, including recipes that consume UU-Matter, and remain required inputs.
 All returned fluid paths stay available. Use required intermediates when you
 want a particular fluid route. Ordering does not recover an undiscovered path
 or establish best yield, atom contribution or a coolant role.
+
+Material presentation also moves retained Space Mining acquisition paths after
+other alternatives already found. This preference takes priority over the Cutter
+convention. Recognition requires one of the exact source-verified `.221`, `.223`
+or `.225` version and JAR cohorts. Unknown cohorts stay neutral. No path or native
+recipe field is removed. Direct and sole acquisition routes remain available.
+This is presentation of existing dependency paths, not improved discovery,
+certified material transfer, or an optimization of ore yield or energy. For
+Scheelite, it can expose a shorter QFT and Tungstensteel route before the chemical
+route. Use required intermediates or tier filters when those constraints matter.
+Other path selectors retain their existing order.
+
+`path_ordering.changed` describes the final permutation. The acquisition policy
+also reports whether its own partition changed the order, the exact source
+cohort and affected recipes. `unchanged_material_order` means no preference
+applied. Its visit counts still report presentation work. These counts are
+separate from search budgets and do not establish additional coverage.
 
 The presentation pass and batched unresolved-producer checks use the existing
 imported data and keep analysis version 6. Reload running code after upgrading.

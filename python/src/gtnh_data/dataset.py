@@ -1972,8 +1972,8 @@ class Dataset:
         duplicates.extend(item for item in primary_duplicates if item['representative_id'] not in duplicate_ids)
         return route, paths, search, sorted(reasons), duplicates, branches
 
-    def _order_material_cutter_paths(self, paths, resources, processes, route, branches):
-        from .balance import quantity
+    def _order_material_paths(self, paths, resources, processes, route, branches):
+        from .balance import _native_projection_model, quantity
         visits = dict(paths=0, recipes=0, slots=0, choices=0, outputs=0)
         templates, peers, kinds = {}, {}, {}
         relevant = False
@@ -2053,13 +2053,56 @@ class Dataset:
                 continue
             peers.setdefault(signature, []).append(index)
             kinds[index] = kind
-        if not relevant:
-            return None
         order = list(range(len(paths)))
         for indices in peers.values():
             preferred = sorted(indices, key=lambda index: kinds[index] != 'item')
             for position, original in zip(indices, preferred):
                 order[position] = original
+        cutter_changed = order != list(range(len(paths)))
+        acquisition_visits = dict(paths=0, process_references=0, processes=0, manifest_mods=0)
+        models, mining_paths = {}, set()
+        for index, path in enumerate(paths):
+            acquisition_visits['paths'] += 1
+            for pid in path['process_ids']:
+                acquisition_visits['process_references'] += 1
+                if pid not in models:
+                    acquisition_visits['processes'] += 1
+                    models[pid] = _native_projection_model(processes[pid])
+                if models[pid] == 'gtnhintergalactic.recipe.SpaceMiningData':
+                    mining_paths.add(index)
+        acquisition_paths, unknown_paths = set(), set()
+        acquisition_changed = False
+        evidence = None
+        if mining_paths:
+            matching = []
+            for mod in json.loads(self._manifest_json)['pack']['mods']:
+                acquisition_visits['manifest_mods'] += 1
+                if mod['id'] == 'gtnhintergalactic':
+                    matching.append(mod)
+            cohort = matching[0] if len(matching) == 1 else {}
+            source_hashes = {
+                '5.09.54.221': '60ceb229cd894dd28393efb6d0013de2835289eeef6fcf84ad3e17a6475baf5b',
+                '5.09.54.223': '1d6147a3c41fe624d49b8748971be13d93ea34d1206de83704d03d06a49ffeb2',
+                '5.09.54.225': '5bd8e63070cf1f70785111e5329c58dcc3afaef38c413755958c633bae0b2337'}
+            version = cohort.get('version')
+            verified = (version in source_hashes and cohort.get('source') == f'gregtech-{version}.jar'
+                        and cohort.get('sha256') == source_hashes[version])
+            evidence = {'status': 'verified' if verified else 'unknown', 'mod_id': 'gtnhintergalactic',
+                        'version': cohort.get('version'), 'source': cohort.get('source'), 'sha256': cohort.get('sha256')}
+            if verified:
+                acquisition_paths = mining_paths
+            else:
+                unknown_paths = mining_paths
+            before_acquisition = list(order)
+            positions = [position for position, original in enumerate(order) if original not in unknown_paths]
+            preferred = sorted((order[position] for position in positions), key=lambda original: original in acquisition_paths)
+            for position, original in zip(positions, preferred):
+                order[position] = original
+            acquisition_changed = order != before_acquisition
+        if not relevant and not mining_paths:
+            return {'policy': 'unchanged_material_order', 'scope': 'retained_material_paths',
+                    'changed': False, 'eligible_paths': 0, 'classification_visits': acquisition_visits,
+                    'original_path_indices': order}
         changed = order != list(range(len(paths)))
         if changed:
             paths[:] = [paths[index] for index in order]
@@ -2067,9 +2110,21 @@ class Dataset:
             positions = {original: index for index, original in enumerate(order)}
             for branch in branches:
                 branch['path_indices'] = sorted(positions[index] for index in branch['path_indices'])
+        if mining_paths:
+            result = {'policy': 'native_acquisition_after_retained_alternatives', 'scope': 'retained_material_paths',
+                      'changed': changed, 'acquisition_changed': acquisition_changed,
+                      'eligible_paths': len(paths) - len(unknown_paths),
+                      'acquisition_paths': len(acquisition_paths), 'unknown_role_paths': len(unknown_paths),
+                      'source_evidence': evidence,
+                      'acquisition_process_ids': sorted(pid for pid, model in models.items()
+                          if model == 'gtnhintergalactic.recipe.SpaceMiningData' and acquisition_paths),
+                      'classification_visits': acquisition_visits, 'original_path_indices': order}
+            if relevant:
+                result['cutter_preference'] = {'changed': cutter_changed, 'eligible_paths': len(kinds), 'classification_visits': visits}
+            return result
         return {'policy': 'cutter_consumed_item_first', 'scope': 'comparable_retained_final_cutter_paths',
                 'changed': changed, 'eligible_paths': len(kinds), 'classification_visits': visits,
-                'original_path_indices': order}
+                'acquisition_classification_visits': acquisition_visits, 'original_path_indices': order}
 
     def trace_processes(self, *, start_id, target_id, max_depth=12, max_processes=300, max_paths=8,
                         required_resource_ids=None, excluded_resource_ids=None, excluded_group_ids=None, max_extra_steps=6,
@@ -2233,7 +2288,7 @@ class Dataset:
                     leaf["reason"] = "Producer inputs, matching or outputs are unresolved"
                 leaves.append(leaf)
             from .flow_index import path_details
-            ordering = self._order_material_cutter_paths(paths, resources, processes, route, branches) if path_selection == 'material' else None
+            ordering = self._order_material_paths(paths, resources, processes, route, branches) if path_selection == 'material' else None
             details = path_details(self, paths, resources, processes, branches) if path_selection == 'material' else []
             result = {"snapshot_id": self.snapshot_id, "start_id": start_id, "target_id": target_id,
                     "resources": [resources[id] for id in sorted(resources)], "processes": [processes[id] for id in sorted(processes)],

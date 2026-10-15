@@ -9,6 +9,120 @@ from .artifacts import choice, process, resource, slot, snapshot
 
 
 class DatasetTests(unittest.TestCase):
+    def acquisition_trace_fixture(self, name, *, verified=True, change=None):
+        rows = [resource(id) for id in ('start', 'mined', 'normal', 'other', 'external', 'tool', 'target')]
+        rows[0]['nbt'] = {'type': 'compound', 'value': {'grade': {'type': 'byte', 'value': 1}}}
+        mining = process('a-mine', [slot(choice('start')), slot(choice('external', amount=4)),
+            slot(choice('tool'), role='presence')], ['mined'], family='gregtech:gt.recipe.spaceMining',
+            conditions={'native_metadata': {'unparsed key': {
+                'type': 'gtnhintergalactic.recipe.SpaceMiningData', 'status': 'uninterpreted'}}})
+        mining['provenance'].update(owner='GTRecipe', map='gt.recipe.spaceMining')
+        recipes = [mining, process('b-make', [slot(choice('start'))], ['normal']),
+            process('c-make', [slot(choice('start'))], ['other']),
+            process('a-finish', [slot(choice('mined'))], ['target']),
+            process('b-finish', [slot(choice('normal'))], ['target']),
+            process('c-finish', [slot(choice('other'))], ['target'])]
+        cohort = {'id': 'gtnhintergalactic', 'version': '5.09.54.221',
+            'source': 'gregtech-5.09.54.221.jar',
+            'sha256': '60ceb229cd894dd28393efb6d0013de2835289eeef6fcf84ad3e17a6475baf5b' if verified else 'unchecked'}
+        if change:
+            change(rows, recipes, cohort)
+        capture = snapshot(self.root / name, resources=rows, processes=recipes)
+        manifest = json.loads((capture / 'manifest.json').read_text())
+        manifest['pack']['mods'] = [cohort]
+        (capture / 'manifest.json').write_text(json.dumps(manifest), encoding='utf-8')
+        return Dataset.import_snapshot(capture, self.root / (name + '.sqlite')), rows, recipes
+
+    def test_material_presentation_moves_verified_acquisition_after_retained_alternatives(self):
+        unchecked, _, _ = self.acquisition_trace_fixture('acquisition-unchecked', verified=False)
+        baseline = unchecked.trace_processes(start_id='start', target_id='target', path_selection='material')
+        dataset, rows, recipes = self.acquisition_trace_fixture('acquisition-verified')
+        result = dataset.trace_processes(start_id='start', target_id='target', path_selection='material')
+        self.assertEqual([p['process_ids'] for p in result['paths']],
+            [['b-make', 'b-finish'], ['c-make', 'c-finish'], ['a-mine', 'a-finish']])
+        self.assertEqual({json.dumps(p, sort_keys=True) for p in result['paths']},
+                         {json.dumps(p, sort_keys=True) for p in baseline['paths']})
+        self.assertEqual(result['route']['process_ids'], result['paths'][0]['process_ids'])
+        self.assertEqual(result['route']['resource_ids'], result['paths'][0]['resource_ids'])
+        for detail in result['path_details']:
+            self.assertEqual(detail['target_process_id'], result['paths'][detail['path_index']]['process_ids'][-1])
+        for branch in result['branch_coverage']:
+            for index in branch['path_indices']:
+                self.assertEqual(result['paths'][index]['process_ids'][-1], branch['target_process_id'])
+        self.assertEqual({p['id']: p for p in result['processes']}, {p['id']: p for p in recipes})
+        self.assertEqual(next(r for r in result['resources'] if r['id'] == 'start'), rows[0])
+        for field in ('resources', 'processes', 'edges', 'leaves', 'cycles', 'limit_reasons', 'recipe_tiers'):
+            self.assertEqual(result[field], baseline[field])
+        self.assertEqual(result['search']['prepared_index']['counts'], baseline['search']['prepared_index']['counts'])
+        for value in (result, baseline):
+            value['search'].pop('distance_seconds', None)
+            value['search'].pop('prepared_index')
+        self.assertEqual(result['search'], baseline['search'])
+        self.assertEqual(result['path_ordering']['original_path_indices'], [1, 2, 0])
+        self.assertEqual(result['path_ordering']['acquisition_paths'], 1)
+        self.assertTrue(result['path_ordering']['changed'])
+        compact = dataset.trace_processes(start_id='start', target_id='target', path_selection='material', view='compact')
+        for field in ('route', 'paths', 'path_details', 'branch_coverage', 'processes', 'path_ordering'):
+            self.assertEqual(compact[field], result[field])
+
+    def test_acquisition_ordering_requires_verified_cohort_and_specific_native_model(self):
+        cases = ('223', '225', 'unchecked_version', 'bad_hash', 'bad_source', 'other_model', 'eye_of_harmony')
+        for case in cases:
+            with self.subTest(case=case):
+                def change(rows, recipes, cohort):
+                    if case in ('223', '225'):
+                        cohort['version'] = '5.09.54.' + case
+                        cohort['source'] = 'gregtech-' + cohort['version'] + '.jar'
+                        cohort['sha256'] = ('1d6147a3c41fe624d49b8748971be13d93ea34d1206de83704d03d06a49ffeb2'
+                            if case == '223' else '5bd8e63070cf1f70785111e5329c58dcc3afaef38c413755958c633bae0b2337')
+                    elif case == 'unchecked_version':
+                        cohort['version'] = '5.09.54.227'
+                    elif case == 'bad_hash':
+                        cohort['sha256'] = 'unchecked'
+                    elif case == 'bad_source':
+                        cohort['source'] = 'other.jar'
+                    elif case == 'other_model':
+                        recipes[0]['conditions']['native_metadata']['unparsed key']['type'] += 'Other'
+                    else:
+                        recipes[0]['family'] = 'gregtech:gt.recipe.eyeofharmony'
+                        recipes[0]['provenance']['map'] = 'gt.recipe.eyeofharmony'
+                        recipes[0]['conditions']['special_items'] = {'type': 'tectech.recipe.EyeOfHarmonyRecipe'}
+                dataset, _, _ = self.acquisition_trace_fixture('acquisition-' + case, change=change)
+                result = dataset.trace_processes(start_id='start', target_id='target', path_selection='material')
+                verified = case in ('223', '225')
+                self.assertEqual(result['paths'][0]['process_ids'][0], 'b-make' if verified else 'a-mine')
+                if case in ('other_model', 'eye_of_harmony'):
+                    self.assertIn('path_ordering', result)
+                    ordering = result['path_ordering']
+                    self.assertEqual(ordering['policy'], 'unchanged_material_order')
+                    self.assertFalse(ordering['changed'])
+                    self.assertEqual(ordering['original_path_indices'], [0, 1, 2])
+                    self.assertEqual(ordering['classification_visits']['processes'], len(result['processes']))
+                    self.assertEqual(ordering['classification_visits']['process_references'],
+                                     sum(len(path['process_ids']) for path in result['paths']))
+                else:
+                    ordering = result['path_ordering']
+                    self.assertEqual(ordering['source_evidence']['status'], 'verified' if verified else 'unknown')
+                    self.assertEqual(ordering['unknown_role_paths'], 0 if verified else 1)
+                    self.assertEqual(ordering['acquisition_paths'], int(verified))
+                    self.assertEqual(ordering['acquisition_changed'], verified)
+
+    def test_acquisition_presentation_preserves_only_direct_and_other_selector_paths(self):
+        dataset, _, recipes = self.acquisition_trace_fixture('acquisition-direct')
+        for arguments in ({'target_id': 'mined'}, {'target_id': 'target', 'required_resource_ids': ['mined']}):
+            with self.subTest(arguments=arguments):
+                result = dataset.trace_processes(start_id='start', path_selection='material', **arguments)
+                self.assertEqual(len(result['paths']), 1)
+                self.assertEqual(result['paths'][0]['process_ids'][0], 'a-mine')
+                self.assertFalse(result['path_ordering']['changed'])
+                self.assertEqual(result['path_ordering']['acquisition_paths'], 1)
+        for policy in ('shortest', 'diverse'):
+            result = dataset.trace_processes(start_id='start', target_id='target', path_selection=policy)
+            self.assertEqual(result['paths'][0]['process_ids'], ['a-mine', 'a-finish'])
+            self.assertNotIn('path_ordering', result)
+        self.assertEqual(dataset.get_process('a-mine')['item'], recipes[0])
+        self.assertIn(recipes[0], dataset.find_processes(input_id='start', output_id='mined')['items'])
+
     def test_concise_trace_omits_only_declared_resource_metadata_and_keeps_full_lookup(self):
         rows = [resource(id) for id in ('start', 'alias', 'unembedded', 'coolant', 'circuit', 'target', 'offcut')]
         rows[0].update(nbt={'type': 'compound', 'value': {'grade': {'type': 'byte', 'value': 1}}},
@@ -66,7 +180,7 @@ class DatasetTests(unittest.TestCase):
         with self.assertRaisesRegex(DatasetError, 'view must be full, compact or concise'):
             dataset.trace_processes(**arguments, view='brief')
 
-    def cutter_trace_fixture(self, name, *, change=None):
+    def cutter_trace_fixture(self, name, *, change=None, cohort=None):
         rows = [resource(id) for id in ('start', 'middle', 'item-feed', 'fluid-feed', 'circuit', 'target', 'offcut')]
         next(row for row in rows if row['id'] == 'fluid-feed').update(kind='fluid', metadata=None)
         next(row for row in rows if row['id'] == 'item-feed')['nbt'] = {
@@ -83,9 +197,41 @@ class DatasetTests(unittest.TestCase):
                    process('item-maker', [slot(choice('middle'))], ['item-feed']), cutter]
         if change:
             change(rows, recipes)
-        dataset = Dataset.import_snapshot(snapshot(self.root / name, resources=rows, processes=recipes),
-                                          self.root / f'{name}.sqlite')
+        capture = snapshot(self.root / name, resources=rows, processes=recipes)
+        if cohort is not None:
+            manifest = json.loads((capture / 'manifest.json').read_text())
+            manifest['pack']['mods'] = [cohort]
+            (capture / 'manifest.json').write_text(json.dumps(manifest), encoding='utf-8')
+        dataset = Dataset.import_snapshot(capture, self.root / f'{name}.sqlite')
         return dataset, recipes
+
+    def test_acquisition_and_cutter_preferences_have_one_composed_permutation(self):
+        def change(rows, recipes):
+            recipes[1]['family'] = 'gregtech:gt.recipe.spaceMining'
+            recipes[1]['provenance'].update(owner='GTRecipe', map='gt.recipe.spaceMining')
+            recipes[1]['conditions']['native_metadata'] = {'unparsed key': {
+                'type': 'gtnhintergalactic.recipe.SpaceMiningData'}}
+        for verified in (True, False):
+            with self.subTest(verified=verified):
+                cohort = {'id': 'gtnhintergalactic', 'version': '5.09.54.221',
+                    'source': 'gregtech-5.09.54.221.jar',
+                    'sha256': '60ceb229cd894dd28393efb6d0013de2835289eeef6fcf84ad3e17a6475baf5b' if verified else 'unchecked'}
+                dataset, recipes = self.cutter_trace_fixture('composed-' + str(verified), change=change, cohort=cohort)
+                result = dataset.trace_processes(start_id='start', target_id='target', path_selection='material')
+                ordering = result['path_ordering']
+                self.assertEqual(ordering['original_path_indices'], [0, 1] if verified else [1, 0])
+                self.assertEqual(ordering['acquisition_changed'], verified)
+                self.assertTrue(ordering['cutter_preference']['changed'])
+                self.assertEqual(ordering['changed'], not verified)
+                self.assertEqual(result['route']['resource_ids'], result['paths'][0]['resource_ids'])
+                self.assertEqual(result['paths'][0]['resource_ids'][-2], 'fluid-feed' if verified else 'item-feed')
+                self.assertEqual({p['id']: p for p in result['processes']}, {p['id']: p for p in recipes})
+                for detail in result['path_details']:
+                    path = result['paths'][detail['path_index']]
+                    self.assertEqual(detail['target_slot_index'], {'item-feed': 0, 'fluid-feed': 1}[path['resource_ids'][-2]])
+                for branch in result['branch_coverage']:
+                    self.assertEqual([result['paths'][i]['resource_ids'][-2] for i in branch['path_indices']],
+                                     ['item-feed' if branch['slot_index'] == 0 else 'fluid-feed'])
 
     def test_material_cutter_presentation_prefers_item_entry_and_preserves_native_alignment(self):
         dataset, recipes = self.cutter_trace_fixture('cutter-order')
@@ -192,7 +338,10 @@ class DatasetTests(unittest.TestCase):
         self.assertEqual([p['resource_ids'] for p in fluid['paths']], [['fluid-feed', 'target']])
         self.assertFalse(fluid['path_ordering']['changed'])
         ordinary, _ = self.cutter_trace_fixture('ordinary-final', change=lambda rows, recipes: recipes[-1].update(family='assembler'))
-        self.assertNotIn('path_ordering', ordinary.trace_processes(start_id='start', target_id='target', path_selection='material'))
+        result = ordinary.trace_processes(start_id='start', target_id='target', path_selection='material')
+        self.assertEqual(result['path_ordering']['policy'], 'unchanged_material_order')
+        self.assertFalse(result['path_ordering']['changed'])
+        self.assertEqual(result['path_ordering']['original_path_indices'], [0, 1])
 
     def test_trace_group_exclusions_block_alias_spines_and_keep_native_cofeeds(self):
         groups = [

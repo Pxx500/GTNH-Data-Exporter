@@ -690,9 +690,9 @@ Comparison preserves ordered nonfluid input slots, outputs, conditions, EU/t
 and amperage. Fluid declarations and duration remain in each complete recipe.
 The preference leaves discovery, path count and fluid participation intact.
 Unknown, mixed or unresolved templates stay in their original positions.
-Other selectors and machine families keep their existing order.
+This Cutter preference does not reorder other selectors or machine families.
 
-Relevant material results include optional `path_ordering` with policy
+Material results disclose presentation work in `path_ordering`. The Cutter policy is
 `cutter_consumed_item_first`, scope `comparable_retained_final_cutter_paths`,
 `changed`, `eligible_paths`, `classification_visits` and `original_path_indices`.
 The permutation maps each new path position to its original position. Visit
@@ -702,6 +702,32 @@ The primary route, branch path indices and path details use the presented
 order. This is an explicit mechanical item-continuity preference. Fluid input
 purpose and material contribution remain unknown. Required fluid waypoints
 and paths entering only through fluids remain supported.
+
+Material presentation also places retained Space Mining acquisition paths after
+other retained alternatives. This stable partition has priority over the Cutter
+preference. It changes neither discovery nor the set of returned paths. The
+source role is recognized only for the exact verified Intergalactic version and
+JAR cohorts bundled with GT `5.09.54.221`, `5.09.54.223` and `5.09.54.225`.
+Unknown cohorts stay neutral. Full native operation requirements, cofeeds and
+outputs remain in each recipe. The convention does not establish atom transfer,
+ore yield, lower energy or better chemistry. A direct or sole acquisition route
+remains available. Other path selectors retain their existing order.
+
+The acquisition policy is `native_acquisition_after_retained_alternatives`, with
+scope `retained_material_paths`. It reports `acquisition_paths`,
+`unknown_role_paths`, `source_evidence`, `acquisition_process_ids`,
+`acquisition_changed`, classification visits and the composed permutation.
+`changed` describes the final order. `acquisition_changed` describes the stable
+partition after applying any Cutter preference. When present,
+`cutter_preference` reports its own evidence separately. This avoids treating
+every final reorder as evidence that acquisition paths moved.
+
+Without either relevant preference, `unchanged_material_order` reports an
+identity permutation, `changed: false` and zero eligible paths. Its visits still
+count the scan of retained paths and unique processes. Cutter-only results
+report that scan as `acquisition_classification_visits`. No presentation visits
+are included in discovery counters. A missing descriptor on a non-material
+result does not imply that a material presentation pass ran.
 
 `branch_coverage` contains `{target_process_id, slot_index,
 candidate_resources, paths, path_indices, status}` for consumed target slots.

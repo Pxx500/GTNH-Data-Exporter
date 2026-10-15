@@ -48,13 +48,28 @@ export type NetworkReport=NetworkWitnessReport|NetworkBoundaryReport
 export interface StatisticsSummary {count:number;min:Rational|null;q1:Rational|null;median:Rational|null;q3:Rational|null;max:Rational|null;iqr:Rational|null}
 export interface StatisticsTier {status:string;tier:number|null;name:string|null;reason?:string}
 export interface StatisticsReport {snapshot_id:string;overview:{resources:{count:number;by_kind:Record<string,number>;by_namespace:Record<string,number>};groups:{count:number;by_kind:Record<string,number>;member_counts:StatisticsSummary};processes:{count:number;by_family:Record<string,number>;by_tier:{recipe_tier:StatisticsTier;count:number}[];by_executability:Record<string,number>;gates:Record<string,number>;energy_status:Record<string,number>}};distributions:(StatisticsSummary&{family:string;recipe_tier:StatisticsTier;metric:string;comparison:string})[];findings:{kind:string;comparison_scope:string;process_ids:string[];normalized_signature:unknown;batch_scales:unknown;normalized_costs:unknown;cost_ratio:Rational;count:number}[];exclusions:Record<string,number>;search:{complete:boolean;truncated:boolean;limit_reasons:string[];[key:string]:unknown};processes:Record<string,Process>}
+interface CutterPathPreference {
+  changed:boolean;eligible_paths:number
+  classification_visits:{paths:number;recipes:number;slots:number;choices:number;outputs:number}
+}
+interface AcquisitionClassificationVisits {paths:number;process_references:number;processes:number;manifest_mods:number}
 export interface Trace {
   path_selection: 'diverse' | 'shortest' | 'material'
   group_exclusions?: {group_id:string;name:string;kind:string;member_count:number}[]
-  path_ordering?: {
-    policy:'cutter_consumed_item_first';scope:'comparable_retained_final_cutter_paths';changed:boolean;eligible_paths:number
-    classification_visits:{paths:number;recipes:number;slots:number;choices:number;outputs:number}
+  path_ordering?: (CutterPathPreference & {
+    policy:'cutter_consumed_item_first';scope:'comparable_retained_final_cutter_paths'
+    acquisition_classification_visits?:AcquisitionClassificationVisits
     original_path_indices:number[]
+  }) | {
+    policy:'native_acquisition_after_retained_alternatives';scope:'retained_material_paths'
+    changed:boolean;acquisition_changed:boolean;eligible_paths:number;acquisition_paths:number;unknown_role_paths:number
+    source_evidence:{status:'verified'|'unknown';mod_id:'gtnhintergalactic';version:string|null;source:string|null;sha256:string|null}
+    acquisition_process_ids:string[];classification_visits:AcquisitionClassificationVisits
+    cutter_preference?:CutterPathPreference
+    original_path_indices:number[]
+  } | {
+    policy:'unchanged_material_order';scope:'retained_material_paths';changed:false;eligible_paths:0
+    classification_visits:AcquisitionClassificationVisits;original_path_indices:number[]
   }
   path_details?: {
     path_index:number;selection_reason:string;material_continuity:'supported'|'partial'|'discontinuous'

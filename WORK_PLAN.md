@@ -1035,6 +1035,27 @@ etap. Bieżące pomiary i decyzje są w SEARCH_EXPERIMENTS.md.
   tożsamości. Wcześniejszy nierozwiązany dump `.223` nie został zmieniony.
   Przechodzi 170 testów Pythona i 30 testów Javy.
 
+- [x] Uporządkować wyłącznie zatrzymane trasy material według zweryfikowanej
+  roli pozyskania przez Space Mining. Zachować cały zbiór dróg, klasy,
+  natywne rekordy, limity i liczniki wyszukiwania. Jedna stabilna partycja
+  ma przesunąć te objazdy za pozostałe znalezione alternatywy, z zachowaniem
+  zgodności głównej trasy, szczegółów i indeksów gałęzi. Oprzeć rozpoznanie
+  wyłącznie na dokładnych kohortach źródłowych .221, .223 i .225 oraz
+  natywnym modelu. Nieznane kohorty pozostają neutralne. Policzyć osobno
+  pracę prezentacji i złożyć preferencję z istniejącą kolejnością Cuttera.
+  Oczekiwany efekt Scheelite jest ograniczony: mining na koniec, krótsza
+  droga przez QFT i Tungstensteel pierwsza, chemia druga. Sprawdzić raz
+  dwanaście zapisanych przypadków bez przebudowy i zwiększania limitów.
+  Wszystkie 12 porównań przechodzi. Zachowano 60 dróg i pełne rekordy,
+  liczniki wyszukiwania oraz indeksy szczegółów i gałęzi. Scheelite ma
+  oczekiwaną permutację [1,2,3,4,5,6,7,0], pozostałe wyniki bez zmian.
+  Dodatkowa prezentacja odwiedza 289 referencji procesów, klasyfikuje 174
+  unikalne PID w obrębie zapytań i przegląda 323 wpisy manifestu tylko dla
+  Scheelite. Zgodne 29 chronionych plików. Przechodzi 215 testów Pythona,
+  84 GUI, typecheck i osobny build. Dwa błędne założenia skryptu porównań
+  poprawiono na zapisanych odpowiedziach. Wykonano łącznie 12 zapytań,
+  bez powtórzeń. Działająca aplikacja i MCP nie zostały przełączone.
+
 Każda próba ma podać wynik negatywny, jeśli nie poprawia jakości lub pokrycia.
 Nie zwiększamy limitów, żeby ukryć brak kierunku wyszukiwania. Rozpoznanie
 materialnego obiegu nie upoważnia do usuwania receptur z audytu loopów.

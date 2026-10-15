@@ -2020,3 +2020,49 @@ Ten runtime configuration/script digests differ, so no identical-configuration
 cohort claim follows. Field-read authority remains source-backed, without an
 independent live-array observer. Native null/empty branches are unobserved.
 Evidence is in underground-blacklist-runtime-acceptance/REPORT.md.
+
+### Prefer retained processing alternatives before Space Mining acquisition
+
+The saved Scheelite result already contains its three-step chemical path at
+index 2. Its primary path instead enters Space Mining through manufactured
+operation requirements. Exact source and actual JAR evidence verifies the narrow
+acquisition role for GT `.221`, `.223` and `.225`. Both complete source files and
+the two corresponding top-level class files are byte-identical across these
+releases. This establishes output origin, not atom correspondence or per-operation
+quantities. All requirements, cofeeds and outputs remain in the native records.
+
+The existing Dataset presentation owner now composes its Cutter preference with
+a higher-priority stable partition of retained acquisition paths. Unknown cohorts
+remain neutral. There is one final permutation for paths, primary route, branch
+indices and path details. Search guidance, limits, candidate admission and the
+returned path pool remain unchanged. The shared native-model identity seam is
+independent of whether operation accounting is currently supported.
+
+Every material result discloses presentation visits, including neutral results.
+These visits are separate from discovery counters. GUI notices require an actual
+reorder and identify the preference that changed it. Public regressions cover
+exact cohorts, unknown evidence, direct and sole acquisition requests, native
+records, Cutter composition and index alignment. All 215 Python tests, 84 GUI
+tests, typecheck and the isolated candidate build pass.
+
+One twelve-request acceptance against the frozen v6 index passes. All 60 paths,
+full native records, requirement classes and search counters remain exact, with
+the declared aligned permutation. Scheelite becomes [1,2,3,4,5,6,7,0]. The eleven
+other saved responses retain their order. Chemistry becomes second. The new
+first path is the existing two-step QFT and Tungstensteel route. This preference
+cannot recover a missing route or establish the best processing chain.
+
+Across the twelve requests, presentation visits 60 paths and 289 process
+references, classifies 174 unique processes within their respective queries and
+scans 323 manifest entries only for Scheelite. These are extra logical operations,
+not unchanged discovery work or a measured CPU speedup. All 29 protected files
+and approved source hashes remain unchanged. Existing native matcher proofs are
+reused through exact bodies, paths and immutable stores, without new game calls.
+
+Two harness assertions initially confused the old Cutter permutation basis and
+its eligible subset with the saved response order and all retained paths. Both
+failures and corrections remain recorded. Offline comparisons establish exact
+production equality for those cases. Their responses were reused, with exactly
+twelve total trace calls and no reruns. Evidence and the frozen protocol are in
+acquisition-route-presentation/. The live app and MCP still use their earlier
+code and data.
