@@ -1056,6 +1056,33 @@ etap. Bieżące pomiary i decyzje są w SEARCH_EXPERIMENTS.md.
   poprawiono na zapisanych odpowiedziach. Wykonano łącznie 12 zapytań,
   bez powtórzeń. Działająca aplikacja i MCP nie zostały przełączone.
 
+- [x] Sprawdzić wykonalność lokalnej informacji o wspólnych Element ID
+  wybranego wejścia i wyjścia konkretnej receptury. Obecny silnik już porównuje
+  materiały na każdym kroku, więc nie przedstawiać tego jako nowego wykrycia.
+  Różnica dotyczy podstawy danych, pełnego natywnego wektora zamiast zbioru
+  nazw materiałów. Najpierw sprawdzić dostępność wektorów w dwunastu zapisanych
+  odpowiedziach i zebrać dokładne rozbieżności. Bez nowych zapytań, wzorów
+  parsowanych z tekstu, podstawiania samego primary ItemData, nowej oceny,
+  indeksu i pilota wyszukiwania. Wspólne pierwiastki nie dowodzą przepływu
+  atomów, a brak pełnego wektora pozostaje unknown.
+  Istniejący czysty właściciel chemistry daje pełne wektory obu końców
+  dla 147 z 289 wystąpień przejść. Pozostałe 142 pozostają unknown.
+  Brak sprzeczności ze znanymi ocenami. Pięć wystąpień czterech par
+  rozwiązuje unknown dzięki równoważnym deklaracjom Water. Jedyny rozłączny
+  przypadek Water do Titanium Plate ma zachowany Titanium Block jako
+  współwejście i jest już objęty preferencją Cuttera. Brak podstaw do
+  nowego pilota. Zero Dataset, SQL, zapytań i zmian indeksu.
+
 Każda próba ma podać wynik negatywny, jeśli nie poprawia jakości lub pokrycia.
 Nie zwiększamy limitów, żeby ukryć brak kierunku wyszukiwania. Rozpoznanie
 materialnego obiegu nie upoważnia do usuwania receptur z audytu loopów.
+
+### Dalsze sprawdzenie jawnych luk katalogów
+
+- [ ] Sprawdzić pasywny katalog Forestry Squeezer w faktycznej kohorcie
+  Forestry 4.11.39 i obecnego właściciela NativeCapture. Snapshot
+  09961ff8-0679-4db1-83e8-c749753fd96a jawnie podaje, że eksport Forestry
+  obejmuje tylko Centrifuge. Najpierw dokładna zgodność źródła i JAR,
+  wejścia, płyny, produkty uboczne, szanse oraz jednostka czasu i energii.
+  Nie zakładać znanych ilości operacji ani wykonalności. Dopiero po tym
+  kontrakt małego adaptera i ograniczony plan odbioru runtime.

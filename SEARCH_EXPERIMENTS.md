@@ -2066,3 +2066,40 @@ production equality for those cases. Their responses were reused, with exactly
 twelve total trace calls and no reruns. Evidence and the frozen protocol are in
 acquisition-route-presentation/. The live app and MCP still use their earlier
 code and data.
+
+### Check declared catalog gaps separately from partial semantics
+
+The latest isolated snapshot `09961ff8-0679-4db1-83e8-c749753fd96a` has 202
+coverage records: six complete, 190 partial and six unsupported. A partial
+registered RecipeMap reports captured entries with unresolved runtime semantics.
+Its declared record count is not a count of missing recipes.
+
+The explicit unsupported rows identify EnderIO grinding-ball variants and
+vanilla furnace mode, Forestry factories beyond Centrifuge, Botania recipes
+beyond Mana Infusion, remaining mod catalogs and remaining acquisition domains.
+Their zero declared records do not establish the size of the missing catalogs.
+The next bounded source check concerns Forestry Squeezer, with actual manifest
+cohort Forestry `4.11.39` and JAR SHA256
+`f3cacea1f523a5b94bf3f7bcc811c49dd5224d5024ac3d98fb6ac3b26a51547f`.
+This is a coverage feasibility gate, without a new capture or adapter yet.
+
+### Reaction-local exact Element evidence adds little on retained paths
+
+Material search already compares the selected input and output of each recipe
+transition, using native material names and recursive components. A separate
+saved-body gate checks whether the existing pure chemistry owner can provide
+complete native Element vectors for the same transitions, without replacing
+whole-item accounting with relative primary composition.
+
+Of 289 transition occurrences across the twelve saved responses, 147 have both
+vectors and 142 remain unknown. There are 55 eligible selected resources and
+52 unknown resources. No known result contradicts existing material comparisons.
+Four unique pairs, five occurrences, resolve previously unknown continuity
+because equivalent native Water candidates yield one vector. The sole disjoint
+pair is Water to Titanium Plate through a Cutter, with its full Titanium Block
+cofeed retained. The existing presentation convention already addresses it.
+
+This gate supports neither a new search pilot nor pruning. It concerns retained
+paths, not unseen frontiers, and Element intersection is not atom mapping.
+No Dataset, SQL, trace, formula parsing, source edit or index rebuild occurred.
+Exact vectors and unknown reasons are in reaction-local-element-feasibility/.
