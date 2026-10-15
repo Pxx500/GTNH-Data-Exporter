@@ -903,13 +903,27 @@ etap. Bieżące pomiary i decyzje są w SEARCH_EXPERIMENTS.md.
   limit procesów. Praca 199355 do 205787, bez obietnicy przyspieszenia.
   Zgodne 45 hashy. Poprawiono też opis max_processes w GUI i MCP.
   Przechodzi 28 testów App/TraceView, typecheck i build kandydata GUI.
-- [ ] Sprawdzić w prywatnym pilocie pomijanie rozpoznanych pustych celek jako
+- [x] Sprawdzić w prywatnym pilocie pomijanie rozpoznanych pustych celek jako
   pośrednich w material. Autorytet to associated cell, Materials.Empty,
   jawne null NBT i niewildcardowe metadata, nie nazwa itemu. Początek, cel
   i jawne wymagane waypointy są wyjątkami. Pełne celki i cofeedy zostają.
   Wspólny obecny właściciel ról i cache, bez nowego indeksu. Trzy pary
   Polymer, Wafer i Scheelite, bez strojenia po wyniku. Dodatni wynik wymaga
   rzeczywistego krakingu i polimeryzacji, nie kolejnego nośnikowego objazdu.
+  Wynik negatywny. Sześć wywołań usuwa Empty Cell, lecz Naphtha przechodzi
+  przez Potassium i Hydrogen do QFT, bez Ethylene. Praca Polymer 53178 do
+  76419, w tym 14726 nowych jednostek klasyfikacji. Wafer i Scheelite zachowują
+  dokładne drogi. Zgodne 48 hashy i natywne kroki, bez promocji do kodu.
+  Opcjonalny miernik pamięci zawiódł przed pierwszym zapytaniem. Usunięto go
+  w zapisanej korekcie setup, bez powtórki zapytań i bez pomiaru pamięci procesu.
+- [ ] Sprawdzić źródłowy kontrakt Space Mining i jego konsumentów. Rods/drills
+  są kosztami operacji, a ruda pochodzi z losowanej puli asteroidy. Ustalić,
+  jak obecna interpretacja szans i nominalnych bilansów traktuje te wagi.
+  Bez domyślnej listy wykluczeń i zmian surowych receptur przed analizą.
+- [ ] Sprawdzić odrębność i wykonalność relewancji wobec składników celu,
+  ważonych natywnymi ilościami. Tylko zapisane świadki i obecny właściciel
+  deklaracji. Brak wzorów zgadywanych z nazw i brak promocji nieznanego składu.
+  Najpierw porównanie z zakończonymi badaniami weighted semantic potential.
 - [x] Wyjaśnić kolejność Scheelite: główna droga ma siedem kroków przez QFT
   i Space Mining, a trzyetapowy przerób chemiczny jest na indeksie 2.
   Sprawdzić właściciela wyboru głównej trasy. Zachować wszystkie legalne

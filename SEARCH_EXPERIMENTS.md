@@ -1802,10 +1802,20 @@ shares the cell prefix and Tin byproduct but has Hydrogen primary. Filled
 molten polyethylene uses cellMolten and Plastic primary. They are not empty
 states. No absent ore membership or container-registry relation was invented.
 
-A private material-spine pilot will test excluding only positively recognized
+A private material-spine pilot tests excluding only positively recognized
 empty intermediates, preserving explicit start/target/required requests, full
 native cofeeds, filled cells and audit edges. It reuses the current role-cache
-owner after a cheap token screen. Runtime cost is not established by these
-saved declarations. The fixed pilot is three pairs and must recover the
-actual chemical story rather than merely another carrier path. Evidence and
-policy alternatives are in empty-container-routing-study/.
+owner after a cheap token screen. Its six calls fail the story gate: Polymer
+instead follows Potassium and Hydrogen into a QFT that consumes separately
+supplied Carbon and other fluids. There is no Ethylene processing story.
+Wafer and Scheelite retain exact ordered paths and classes. All native checks
+and 48 protection hashes pass, but that does not justify the policy.
+
+Polymer work rises from 53178 to 76419, including 14726 explicitly charged
+classification units. Observed single-pair wall time is 0.805 to 0.896 seconds.
+Wafer and Scheelite single pairs move in opposite directions. No speedup,
+physical-memory attribution or full causal benchmark is claimed. The optional
+Windows sampler fails before Dataset construction or any query and is removed
+through a preserved setup correction. Six calls run once, without tuning.
+No production code, index, dataset or service changes. Evidence and policy
+alternatives are in empty-container-routing-study/.
