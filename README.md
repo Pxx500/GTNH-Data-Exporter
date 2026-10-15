@@ -145,6 +145,28 @@ quantities and alternatives, and NEI's NBT projection loses type information.
 Neither signature agreement nor display agreement proves pack-wide execution
 semantics. See [FORMAT.md](FORMAT.md) for the reference contract.
 
+Forestry Still has a separate, explicitly selected comparison profile:
+
+```powershell
+python/.venv/Scripts/python.exe scripts/export_full_pack.py --output exports/paired-still --nei-reference forestry_still --java-home "C:/Program Files/Java/jdk-25.0.4.1"
+python/.venv/Scripts/python.exe scripts/compare_nei.py exports/paired-still --profile forestry_still --report exports/paired-still/comparison.json
+```
+
+This profile reads the two native NEI fluid tanks independently and compares
+their unscaled fluid templates with the canonical declarations. It requires
+the pinned Forestry 4.11.39 and NEI 2.8.160-GTNH JARs and the same capture
+cohort. It does not compare controller batches or machine execution. Missing,
+unsupported or failed tank observations cannot pass as empty matches.
+The bare `--nei-reference` flag and explicit `all` retain the full reference
+capture. The default comparator retains its original GT/NEI version pins.
+
+A same-run Still capture on 2026-10-15 found three native declarations and
+three NEI tank views. All three ordered fluid-template projections agree,
+including quantities and typed NBT, with no missing, differing, unsupported
+or failed observations. Occurrence counts also agree, with no duplicates.
+Capture/import took 187.55 seconds and comparison took 4.39 seconds.
+This result covers Still presentation only.
+
 The latest paired full-pack run on 2026-10-12 captured 366 handlers and 287,464
 views/signatures in a 210.53-second pipeline. Independent item presentation
 context retains 55,875 original GT alias queries, 231 NEI item pools and

@@ -10,6 +10,7 @@ import argparse
 import gzip
 import hashlib
 import json
+import math
 import re
 import sys
 import time
@@ -34,6 +35,18 @@ HISTORICAL_GT_FAMILIES = frozenset(('gregtech:gt.recipe.alloysmelter', 'gregtech
 PINNED_MODS = {
     'NotEnoughItems': ('2.8.159-GTNH', '050b2440952adc930e871586f496607959344aa2d7c3be781fd922a5b253a3af'),
     'gregtech': ('5.09.54.221', '60ceb229cd894dd28393efb6d0013de2835289eeef6fcf84ad3e17a6475baf5b'),
+}
+STILL_HANDLER = 'forestry.factory.recipes.nei.NEIHandlerStill'
+STILL_CACHED_RECIPE = STILL_HANDLER + '$CachedStillRecipe'
+STILL_PROFILE = ('forestry:still', 'forestry_still')
+STILL_PINNED_MODS = {
+    'Forestry': ('4.11.39', 'f3cacea1f523a5b94bf3f7bcc811c49dd5224d5024ac3d98fb6ac3b26a51547f'),
+    'NotEnoughItems': ('2.8.160-GTNH', '723984da9883980f1b13a71e3e500ed52ea3c059141ef931078a8ea511a1ae17'),
+}
+STILL_SOURCE_SCOPE = {
+    'forestry_commit': 'f2e85073d33f50f9eec874cdabef41e1a85b297f',
+    'components': {name: {'version': version, 'sha256': checksum} for name, (version, checksum) in STILL_PINNED_MODS.items()},
+    'family': 'forestry:still', 'projection': 'unscaled_per_unit_templates',
 }
 SOURCE_SCOPE = {
     'nei_commit': '550e85c456ff2a2ac92c47af4235ad3aa46beecb',
@@ -253,6 +266,108 @@ def _typed_nbt(tag):
 
 def _typed_item_key(resource):
     return _json([resource['registry_name'], resource['metadata'], resource['nbt']])
+
+
+def _exact_typed_nbt(tag):
+    """Validate native typed evidence without converting it through NBTJson."""
+    if tag is None:
+        return
+    if not isinstance(tag, dict) or 'type' not in tag or 'value' not in tag:
+        raise Unsupported('Malformed typed fluid NBT')
+    kind, value = tag['type'], tag['value']
+    names = ('end', 'byte', 'short', 'int', 'long', 'float', 'double', 'byte_array', 'string', 'list', 'compound', 'int_array')
+    if kind not in names or set(tag) != ({'type', 'value', 'element_type_id'} if kind == 'list' else {'type', 'value'}):
+        raise Unsupported('Malformed typed fluid NBT fields/type')
+    if kind == 'compound':
+        valid = isinstance(value, dict)
+        if valid:
+            for child in value.values():
+                _exact_typed_nbt(child)
+                if child is None or child['type'] == 'end':
+                    valid = False
+    elif kind == 'list':
+        element = tag['element_type_id']
+        valid = type(element) is int and 0 <= element < len(names) and isinstance(value, list)
+        if valid:
+            for child in value:
+                _exact_typed_nbt(child)
+                if child is None or child['type'] == 'end' or child['type'] != names[element]:
+                    valid = False
+    elif kind in ('byte', 'short', 'int'):
+        bits = {'byte': 8, 'short': 16, 'int': 32}[kind]
+        valid = type(value) is int and -(2 ** (bits - 1)) <= value < 2 ** (bits - 1)
+    elif kind in ('byte_array', 'int_array'):
+        bits = 8 if kind == 'byte_array' else 32
+        valid = isinstance(value, list) and all(type(entry) is int and -(2 ** (bits - 1)) <= entry < 2 ** (bits - 1) for entry in value)
+    elif kind == 'long':
+        valid = isinstance(value, str) and re.fullmatch(r'-?(0|[1-9][0-9]*)', value) is not None and -(2 ** 63) <= int(value) < 2 ** 63
+    elif kind in ('float', 'double'):
+        valid = type(value) in (int, float) and math.isfinite(value) and (kind != 'float' or abs(value) <= 3.4028235e38)
+    elif kind == 'string':
+        valid = isinstance(value, str)
+    else:
+        valid = value is None
+    if not valid:
+        raise Unsupported('Malformed typed fluid NBT value')
+
+
+def _still_fluid(template, resources=None):
+    if (not isinstance(template, dict) or not isinstance(template.get('registry_name'), str) or not template['registry_name']
+            or type(template.get('amount')) is not int or not 0 < template['amount'] <= 2147483647 or 'nbt' not in template):
+        raise Unsupported('Still fluid template requires a registered identity, positive int32 amount and typed NBT')
+    _exact_typed_nbt(template['nbt'])
+    identity = _json(['fluid', template['registry_name'], None, template['nbt']])
+    if resources is not None:
+        if template.get('status') != 'registered' or not isinstance(template.get('native_fluid_class'), str) or not template['native_fluid_class']:
+            raise Unsupported('Still canonical fluid template is not a captured registered fluid')
+        if 'resource_id' in template:
+            resource = resources.get(template['resource_id']) if isinstance(template['resource_id'], str) else None
+            if (resource is None or resource.get('kind') != 'fluid' or resource.get('metadata') is not None
+                    or resource.get('registry_name') != template['registry_name'] or 'nbt' not in resource
+                    or _json(resource['nbt']) != _json(template['nbt'])):
+                raise Unsupported('Still canonical fluid template resource link does not preserve exact identity/NBT')
+    return _slot([[identity, template['amount']]], None)
+
+
+def _still_view_projection(handler, view):
+    if (handler.get('native_class') != STILL_HANDLER or handler.get('queried_native_class') != STILL_HANDLER
+            or handler.get('handler_id') != STILL_HANDLER or handler.get('native_recipe_id') != 'forestry.still'):
+        raise Unsupported('Still handler identity is outside the verified exact native class/ID')
+    facts = view.get('forestry_still_tanks')
+    if (not isinstance(facts, dict) or facts.get('status') != 'captured' or facts.get('reason') is not None
+            or facts.get('failure') is not None or view.get('failure') or view.get('failures')):
+        raise Unsupported('Still typed tank observation is missing, unsupported or failed')
+    if (view.get('ingredients') != [] or view.get('other_stacks') != [] or 'result' not in view or view['result'] is not None
+            or facts.get('quantity_scope') != 'unscaled_per_unit_templates' or facts.get('cached_recipe_class') != STILL_CACHED_RECIPE
+            or facts.get('getter_declaring_class') != STILL_CACHED_RECIPE or facts.get('source_api') != STILL_CACHED_RECIPE + '.getFluidTanks'):
+        raise Unsupported('Still view capability or generic item shape is outside the verified tank projection')
+    tanks = facts.get('tanks')
+    if not isinstance(tanks, list) or len(tanks) != 2:
+        raise Unsupported('Still view requires exactly two ordered tank positions')
+    slots = []
+    for ordinal, (tank, x) in enumerate(zip(tanks, (30, 120))):
+        if (not isinstance(tank, dict) or type(tank.get('ordinal')) is not int or tank['ordinal'] != ordinal
+                or tank.get('native_class') != 'forestry.core.recipes.nei.PositionedFluidTank'
+                or tank.get('position') != {'x': x, 'y': 4, 'width': 16, 'height': 58}
+                or tank.get('show_amount') is not True or tank.get('per_tick') is not False
+                or not isinstance(tank.get('alternatives'), list) or len(tank['alternatives']) != 1):
+            raise Unsupported('Still positioned tank shape/order is outside the verified handler')
+        alternative = tank['alternatives'][0]
+        if (not isinstance(alternative, dict) or type(alternative.get('ordinal')) is not int or alternative['ordinal'] != 0
+                or alternative.get('native_class') != 'net.minecraftforge.fluids.FluidTank'
+                or type(alternative.get('capacity')) is not int or alternative['capacity'] != 10000):
+            raise Unsupported('Still tank alternative class, ordinal or capacity is unsupported')
+        slots.append(_still_fluid(alternative.get('fluid')))
+    return _projection([slots[0]], [slots[1]])
+
+
+def _still_canonical_projection(process, resources):
+    facts = process.get('conditions') or {}
+    if (facts.get('native_class') != 'forestry.factory.recipes.StillRecipe' or facts.get('native_version') != '4.11.39'
+            or facts.get('declaration_status') != 'captured_exact_native_class'):
+        raise Unsupported('Still canonical declaration is outside the verified exact recipe class/version')
+    return _projection([_still_fluid(facts.get('native_input_template'), resources)],
+                       [_still_fluid(facts.get('native_output_template'), resources)])
 
 
 def _ordinary_item_projection(context, record):
@@ -482,7 +597,7 @@ def _differences(left, right):
     return sorted(set(fields))
 
 
-def compare(snapshot, reference, *, example_limit=20):
+def compare(snapshot, reference, *, example_limit=20, profile='default'):
     started = time.perf_counter()
     phase_started = started
     timings = {}
@@ -495,11 +610,37 @@ def compare(snapshot, reference, *, example_limit=20):
 
     if type(example_limit) is not int or not 0 <= example_limit <= 1000:
         raise ComparisonError('example_limit must be between 0 and 1000')
+    if profile not in ('default', 'forestry_still'):
+        raise ComparisonError('profile must be default or forestry_still')
+    selected_profile = profile
+    still = profile == 'forestry_still'
     snapshot, reference = Path(snapshot), Path(reference)
     manifest = json.loads((snapshot / 'manifest.json').read_text(encoding='utf-8'))
     summary = json.loads((reference / 'summary.json').read_text(encoding='utf-8'))
-    if manifest.get('schema_version') != 1 or type(summary.get('schema_version')) is not int or summary['schema_version'] not in (1, 2):
-        raise ComparisonError('Only canonical schema 1 and reference schemas 1/2 are mapped')
+    if manifest.get('schema_version') != 1 or type(summary.get('schema_version')) is not int or summary['schema_version'] not in ((3,) if still else (1, 2)):
+        raise ComparisonError('Profile requires canonical schema 1 and reference schema ' + ('3' if still else '1/2'))
+    if still:
+        if (summary.get('profile') != 'forestry_still' or summary.get('view_projection') != 'forestry_still_fluid_tanks_v1'
+                or summary.get('signature_projection') != 'not_applicable_fluid_tank_profile'
+                or summary.get('canonical_files') != manifest['files']
+                or summary.get('item_presentation_context') != {'status': 'not_applicable', 'reason': 'fluid_only_profile'}
+                or 'handler_item_facts' in summary
+                or set(summary.get('files', {})) != {'handlers.jsonl.gz', 'signatures.jsonl.gz', 'handler-views.jsonl.gz'}
+                or (reference / 'presentation-context.json').exists()):
+            raise ComparisonError('Still reference capability, canonical file binding or item-context scope is invalid')
+        selection = summary.get('selection')
+        observations = summary.get('tank_observations')
+        if (not isinstance(selection, dict) or set(selection) != {'selected_handlers', 'excluded_handlers', 'failure'}
+                or any(type(selection.get(name)) is not int or selection[name] < 0 for name in ('selected_handlers', 'excluded_handlers'))
+                or (selection['failure'] is not None and (not isinstance(selection['failure'], dict)
+                    or not isinstance(selection['failure'].get('reason'), str) or not selection['failure']['reason'].strip()))
+                or not isinstance(observations, dict) or set(observations) != {'captured', 'unsupported', 'failed'}
+                or any(type(value) is not int or value < 0 for value in observations.values())
+                or not isinstance(summary.get('counts'), dict)
+                or any(type(value) is not int or value < 0 for value in summary['counts'].values())
+                or any(type(summary.get(name)) is not int or summary[name] < 0
+                       for name in ('failed_handlers', 'failed_signatures', 'failed_views', 'failed_stacks'))):
+            raise ComparisonError('Still selection, observation or failure counters are invalid')
     lossless = summary['schema_version'] == 2
     if lossless and summary.get('handler_item_facts') != HANDLER_ITEM_FACTS:
         raise ComparisonError('Reference handler item-facts capability is missing or unmapped')
@@ -508,7 +649,7 @@ def compare(snapshot, reference, *, example_limit=20):
     if summary.get('canonical_snapshot_id') != manifest['snapshot_id'] or summary.get('canonical_pack') != manifest['pack']:
         raise ComparisonError('Reference snapshot identity or pack/config cohort does not match')
     mods = {mod['id']: mod for mod in manifest['pack']['mods']}
-    for id, (version, checksum) in PINNED_MODS.items():
+    for id, (version, checksum) in (STILL_PINNED_MODS if still else PINNED_MODS).items():
         if id not in mods or (mods[id].get('version'), mods[id].get('sha256')) != (version, checksum):
             raise ComparisonError(f'Unmapped runtime version/hash for {id}')
     handler_records = list(_records(reference, 'handlers.jsonl.gz', summary['files']))
@@ -529,25 +670,34 @@ def compare(snapshot, reference, *, example_limit=20):
 
     signature_indexes = set()
     observed_failures = sum(bool(handler.get('failure')) or handler.get('enumeration_status') == 'failed' for handler in handlers.values())
+    if still:
+        observed_failures += bool(selection['failure'])
     for signature in _records(reference, 'signatures.jsonl.gz', summary['files']):
         validate_reference(signature, signature_indexes)
         if signature.get('projection') != 'native_recipe_id_api':
             raise ComparisonError('Signature projection label is not the pinned native RecipeId API')
         observed_failures += bool(signature.get('failure'))
     signature_count = len(signature_indexes)
+    if still and signature_count:
+        raise ComparisonError('Still reference signatures must be empty and explicitly not applicable')
     del signature_indexes
     finish_phase('reference_signatures')
     resources = {record['id']: record for record in _records(snapshot, 'resources.jsonl.gz', manifest['files'])}
     for _ in _records(snapshot, 'groups.jsonl.gz', manifest['files']):
         pass
-    context, context_report = _presentation_context(reference, summary, manifest, resources)
+    if still:
+        context = None
+        context_report = {'available': False, 'complete': None, 'failure_count': 0,
+                          'status': 'not_applicable', 'reason': 'fluid_only_profile'}
+    else:
+        context, context_report = _presentation_context(reference, summary, manifest, resources)
     if lossless:
         if context is None or context['version'] != 3:
             raise ComparisonError('Lossless handler item facts require independent context schema 3')
         context['handler_item_facts'] = True
     typed_identities = defaultdict(set)
     uncertain_buckets = set()
-    for resource in resources.values():
+    for resource in (() if still else resources.values()):
         try:
             identity = _resource_identity(resource, context)
             typed_identities[identity].add(_json([resource['kind'], resource['registry_name'], resource['metadata'], resource['nbt']]))
@@ -583,7 +733,8 @@ def compare(snapshot, reference, *, example_limit=20):
         if len(examples['unsupported']) < example_limit:
             examples['unsupported'].append({'reason': reason, **detail})
 
-    profiles, normalized_views = set(), []
+    profiles, normalized_views = ({STILL_PROFILE} if still else set()), []
+    tank_observations = Counter(captured=0, unsupported=0, failed=0)
     unresolved_reference_outputs = set()
     handlers_with_views, view_indexes = set(), set()
     for view in _records(reference, 'handler-views.jsonl.gz', summary['files']):
@@ -591,16 +742,23 @@ def compare(snapshot, reference, *, example_limit=20):
         counts['reference_views'] += 1
         handlers_with_views.add(view['handler_key'])
         observed_failures += bool(view.get('failure') or view.get('failures'))
-        positions = (view.get('ingredients') or []) + (view.get('other_stacks') or []) + ([view['result']] if view.get('result') else [])
+        if still:
+            facts = view.get('forestry_still_tanks')
+            status = facts.get('status') if isinstance(facts, dict) else None
+            if status not in tank_observations:
+                raise ComparisonError('Still view has no valid tank observation status')
+            tank_observations[status] += 1
+            observed_failures += status == 'failed' and not (view.get('failure') or view.get('failures'))
+        positions = [] if still else (view.get('ingredients') or []) + (view.get('other_stacks') or []) + ([view['result']] if view.get('result') else [])
         observed_failures += sum(bool(alternative.get('failure')) + (bool(alternative.get('item_facts_failure')) if lossless else 0)
                                  for positioned in positions for alternative in positioned.get('alternatives', []))
         handler = handlers[view['handler_key']]
         profile = None
         try:
-            profile = _profile(handler, view, context)
+            profile = STILL_PROFILE if still else _profile(handler, view, context)
             profiles.add(profile)
             normalized_views.append(({'handler_key': view['handler_key'], 'recipe_index': view['recipe_index']}, profile,
-                                     _view_projection(view, profile, ambiguous, context)))
+                                     _still_view_projection(handler, view) if still else _view_projection(view, profile, ambiguous, context)))
         except Unsupported as error:
             unsupported(str(error), {'side': 'nei', 'handler_key': view['handler_key'], 'recipe_index': view['recipe_index']})
             if lossless and profile is not None:
@@ -612,13 +770,25 @@ def compare(snapshot, reference, *, example_limit=20):
                         unresolved_reference_outputs.add((profile, _json(sorted(sorted(slot) for slot in anchors))))
                 except (Unsupported, KeyError, TypeError):
                     pass
-    del view_indexes
     for handler in handlers.values():
         if handler['handler_key'] not in handlers_with_views:
             unsupported('Handler has no captured views. Its recipe coverage is unverified', {'side': 'nei', 'handler_key': handler['handler_key'],
                         'enumeration_status': handler['enumeration_status'], 'recipe_count': handler.get('recipe_count')})
     if summary.get('counts') != {'handlers': len(handlers), 'signatures': signature_count, 'handler_views': counts['reference_views']}:
         raise ComparisonError('Reference summary counts do not match the streams')
+    if still and observations != dict(tank_observations):
+        raise ComparisonError('Still tank observation counters do not match the views')
+    reference_complete = summary.get('complete') is True
+    if still:
+        reference_complete = (reference_complete and selection['selected_handlers'] == 1 and selection['failure'] is None
+                              and len(handlers) == 1 and counts['reference_views'] > 0 and counts['unsupported'] == 0
+                              and tank_observations['captured'] == counts['reference_views'] and not observed_failures)
+        if len(handlers) == 1:
+            handler = next(iter(handlers.values()))
+            reference_complete = (reference_complete and handler.get('enumeration_status') == 'ok'
+                                  and type(handler.get('recipe_count')) is int and handler['recipe_count'] == counts['reference_views']
+                                  and {index for key, index in view_indexes} == set(range(counts['reference_views'])))
+    del view_indexes
     finish_phase('reference_views_projection')
     catalog = defaultdict(dict)
     output_index = defaultdict(set)
@@ -630,12 +800,12 @@ def compare(snapshot, reference, *, example_limit=20):
         if not applicable:
             counts['canonical_outside_mapped_profiles'] += 1
             continue
-        if process.get('conditions', {}).get('hidden') is True:
+        if not still and process.get('conditions', {}).get('hidden') is True:
             counts['excluded_hidden'] += 1
             continue
         for profile in applicable:
             try:
-                projection = _canonical_projection(process, profile, resources, ambiguous, context)
+                projection = _still_canonical_projection(process, resources) if still else _canonical_projection(process, profile, resources, ambiguous, context)
                 key = _json(projection)
                 catalog[profile].setdefault(key, {'projection': projection, 'process_ids': []})['process_ids'].append(process['id'])
                 output_index[(profile, _output_key(projection))].add(key)
@@ -644,7 +814,7 @@ def compare(snapshot, reference, *, example_limit=20):
                 unresolved = {'process_id': process['id'], 'reason': str(error)}
                 if hasattr(error, 'output_key'):
                     unresolved_outputs[(profile, error.output_key)].append(unresolved)
-                else:
+                elif not still:
                     try:
                         anchors = {_resource_identity(resources[output['resource_id']], context) for output in process['outputs']}
                         if anchors and not anchors.intersection(ambiguous) and all(json.loads(identity)[2] != 32767 for identity in anchors):
@@ -710,9 +880,9 @@ def compare(snapshot, reference, *, example_limit=20):
     capture_failures = max(observed_failures, sum(summary.get(name, 0) for name in failure_fields))
     finish_phase('remaining_stream_validation')
     timings['total'] = round(time.perf_counter() - started, 3)
-    return {'schema_version': 1, 'canonical_snapshot_id': manifest['snapshot_id'], 'scope': SOURCE_SCOPE, 'counts': dict(counts),
+    report = {'schema_version': 1, 'canonical_snapshot_id': manifest['snapshot_id'], 'scope': STILL_SOURCE_SCOPE if still else SOURCE_SCOPE, 'counts': dict(counts),
             'unsupported_reasons': dict(reasons), 'examples': examples, 'example_limit': example_limit,
-            'reference_complete': summary.get('complete') is True, 'capture_failures': capture_failures,
+            'reference_complete': reference_complete and (not still or (counts['unsupported'] == 0 and capture_failures == 0)), 'capture_failures': capture_failures,
             'presentation_context': context_report,
             'handler_item_facts': summary.get('handler_item_facts') if lossless else None,
             'capture_failure_unit': 'events, not distinct affected recipes',
@@ -727,12 +897,34 @@ def compare(snapshot, reference, *, example_limit=20):
                             'Hidden GT recipes excluded. Disabled/fake recipes are retained for display comparison',
                             'Furnace auxiliary fuel is not an output. Fuel, time, EU and XP are unverified',
                             'Counts compare unique canonical presentation projections, not duplicate registration multiplicities']}
+    if still:
+        report['profile'] = selected_profile
+        report['native_signatures']['scope'] = 'Not applicable to the fluid-tank profile. The signatures stream must be empty'
+        view_occurrences = defaultdict(list)
+        for view, _, projection in normalized_views:
+            view_occurrences[_json(projection)].append(view)
+        occurrences = [{'projection': json.loads(key), 'canonical_process_ids': catalog[STILL_PROFILE].get(key, {}).get('process_ids', []),
+                        'nei_views': view_occurrences.get(key, [])}
+                       for key in dict.fromkeys([*catalog[STILL_PROFILE], *view_occurrences])]
+        report['duplicate_occurrences'] = {'canonical': sum(len(value['process_ids']) - 1 for value in catalog[STILL_PROFILE].values()),
+                                           'nei': sum(len(views) - 1 for views in view_occurrences.values())}
+        report['projection_occurrences'] = occurrences
+        report['catalog_occurrence_counts_equal'] = (counts['unsupported'] == 0 and counts['differences'] == 0
+            and counts['missing_canonical'] == 0 and counts['missing_nei'] == 0
+            and report['reference_complete']
+            and all(len(candidate['process_ids']) == len(view_occurrences[key]) for key, candidate in catalog[STILL_PROFILE].items()))
+        report['limitations'] = ['Only source-verified Still per-unit fluid templates are compared, including exact typed NBT and tank order',
+                                'Template agreement does not prove batch yield, accepted output, execution, matching, timing or energy',
+                                'Unique projection equality does not prove catalog occurrence equality. Occurrences are reported separately',
+                                'No authority or equivalence claim for GT maps or other NEI handlers']
+    return report
 
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('snapshot', type=Path)
     parser.add_argument('--reference', type=Path)
+    parser.add_argument('--profile', choices=('default', 'forestry_still'), default='default')
     parser.add_argument('--report', type=Path, required=True)
     parser.add_argument('--example-limit', type=int, default=20)
     parser.add_argument('--max-missing', type=int, default=0)
@@ -744,7 +936,7 @@ def main(argv=None):
         for value in (args.max_missing, args.max_differences, args.max_capture_failures, args.max_unsupported):
             if value is not None and value < 0:
                 raise ComparisonError('Thresholds must be nonnegative')
-        report = compare(args.snapshot, args.reference or args.snapshot / 'nei-reference', example_limit=args.example_limit)
+        report = compare(args.snapshot, args.reference or args.snapshot / 'nei-reference', example_limit=args.example_limit, profile=args.profile)
         counts = report['counts']
         passed = (counts['matched'] + counts['differences'] > 0
                   and counts['missing_canonical'] + counts['missing_nei'] <= args.max_missing and counts['differences'] <= args.max_differences

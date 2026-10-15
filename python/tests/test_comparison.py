@@ -417,6 +417,301 @@ class ComparisonTests(unittest.TestCase):
         with gzip.open(directory / name, 'rt', encoding='utf-8') as stream:
             return [json.loads(line) for line in stream]
 
+    def still_capture(self):
+        fluids = [dict(resource(id, registry_name=name), kind='fluid', metadata=None)
+                  for id, name in [('in', 'biomass'), ('out', 'bioethanol')]]
+        templates = [dict(registry_name=value['registry_name'], amount=amount, nbt=None,
+                          native_fluid_class='net.minecraftforge.fluids.Fluid', status='registered', resource_id=value['id'])
+                     for value, amount in zip(fluids, (10, 3))]
+        canonical = process('still', [], ['out'], family='forestry:still', executable=None, conditions={
+            'native_class': 'forestry.factory.recipes.StillRecipe', 'native_version': '4.11.39',
+            'declaration_status': 'captured_exact_native_class', 'native_input_template': templates[0],
+            'native_output_template': templates[1], 'native_cycles_per_unit': 100,
+            'dynamic_inputs': 'unresolved', 'dynamic_output': 'unresolved'})
+        canonical['outputs'][0].update(amount=3, chance=None)
+        directory = snapshot(self.root / 'snapshot', resources=fluids, processes=[canonical])
+        manifest_path = directory / 'manifest.json'
+        manifest = json.loads(manifest_path.read_text())
+        manifest['pack'] = {'mods': [
+            {'id': 'Forestry', 'version': '4.11.39', 'sha256': 'f3cacea1f523a5b94bf3f7bcc811c49dd5224d5024ac3d98fb6ac3b26a51547f'},
+            {'id': 'NotEnoughItems', 'version': '2.8.160-GTNH', 'sha256': '723984da9883980f1b13a71e3e500ed52ea3c059141ef931078a8ea511a1ae17'},
+            {'id': 'gregtech', 'version': '5.09.54.225', 'sha256': '5bd8e63070cf1f70785111e5329c58dcc3afaef38c413755958c633bae0b2337'}]}
+        manifest_path.write_text(json.dumps(manifest))
+        handler_class = 'forestry.factory.recipes.nei.NEIHandlerStill'
+        cached = handler_class + '$CachedStillRecipe'
+        handler = {'handler_key': 'h0', 'native_class': handler_class, 'queried_native_class': handler_class,
+                   'handler_id': handler_class, 'native_recipe_id': 'forestry.still', 'handler_name': 'Still',
+                   'gt_recipe_map_id': None, 'enumeration_status': 'ok', 'recipe_count': 1, 'failure': None}
+        tanks = [{'ordinal': index, 'native_class': 'forestry.core.recipes.nei.PositionedFluidTank',
+                  'position': {'x': x, 'y': 4, 'width': 16, 'height': 58}, 'show_amount': True, 'per_tick': False,
+                  'alternatives': [{'ordinal': 0, 'native_class': 'net.minecraftforge.fluids.FluidTank', 'capacity': 10000,
+                                    'fluid': {key: value[key] for key in ('registry_name', 'amount', 'nbt')}}]}
+                 for index, (x, value) in enumerate(zip((30, 120), templates))]
+        view = {'handler_key': 'h0', 'recipe_index': 0, 'ingredients': [], 'other_stacks': [], 'result': None,
+                'failure': None, 'forestry_still_tanks': {'status': 'captured', 'quantity_scope': 'unscaled_per_unit_templates',
+                    'cached_recipe_class': cached, 'getter_declaring_class': cached, 'source_api': cached + '.getFluidTanks',
+                    'reason': None, 'failure': None, 'tanks': tanks}}
+        reference = directory / 'nei-reference'
+        reference.mkdir()
+        summary = {'schema_version': 3, 'profile': 'forestry_still', 'view_projection': 'forestry_still_fluid_tanks_v1',
+                   'signature_projection': 'not_applicable_fluid_tank_profile', 'canonical_snapshot_id': manifest['snapshot_id'],
+                   'canonical_pack': manifest['pack'], 'canonical_files': manifest['files'], 'files': {},
+                   'counts': {'handlers': 1, 'signatures': 0, 'handler_views': 1}, 'complete': True,
+                   'selection': {'selected_handlers': 1, 'excluded_handlers': 17, 'failure': None},
+                   'tank_observations': {'captured': 1, 'unsupported': 0, 'failed': 0},
+                   'item_presentation_context': {'status': 'not_applicable', 'reason': 'fluid_only_profile'},
+                   'failed_handlers': 0, 'failed_signatures': 0, 'failed_views': 0, 'failed_stacks': 0}
+        (reference / 'summary.json').write_text(json.dumps(summary))
+        for name, records in [('handlers.jsonl.gz', [handler]), ('handler-views.jsonl.gz', [view]), ('signatures.jsonl.gz', [])]:
+            self.replace_records(reference, name, records, 'summary.json')
+        return directory, reference
+
+    def test_still_profile_compares_unscaled_typed_tanks_without_item_context(self):
+        directory, reference = self.still_capture()
+        report = comparison.compare(directory, reference, profile='forestry_still')
+        self.assertEqual(report['counts']['matched'], 1)
+        self.assertEqual(report['counts']['unsupported'], 0)
+        self.assertTrue(report['reference_complete'])
+        self.assertEqual(report['profile'], 'forestry_still')
+        self.assertEqual(report['presentation_context'], {'available': False, 'complete': None, 'failure_count': 0,
+                                                          'status': 'not_applicable', 'reason': 'fluid_only_profile'})
+        self.assertEqual(report['native_signatures']['records'], 0)
+        self.assertEqual(comparison.main([str(directory), '--profile', 'forestry_still', '--report', str(self.root / 'report.json')]), 0)
+        with self.assertRaises(comparison.ComparisonError):
+            comparison.compare(directory, reference)
+
+    def test_still_template_amount_and_typed_identity_disagreements_are_not_equal(self):
+        base = self.root
+        for case in ('input_amount', 'output_amount', 'typed_nbt', 'reversed_fluids'):
+            with self.subTest(case=case):
+                self.root = base / case
+                directory, reference = self.still_capture()
+                view = self.read_records(reference, 'handler-views.jsonl.gz')[0]
+                fluids = [tank['alternatives'][0]['fluid'] for tank in view['forestry_still_tanks']['tanks']]
+                if case == 'input_amount':
+                    fluids[0]['amount'] = 1000
+                elif case == 'output_amount':
+                    fluids[1]['amount'] = 300
+                elif case == 'typed_nbt':
+                    fluids[0]['nbt'] = {'type': 'compound', 'value': {'v': {'type': 'byte', 'value': 1}}}
+                else:
+                    fluids[0].update(registry_name='bioethanol', amount=3)
+                    fluids[1].update(registry_name='biomass', amount=10)
+                self.replace_records(reference, 'handler-views.jsonl.gz', [view], 'summary.json')
+                report = comparison.compare(directory, reference, profile='forestry_still')
+                self.assertEqual(report['counts']['matched'], 0)
+                self.assertGreater(report['counts']['differences'] + report['counts']['missing_canonical'], 0)
+                if case != 'reversed_fluids':
+                    self.assertEqual(report['counts']['differences'], 1)
+
+    def test_still_typed_nbt_preserves_long_empty_list_and_numeric_tag_types(self):
+        directory, reference = self.still_capture()
+        tag = {'type': 'compound', 'value': {'long': {'type': 'long', 'value': '9223372036854775807'},
+                                           'list': {'type': 'list', 'element_type_id': 1, 'value': []},
+                                           'number': {'type': 'byte', 'value': 1}}}
+        resources = self.read_records(directory, 'resources.jsonl.gz')
+        resources[0]['nbt'] = tag
+        canonical = self.read_records(directory, 'processes.jsonl.gz')[0]
+        canonical['conditions']['native_input_template']['nbt'] = tag
+        view = self.read_records(reference, 'handler-views.jsonl.gz')[0]
+        view['forestry_still_tanks']['tanks'][0]['alternatives'][0]['fluid']['nbt'] = tag
+        self.replace_records(directory, 'resources.jsonl.gz', resources, 'manifest.json')
+        self.replace_records(directory, 'processes.jsonl.gz', [canonical], 'manifest.json')
+        self.replace_records(reference, 'handler-views.jsonl.gz', [view], 'summary.json')
+        summary_path = reference / 'summary.json'
+        summary = json.loads(summary_path.read_text())
+        summary['canonical_files'] = json.loads((directory / 'manifest.json').read_text())['files']
+        summary_path.write_text(json.dumps(summary))
+        self.assertEqual(comparison.compare(directory, reference, profile='forestry_still')['counts']['matched'], 1)
+        view['forestry_still_tanks']['tanks'][0]['alternatives'][0]['fluid']['nbt']['value']['number']['type'] = 'int'
+        self.replace_records(reference, 'handler-views.jsonl.gz', [view], 'summary.json')
+        self.assertEqual(comparison.compare(directory, reference, profile='forestry_still')['counts']['differences'], 1)
+
+    def test_still_unverified_tank_shapes_and_capabilities_cannot_pass(self):
+        base = self.root
+        for case in ('tankless', 'coordinates', 'tank_order', 'tank_class', 'capacity', 'alternatives', 'show_amount',
+                     'per_tick', 'cached_class', 'getter', 'ordinary_items', 'null_amount', 'malformed_nbt'):
+            with self.subTest(case=case):
+                self.root = base / case
+                directory, reference = self.still_capture()
+                view = self.read_records(reference, 'handler-views.jsonl.gz')[0]
+                facts = view['forestry_still_tanks']
+                tank = facts['tanks'][0]
+                if case == 'tankless':
+                    facts['tanks'] = []
+                elif case == 'coordinates':
+                    tank['position']['x'] = 120
+                elif case == 'tank_order':
+                    facts['tanks'].reverse()
+                elif case == 'tank_class':
+                    tank['native_class'] = 'custom.PositionedFluidTank'
+                elif case == 'capacity':
+                    tank['alternatives'][0]['capacity'] = 1000
+                elif case == 'alternatives':
+                    tank['alternatives'].append(dict(tank['alternatives'][0], ordinal=1))
+                elif case == 'show_amount':
+                    tank['show_amount'] = False
+                elif case == 'per_tick':
+                    tank['per_tick'] = True
+                elif case == 'cached_class':
+                    facts['cached_recipe_class'] += '$Custom'
+                elif case == 'getter':
+                    facts['getter_declaring_class'] = 'custom.Parent'
+                elif case == 'ordinary_items':
+                    view['ingredients'] = [{'alternatives': []}]
+                elif case == 'null_amount':
+                    tank['alternatives'][0]['fluid']['amount'] = None
+                else:
+                    tank['alternatives'][0]['fluid']['nbt'] = {'type': 'byte', 'value': '1'}
+                self.replace_records(reference, 'handler-views.jsonl.gz', [view], 'summary.json')
+                report = comparison.compare(directory, reference, profile='forestry_still')
+                self.assertEqual(report['counts']['matched'], 0)
+                self.assertGreater(report['counts']['unsupported'], 0)
+                self.assertFalse(report['reference_complete'])
+
+    def test_still_canonical_templates_require_exact_registered_resource_links(self):
+        base = self.root
+        for case in ('wrong_resource', 'unregistered', 'wrong_class', 'unknown_amount'):
+            with self.subTest(case=case):
+                self.root = base / case
+                directory, reference = self.still_capture()
+                canonical = self.read_records(directory, 'processes.jsonl.gz')[0]
+                template = canonical['conditions']['native_input_template']
+                if case == 'wrong_resource':
+                    template['resource_id'] = 'out'
+                elif case == 'unregistered':
+                    template['status'] = 'unregistered'
+                elif case == 'wrong_class':
+                    canonical['conditions']['native_class'] += '$Custom'
+                else:
+                    template['amount'] = None
+                self.replace_records(directory, 'processes.jsonl.gz', [canonical], 'manifest.json')
+                summary_path = reference / 'summary.json'
+                summary = json.loads(summary_path.read_text())
+                summary['canonical_files'] = json.loads((directory / 'manifest.json').read_text())['files']
+                summary_path.write_text(json.dumps(summary))
+                report = comparison.compare(directory, reference, profile='forestry_still')
+                self.assertEqual(report['counts']['matched'], 0)
+                self.assertGreater(report['counts']['unsupported'], 0)
+                self.assertFalse(report['reference_complete'])
+
+    def test_still_reference_binding_and_profile_are_explicit(self):
+        base = self.root
+        for case in ('forestry_hash', 'nei_version', 'snapshot', 'files', 'schema', 'capability', 'item_context', 'signatures'):
+            with self.subTest(case=case):
+                self.root = base / case
+                directory, reference = self.still_capture()
+                summary_path = reference / 'summary.json'
+                summary = json.loads(summary_path.read_text())
+                if case in ('forestry_hash', 'nei_version'):
+                    manifest_path = directory / 'manifest.json'
+                    manifest = json.loads(manifest_path.read_text())
+                    if case == 'forestry_hash':
+                        manifest['pack']['mods'][0]['sha256'] = '0' * 64
+                    else:
+                        manifest['pack']['mods'][1]['version'] = '2.8.159-GTNH'
+                    manifest_path.write_text(json.dumps(manifest))
+                    summary['canonical_pack'] = manifest['pack']
+                elif case == 'snapshot':
+                    summary['canonical_snapshot_id'] = 'other'
+                elif case == 'files':
+                    summary['canonical_files'].pop('coverage.jsonl.gz')
+                elif case == 'schema':
+                    summary['schema_version'] = 2
+                elif case == 'capability':
+                    summary['view_projection'] = 'tankless'
+                elif case == 'item_context':
+                    summary['handler_item_facts'] = comparison.HANDLER_ITEM_FACTS
+                else:
+                    self.replace_records(reference, 'signatures.jsonl.gz', [{'handler_key': 'h0', 'recipe_index': 0,
+                        'projection': 'native_recipe_id_api', 'signature': {}, 'failure': None}], 'summary.json')
+                    summary = json.loads(summary_path.read_text())
+                summary_path.write_text(json.dumps(summary))
+                with self.assertRaises(comparison.ComparisonError):
+                    comparison.compare(directory, reference, profile='forestry_still')
+        self.root = base / 'default_pin'
+        directory, reference = self.capture()
+        manifest_path = directory / 'manifest.json'
+        manifest = json.loads(manifest_path.read_text())
+        manifest['pack']['mods'][1]['version'] = '5.09.54.225'
+        manifest_path.write_text(json.dumps(manifest))
+        summary_path = reference / 'summary.json'
+        summary = json.loads(summary_path.read_text())
+        summary['canonical_pack'] = manifest['pack']
+        summary_path.write_text(json.dumps(summary))
+        with self.assertRaisesRegex(comparison.ComparisonError, 'gregtech'):
+            comparison.compare(directory, reference)
+
+    def test_still_incomplete_catalogs_remain_incomplete_even_with_complete_claim(self):
+        base = self.root
+        for case in ('missing', 'empty', 'duplicate', 'unsupported', 'failed', 'recipe_count', 'selection_failure'):
+            with self.subTest(case=case):
+                self.root = base / case
+                directory, reference = self.still_capture()
+                handlers = self.read_records(reference, 'handlers.jsonl.gz')
+                views = self.read_records(reference, 'handler-views.jsonl.gz')
+                summary_path = reference / 'summary.json'
+                summary = json.loads(summary_path.read_text())
+                if case == 'missing':
+                    handlers, views = [], []
+                    summary['selection']['selected_handlers'] = 0
+                elif case == 'empty':
+                    handlers[0].update(recipe_count=0, enumeration_status='empty')
+                    views = []
+                elif case == 'duplicate':
+                    handlers.append(dict(handlers[0], handler_key='h1'))
+                    views.append(dict(views[0], handler_key='h1'))
+                    summary['selection']['selected_handlers'] = 2
+                elif case in ('unsupported', 'failed'):
+                    views[0]['forestry_still_tanks'].update(status=case, reason='native_shape_not_supported')
+                    if case == 'failed':
+                        views[0]['forestry_still_tanks']['failure'] = {'phase': 'forestry_still_tanks', 'class': 'Exception', 'message': 'getter failed'}
+                        summary['failed_views'] = 1
+                elif case == 'recipe_count':
+                    handlers[0]['recipe_count'] = 2
+                else:
+                    summary['selection']['failure'] = {'reason': 'unsupported_still_manager'}
+                summary['counts'].update(handlers=len(handlers), handler_views=len(views))
+                summary['tank_observations'] = {status: sum(view['forestry_still_tanks']['status'] == status for view in views)
+                                                for status in ('captured', 'unsupported', 'failed')}
+                summary_path.write_text(json.dumps(summary))
+                self.replace_records(reference, 'handlers.jsonl.gz', handlers, 'summary.json')
+                self.replace_records(reference, 'handler-views.jsonl.gz', views, 'summary.json')
+                report = comparison.compare(directory, reference, profile='forestry_still')
+                self.assertFalse(report['reference_complete'])
+                if case in ('failed', 'selection_failure'):
+                    self.assertGreater(report['capture_failures'], 0)
+
+    def test_still_duplicate_occurrences_keep_pids_and_cached_indexes(self):
+        directory, reference = self.still_capture()
+        canonical = self.read_records(directory, 'processes.jsonl.gz')[0]
+        self.replace_records(directory, 'processes.jsonl.gz', [canonical, dict(canonical, id='second')], 'manifest.json')
+        summary_path = reference / 'summary.json'
+        summary = json.loads(summary_path.read_text())
+        summary['canonical_files'] = json.loads((directory / 'manifest.json').read_text())['files']
+        summary_path.write_text(json.dumps(summary))
+        report = comparison.compare(directory, reference, profile='forestry_still')
+        self.assertEqual(report['counts']['matched'], 1)
+        self.assertEqual(report['duplicate_occurrences'], {'canonical': 1, 'nei': 0})
+        self.assertFalse(report['catalog_occurrence_counts_equal'])
+        occurrence = report['projection_occurrences'][0]
+        self.assertEqual(occurrence['canonical_process_ids'], ['still', 'second'])
+        self.assertEqual(occurrence['nei_views'], [{'handler_key': 'h0', 'recipe_index': 0}])
+        views = self.read_records(reference, 'handler-views.jsonl.gz')
+        self.replace_records(reference, 'handler-views.jsonl.gz', [views[0], dict(views[0], recipe_index=1)], 'summary.json')
+        handlers = self.read_records(reference, 'handlers.jsonl.gz')
+        handlers[0]['recipe_count'] = 2
+        self.replace_records(reference, 'handlers.jsonl.gz', handlers, 'summary.json')
+        summary = json.loads(summary_path.read_text())
+        summary['counts']['handler_views'] = 2
+        summary['tank_observations']['captured'] = 2
+        summary_path.write_text(json.dumps(summary))
+        report = comparison.compare(directory, reference, profile='forestry_still')
+        self.assertTrue(report['catalog_occurrence_counts_equal'])
+        self.assertEqual(report['duplicate_occurrences'], {'canonical': 1, 'nei': 1})
+        self.assertEqual(report['projection_occurrences'][0]['nei_views'],
+                         [{'handler_key': 'h0', 'recipe_index': 0}, {'handler_key': 'h0', 'recipe_index': 1}])
+
     def capture(self, *, amount=2, chance=5000, alternatives=None, resources=None):
         resources = resources or [resource('in', registry_name='test:input'), resource('alt', registry_name='test:alternative'), resource('out', registry_name='test:output')]
         canonical = process('p', [slot(choice('in', 'unified', group='g', amount=2))], ['out'], family='gregtech:gt.recipe.alloysmelter')

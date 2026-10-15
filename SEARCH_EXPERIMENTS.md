@@ -2328,3 +2328,75 @@ custom class and source-reference catch branches remain unobserved. There is
 no independent original-catalog observer, accepted-tank-yield proof or live
 GUI/MCP activation. Evidence is in forestry-still-audit/ and
 forestry-still-acceptance/. No retry, reimport or extra public call occurred.
+
+### A source-reachable Still output-loss candidate
+
+The actual Still declarations expose a concrete source-level loss witness under
+the verified Forestry 4.11.39 controller and Forge tank contract. The product
+tank is 10000 mB. Biomass attempts 300 mB per batch, so 33 batches leave 100 mB
+free. The controller checks only the 3 mB template, then accepts 100 of the next
+300 mB and discards the fill return. Batch 34 can therefore lose 200 mB. Resin
+similarly reaches 9975 mB after 133 batches and can lose 50 mB at batch 134.
+Both witnesses use empty container slots, ordinary input replenishment and
+sufficient power, with no output drain. Mead's 500 mB batch divides the capacity
+and supplies a negative control: no output loss in the same no-drain sequence.
+Blocked completion is distinct from input reserved in the persisted buffer.
+
+The verdict is VERIFIED_REACHABLE_FROM_SOURCE, not a live GTNH reproduction.
+Actual post-transformation methods were not inspected. A bounded patch-source
+search has no hits, but those checkouts differ from runtime versions and cannot
+rule out a transformer. No mod fix or external publication was made. Full guard,
+bytecode, arithmetic and snapshot evidence is in forestry-still-output-loss/.
+
+### New NEI families need explicit presentation contracts
+
+Exact source/JAR research covers Forestry39, Botania39 and NEI160 in both recent
+snapshots. None of Squeezer, Carpenter, Petal or Still has an existing comparator
+profile. Generic reference getters omit Forestry tanks. Squeezer also includes
+container recipes, and its float chance becomes tooltip text while the generic
+numeric chance remains 10000. Carpenter caps displayed grid quantities at one
+and requires layout-sensitive comparison. Petal adds a renamed representative
+seed, omits water/full finishing semantics and excludes skull outputs. Still
+presents unscaled templates, not controller batches. An empty tankless signature
+cannot establish fidelity.
+
+The next design is limited to Still's two fluid templates, within existing
+capture/comparator owners. It must keep same-run identity, explicit selected
+scope and exact component authority, while preserving the existing default GT
+.221/NEI159 profile. No global cohort relaxation or full machine validation is
+justified. Item-pattern, remnant-chance and seed-placeholder comparison remain
+separate later scopes. Source matrix evidence is in nei-new-catalog-coverage/.
+
+### Still templates agree with a same-run native NEI observation
+
+The explicit Still-only reference profile is implemented in the existing
+capture, runner and comparator owners. Reference schema 3 binds the same
+snapshot, complete pack and canonical file descriptors. It reads the actual
+ordered NEI fluid tanks with typed NBT. Signatures and item presentation
+context are explicitly inapplicable. The default GT .221/NEI159 comparison
+and historical reference contracts retain their original version guards.
+
+Forty focused comparator tests, seven runner tests, all 233 Python tests and
+42 Java tests pass. The first Java compile exposed unavailable Gson deepCopy.
+Serializing the unchanged manifest files object removes that API mismatch.
+The consolidated review and Java audit found no confirmed changed-code defect.
+IntelliJ completes with 79 advisories. Combined PMD is explicitly skipped by
+the nested-root check. Supplemental PMD completes with 23 producer advisories
+and zero processing/configuration errors, with no source fix required.
+
+One 187.551-second capture/import produces snapshot
+0a6457af-d45b-4afc-844f-6796cf97705e with 260636 processes. One frozen
+comparator call takes 4.389 seconds and matches all three Still projections
+against three views from one exact NEI handler. There are zero differences,
+missing sides, unsupported observations or capture failures. Occurrence
+counts agree and neither side has duplicates. Biomass 10 to bioethanol 3,
+resin 5 to turpentine 3 and short.mead 10 to mead 5 retain null NBT on both
+sides. No cycle multiplier participates in presentation comparison.
+
+All 105 inherited protected files, four absence gates, frozen inputs, main UI
+and new canonical/index/sidecar/reference artifacts remain unchanged. No active
+service, GUI bundle or MCP data selection was changed. No retry, recapture,
+threshold change or extra Dataset call was made. This is independent native
+presentation observation from the same runtime catalog, not external catalog
+enumeration or proof of controller matching, batch yield, accepted tank output,
+timing or energy. Full evidence is in nei-still-comparison/.

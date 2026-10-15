@@ -1232,3 +1232,77 @@ materialnego obiegu nie upoważnia do usuwania receptur z audytu loopów.
   są zgodne, bez twierdzenia o równości wszystkich ich rekordów.
   Brak obserwacji tagowanych płynów, nieprawidłowych skalarów, obcych klas,
   wyjątków katalogu referencji i faktycznego wypełniania zbiornika.
+
+### Niezależne porównanie nowych katalogów z prezentacją NEI
+
+- [x] Zweryfikować źródła czterech handlerów dla rzeczywistego Forestry39,
+  Botania39 i NEI160. Obecny comparator nie ma profili tych rodzin.
+  Ogólne gettery pomijają zbiorniki Squeezera, Carpentera i Still.
+  Carpenter zmienia ilości siatki i wymaga zachowania pozycji komórek.
+  Petal dodaje reprezentatywne nasiono i pomija pełne wymagania kontrolera.
+  Still pokazuje nieprzeskalowane szablony. Pusta ogólna sygnatura nie jest
+  dowodem zgodności. Zachować dotychczasowy zakres map GT .221/NEI159.
+- [x] Zaprojektować najmniejsze porównanie dwóch szablonów płynu Still
+  w istniejących właścicielach. Porównać interfejs pełnego odczytu z jawnym
+  wyborem zakresu, bez nowego frameworka profili. Odczyt NEI musi być niezależny
+  od danych kanonicznych, z dowodem tej samej sesji eksportu i rzeczywistych
+  wersji komponentów. Bez twierdzenia o wykonaniu kontrolera i uzysku batcha.
+  Dopiero po ustaleniu kontraktu implementacja, testy i jeden odbiór referencji.
+  Wybrano --nei-reference [all|forestry_still] oraz jawny --profile
+  forestry_still w comparatorze. Sama flaga --nei-reference zachowuje obecne
+  znaczenie. Nowy profil wymaga osobnej referencji schema 3, Typed NBT płynów,
+  canonical_files i identyczności snapshotu/packa. Nie korzysta z kontekstu
+  itemów ani pustych sygnatur Recipe.of. Kontrakt dotyczy dokładnych wersji
+  Forestry 4.11.39 i NEI 2.8.160-GTNH oraz ich hashy JAR.
+- [x] Przechwycić niezależne dwa tanki Still w NeiReferenceCapture.
+  Wybrać dokładny handler przed all-recipes, sprawdzić manager i klasy
+  natywnego rosteru bez getterów, zachować pozycje, alternatywy, ilości i NBT.
+  Pełny dotychczasowy eksport schema 2 działa dalej. Dla nowego zakresu
+  sygnatury oraz kontekst itemów są jawnie nieadekwatne, a brak handlera,
+  duplikaty i nieobsługiwane fakty nie mogą tworzyć pustego sukcesu.
+  Kod kompiluje się, a 42 testy Javy przechodzą. Dodatni odczyt płynów
+  pozostaje do sprawdzenia w jednym odbiorze runtime. Pierwszy compile wykrył
+  niedostępną metodę Gson deepCopy. Zapis niezmienianego manifest.files
+  bez tej metody usuwa problem rzeczywistej wersji biblioteki.
+- [x] Przekazać wybrany zakres przez istniejący runner i Gradle.
+  W testach bez gry sprawdzić brak flagi, bare/all, Still oraz błędny argument.
+  Nie dodawać drugiej ścieżki uruchamiania ani ustawień trwałej usługi.
+  Wszystkie siedem testów runnera przechodzi. Przekazanie właściwości do
+  rzeczywistego JVM zostaje do potwierdzenia w odbiorze.
+- [x] Dodać jawny profil porównania w compare_nei i jego istniejących testach.
+  Współdzielić odczyt, integralność, raport i progi. Weryfikować dwa
+  uporządkowane szablony oraz ich referencje do kanonicznych płynów.
+  Zachować dotychczasowe testy GT .221/NEI159, odrzucenie .225 w domyślnym
+  profilu i schema 1/2. W nowym profilu testować różnice ilości/NBT, zamianę
+  tanków, błędny zakres/kohortę, brak faktów i niepełne przechwycenie.
+  Targetowane 40 testów i pełne 233 testy Pythona przechodzą. Raport rozdziela
+  unikalne projekcje od wystąpień z PID i indeksem cache. Dokładny handler_id
+  jest nazwą klasy, a native_recipe_id ma wartość forestry.still.
+- [x] Domknąć wspólny przegląd i kontrole. Targetowane testy komponentów,
+  potem pełne testy Pythona oraz jeden audyt Javy. Po zamrożeniu źródeł
+  jeden świeży capture --nei-reference forestry_still i jedno porównanie.
+  Chronić wszystkie istniejące dumpy, indeksy, UI i konfigurację. Nie zmieniać
+  progów ani rekordów, by ukryć rozbieżność. Oddzielić zgodność prezentacji
+  od działania maszyny. Commity mają oddzielać producenta referencji od
+  konsumenta porównania, o ile oba pozostają spójne i mają zielone kontrole.
+  Wspólny przegląd źródeł i testów zakończony. Pełne 233 testy Pythona oraz
+  42 testy Javy przechodzą. IntelliJ i osobny PMD nie wykazały potwierdzonego
+  błędu zmienionego kodu. Wspólny PMD ponownie pominięty przez znaną kontrolę
+  zagnieżdżonego rootu. Osobny PMD zakończony bez błędów przetwarzania.
+  Przygotowanie chroni 105 istniejących plików i cztery bramki nieobecności,
+  bez różnic względem poprzedniego odbioru. Jeden capture/import trwał 187,55 s.
+  Snapshot 0a6457af-d45b-4afc-844f-6796cf97705e zawiera 260636 procesów.
+  Jeden comparator w 4,39 s potwierdza trzy zgodne szablony i trzy widoki NEI.
+  Zero różnic, braków, nieobsługiwanych obserwacji i błędów. Liczby wystąpień
+  zgodne, bez duplikatów. Wszystkie chronione pliki, zamrożone wejścia,
+  główny UI i nowe artefakty pozostają zgodne. Referencja dotyczy tylko
+  prezentacji nieprzeskalowanych szablonów Still. Nie dowodzi wykonania
+  kontrolera ani przyjętego uzysku batcha. Raport w nei-still-comparison/.
+
+- [x] Sprawdzić źródłową hipotezę utraty wyjścia Still na rzeczywistych
+  recepturach dumpa. Dla zbiornika 10000 mB biomasa może stracić 200 mB
+  przy 34. partii, a żywica 50 mB przy 134. partii bez odpływu wyjścia.
+  Sprawdzono pozostałe bramki, bufor wejścia i zasilanie. Mead jest kontrolą
+  ujemną dla tego samego przebiegu bez odpływu. Wynik dotyczy zweryfikowanych
+  klas źródłowych. Brak dowodu końcowych transformacji i reprodukcji live.
+  Nie zmieniano moda ani nie publikowano zgłoszenia.

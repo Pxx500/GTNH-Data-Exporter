@@ -563,6 +563,50 @@ negative. NEI NBTJson is not injective. Without captured lossless facts,
 ambiguous projections remain unsupported rather than being equated by display
 name or lossy NBT decoding.
 
+### Forestry Still fluid reference
+
+The explicit `forestry_still` capture scope uses reference summary schema 3.
+It selects the exact registered `NEIHandlerStill` before loading recipes from
+unrelated handlers. The exact native manager and recipe roster are checked
+before NEI constructs its cached recipes. A missing or duplicate handler,
+unsupported roster or component identity mismatch is a selection failure.
+The default full capture retains reference summary schema 2.
+
+Schema 3 declares `profile: "forestry_still"`,
+`view_projection: "forestry_still_fluid_tanks_v1"` and
+`signature_projection: "not_applicable_fluid_tank_profile"`.
+`canonical_files` copies the closed canonical file declarations. Together with
+the snapshot ID, pack manifest and verified stream hashes/counts, this binds
+the reference to its paired canonical capture.
+`selection` records selected/excluded handler counts and a nullable failure.
+`tank_observations` counts captured, unsupported and failed observations.
+
+Each view retains the ordinary generic fields and adds `forestry_still_tanks`.
+The observation records its status, cached recipe class, getter API and
+declaring class, plus `quantity_scope: "unscaled_per_unit_templates"`.
+Its ordered `tanks` retain ordinal, native class, position, `show_amount`,
+`per_tick` and the complete ordered alternatives. Each alternative retains
+ordinal, native class, capacity and a fluid with `registry_name`, positive
+`amount` and lossless typed `nbt`. Unsupported shapes remain explicit and
+are not reduced to a convenient pair of fluids.
+
+The supported view contains two ordinary fluid tanks at their source-defined
+positions and no generic item ingredients/result/other stacks. The comparator
+checks both unscaled templates against `conditions.native_input_template`
+and `conditions.native_output_template`, including their canonical resource
+links, quantities and typed NBT. It does not multiply by cycle count.
+Unique projection agreement and occurrence agreement are reported separately.
+
+The profile requires Forestry 4.11.39 and NEI 2.8.160-GTNH with their pinned
+JAR hashes. It has no item presentation context. The summary explicitly sets
+`item_presentation_context` to `status: "not_applicable"` with reason
+`fluid_only_profile`. No context file or item-facts capability is advertised.
+The signatures stream has zero records and is explicitly inapplicable.
+Empty generic signatures do not establish fluid agreement. Selection failures,
+missing views, unsupported tanks and failed observations prevent complete
+validation. Agreement covers presentation templates, not controller execution,
+batch yield, power use or output-space checks.
+
 ## Dataset operations
 
 The same operations serve HTTP, CLI and MCP. Opening a Dataset fixes one
