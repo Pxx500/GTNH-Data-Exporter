@@ -950,6 +950,42 @@ or malformed native evidence do not substitute literal hints. Failed evidence
 remains in the resource record. Absence of a hint does not certify absence of
 a tool category. Native recipe roles and accounting remain unchanged.
 
+Material traces include `path_details[].material_detours`, descriptive
+evidence for retained two- or three-recipe windows. Step indices `start_step` and `end_step` are
+zero-based and inclusive. Each entry keeps `process_ids`, `resource_ids`,
+`cases_checked`, `zero_net_cases` and a concrete `witness`.
+
+- `status: zero_net`, scope `all_concrete_choices`, means every enumerated,
+  supported deterministic concrete input case compatible with the selected
+  dependency spine has zero net change across the
+  complete captured exact-resource vector
+- `status: conditional_zero_net`, scope `concrete_selection_witness_only`,
+  means fully enumerated cases include both zero and nonzero vectors. The
+  witness proves only that a zero-net selection exists
+
+The witness contains per-process input `selections`, exact rational
+`executions`, `required_start_stock`, `presence` and an empty `net` map.
+Even universal net-balance evidence includes only one startup-stock witness.
+Other concrete selections can require different starting resources.
+Starting stock includes presence requirements. Do not subtract the global
+presence map to infer consumed startup stock. These are conservative batch
+prefix requirements, not a declaration that stock is available.
+
+The trace-level `material_detour_analysis` reports scope
+`retained_2_3_recipe_windows`, analysis `status` (`complete` or `partial`),
+`limits`, actual `work` and `counts` for `zero_net`, `conditional_zero_net`,
+`nonzero` and `unknown`. Limits are 128 windows, 256 concrete cases, 4096
+matching-row analysis visits and 16 cases per window. Visits operate on
+already rendered matching candidates. They do not count prior rendering or
+search expansion. Unknown or nonzero windows have no positive path annotation.
+An unresolved effect, uncertain chance or incomplete bounded enumeration
+cannot establish a positive result.
+
+This evidence describes captured resource balances. It does not certify atom
+provenance, native machine execution or whether removing a window preserves
+every condition. It changes neither discovery nor path order and does not
+filter recipes. Empty annotations do not certify absence of material detours.
+
 `route` contains `status`, `strategy`, ordered `resource_ids` and ordered
 `process_ids`. The strategy field retains `shortest_known_dependency_path`.
 For diverse and shortest selection this means fewest process steps in the

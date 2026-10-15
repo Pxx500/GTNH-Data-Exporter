@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import type { Trace, TierOptions, TraceJob } from './api'
+import type { MaterialDetour, Resource, Trace, TierOptions, TraceJob } from './api'
 import { Badge, CoverageList, JsonData, ResourceRef } from './Details'
+import { QuantityList, quantity } from './AccountingDetails'
 import { pathConnections, recipeGraphForTrace, RecipeGraph } from './RecipeGraph'
 import type { AttachedConnection } from './RecipeGraph'
 import { RecyclePanel } from './RecyclePanel'
@@ -47,6 +48,22 @@ export function TraceActivity({activity,children}:{activity:TraceActivityState;c
     {activity.error && <p className="trace-activity-error" role="alert">{activity.error}</p>}
     {children && <div className="trace-activity-actions">{children}</div>}
   </section>
+}
+
+function MaterialDetourDetails({detour,resources,recipeName,inspect,onSelect}:{detour:MaterialDetour;resources:ReadonlyMap<string,Resource>;recipeName:(id:string)=>string;inspect:(id:string)=>void;onSelect:(id:string)=>void}) {
+  const conditional=detour.status==='conditional_zero_net'
+  return <details>
+    <summary>{conditional?'Possible material detour':'No net material change'} · Steps {detour.start_step+1} to {detour.end_step+1}</summary>
+    <p>{conditional?'Some captured concrete choices have no net material change. Other checked choices change the material balance. The witness below is one zero-net selection.':'All captured concrete choices checked for this window have no net material change.'}</p>
+    <p className="help">This is captured material accounting, not proof of native execution or atom provenance. Starting stock is still needed for the listed recipe order.</p>
+    <p>Zero-net choices: {detour.zero_net_cases} of {detour.cases_checked} checked.</p>
+    <QuantityList values={detour.witness.required_start_stock} label="Required starting stock (includes presence requirements)" resources={resources} onSelect={onSelect}/>
+    {Object.keys(detour.witness.presence).length>0 && <><QuantityList values={detour.witness.presence} label="Presence requirements" resources={resources} onSelect={onSelect}/><p className="help">Required by non-consuming slots. Already included in starting stock.</p></>}
+    <details><summary>Concrete selection and recipe runs</summary><ol>{detour.witness.executions.map((execution,index)=><li key={index}>
+      <button onClick={()=>inspect(execution.process_id)}>{recipeName(execution.process_id)}</button><span>Runs {quantity(execution.runs)}</span>
+      <ul>{Object.entries(detour.witness.selections[execution.process_id]??{}).map(([slot,choice])=><li key={slot}>Input {Number(slot)+1}: <ResourceRef id={choice.resource_id} resources={resources} onSelect={onSelect}/> · Choice {choice.choice_index+1}</li>)}</ul>
+    </li>)}</ol></details>
+  </details>
 }
 
 export function TraceView({trace,onSelect,onUseStart,onUseTarget,tierOptions,boardId,jobStatus,resultRevision,activity,activityActions}: {trace: Trace;onSelect:(id:string)=>void;onUseStart?:(id:string)=>void;onUseTarget?:(id:string)=>void;tierOptions?:TierOptions;boardId?:string;jobStatus?:TraceJob['status'];resultRevision?:number;activity?:TraceActivityState;activityActions?:React.ReactNode}) {
@@ -106,6 +123,7 @@ export function TraceView({trace,onSelect,onUseStart,onUseTarget,tierOptions,boa
   const recipeName=(id:string)=>processById.get(id)?.display_name || id
   const resourceName=(id:string)=>resourceById.get(id)?.display_name || resourceById.get(id)?.registry_name || id
   const hasRecipes=trace.paths.some(path=>path.process_ids.length>0)
+  const materialDetourCount=trace.path_details?.reduce((count,path)=>count+(path.material_detours?.length??0),0)??0
   return <>
     <section className={`main-route-panel route-${route.status}`} aria-label="Target-directed route">
       <div className="detail-title">
@@ -143,14 +161,16 @@ export function TraceView({trace,onSelect,onUseStart,onUseTarget,tierOptions,boa
     </div>
       {overlay && <div className="notice"><strong>Main path and secondary return path</strong><p>The graph now shows the chosen main plan and one return path. Output and return links are presentation connections, not simultaneous execution proof.</p><ul>{attachments.map((link,index)=><li key={index}>{link.label}: {recipeName(link.source)} → {recipeName(link.target)} · {resourceName(link.resourceId)}</li>)}</ul><button onClick={()=>setOverlay(null)}>Show all main paths</button></div>}
       {recycle && <RecyclePanel key={`${trace.snapshot_id}:${recycle.ownerId}:${recycle.byproductId}:${recycle.initialPathIndex??'default'}`} trace={trace} {...recycle} tierOptions={tierOptions} onSelect={selectResource} onOverlay={(plan,index)=>{setHighlight(null);setOverlay({plan,index,ownerId:recycle.ownerId})}}/>}
-      <details className="path-list"><summary>Ordered paths and explanations ({trace.paths.length})</summary>{trace.paths.map((path,index)=>{
+      <details className="path-list"><summary>Ordered paths and explanations ({trace.paths.length}){materialDetourCount>0 && ` · ${materialDetourCount} material detour${materialDetourCount===1?'':'s'}`}</summary>
+      {trace.material_detour_analysis && <p className="help">Material balance checks cover only short recipe fragments.{trace.material_detour_analysis.status==='partial' && ' Some fragments could not be checked.'}</p>}
+      {trace.paths.map((path,index)=>{
         const explanation=trace.path_details?.find(item=>item.path_index===index)
         const branch=explanation?.target_process_id!=null && explanation.target_slot_index!=null && processById.has(explanation.target_process_id) ? {processId:explanation.target_process_id,slotIndex:explanation.target_slot_index}:null
         return <section key={index}><h4>Path {index+1} · {path.process_ids.length} steps</h4>{explanation && branch && <>
           <p>{explanation.selection_reason}</p><p>Material continuity hint: {explanation.material_continuity}. Target ingredient branch: <button onClick={()=>inspect(branch.processId)}>{recipeName(branch.processId)}</button>, input {branch.slotIndex+1}.</p>
           <p className="help">This path explains one dependency branch. Other recipe inputs still need external supplies.</p>
           {explanation.byproduct_steps.length>0 && <p className="help">Secondary output positions: {explanation.byproduct_steps.map(step=>`${recipeName(step.process_id)} → ${resourceName(step.resource_id)}`).join(', ')}. Native output order is a hint and does not prove a by-product role.</p>}
-        </>}{!!explanation?.input_category_hints?.length && <p className="help"><span title="Category membership does not determine actual tool use, wear or material contribution.">Crafting tool category:</span> {explanation.input_category_hints.map((hint,hintIndex)=><span key={`${hint.step_index}:${hint.process_id}:${hint.resource_id}`} title={hint.basis==='native_ore_dictionary_matching_membership'?'Native OreDictionary matching uses the item and metadata, including registered wildcards, and ignores NBT.':'Captured OreDictionary membership for this literal registered variant.'}>{hintIndex>0 && ', '}<button onClick={()=>selectResource(hint.resource_id)}>{resourceName(hint.resource_id)}</button> at step {hint.step_index+1} (<button onClick={()=>inspect(hint.process_id)}>{recipeName(hint.process_id)}</button>)</span>)}. See the recipe for other inputs and consumption.</p>}<ol>{path.process_ids.map((id,step)=><li key={id}><button onClick={()=>inspect(id)}>{recipeName(id)}</button><span>→ {resourceName(path.resource_ids[step+1])}</span></li>)}</ol></section>
+        </>}{!!explanation?.input_category_hints?.length && <p className="help"><span title="Category membership does not determine actual tool use, wear or material contribution.">Crafting tool category:</span> {explanation.input_category_hints.map((hint,hintIndex)=><span key={`${hint.step_index}:${hint.process_id}:${hint.resource_id}`} title={hint.basis==='native_ore_dictionary_matching_membership'?'Native OreDictionary matching uses the item and metadata, including registered wildcards, and ignores NBT.':'Captured OreDictionary membership for this literal registered variant.'}>{hintIndex>0 && ', '}<button onClick={()=>selectResource(hint.resource_id)}>{resourceName(hint.resource_id)}</button> at step {hint.step_index+1} (<button onClick={()=>inspect(hint.process_id)}>{recipeName(hint.process_id)}</button>)</span>)}. See the recipe for other inputs and consumption.</p>}{explanation?.material_detours?.map((detour,detourIndex)=><MaterialDetourDetails key={detourIndex} detour={detour} resources={resourceById} recipeName={recipeName} inspect={inspect} onSelect={selectResource}/>)}<ol>{path.process_ids.map((id,step)=><li key={id}><button onClick={()=>inspect(id)}>{recipeName(id)}</button><span>→ {resourceName(path.resource_ids[step+1])}</span></li>)}</ol></section>
       })}</details>
     <details className="path-list" open><summary>Direct recipe connections</summary><ul aria-label="Direct recipe connections">{connections.map(link=><li key={link.id}><button onClick={()=>inspect(link.target)}>{recipeName(link.source)} → {recipeName(link.target)}</button><span>{resourceName(link.resourceId)} · Paths {link.paths.map(index=>index+1).join(', ')}</span></li>)}</ul></details>
     <section className="leaves"><h3>Additional recipe requirements</h3><p className="help">Path intermediates are filtered during search. Presence, tools and co-products remain inside each whole recipe and are not intermediate filter matches.</p><div className="leaf-grid">{trace.leaves.map(leaf=><article key={leaf.resource_id}><ResourceRef id={leaf.resource_id} resources={resourceById} onSelect={selectResource}/><Badge tone={leaf.status==='assumed' ? 'presence' : leaf.status==='available' ? 'good' : 'warning'}>{leaf.status.replaceAll('_',' ')}</Badge>{leaf.reason && <p>{leaf.reason}</p>}</article>)}</div></section>

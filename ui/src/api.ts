@@ -58,6 +58,12 @@ interface CutterPathPreference {
 interface AcquisitionClassificationVisits {paths:number;process_references:number;processes:number;manifest_mods:number}
 export interface RecipeGroup {id:string;basis:'declared_material_transformation'|'native_process';process_ids:string[];auxiliary_input_indices:Record<string,number[]>}
 export interface PathGroup {id:string;representative_path_index:number;path_indices:number[]}
+export interface MaterialDetour {
+  start_step:number;end_step:number;process_ids:string[];resource_ids:string[]
+  status:'zero_net'|'conditional_zero_net';scope:'all_concrete_choices'|'concrete_selection_witness_only'
+  cases_checked:number;zero_net_cases:number
+  witness:{selections:InputSelectionMap;executions:{process_id:string;runs:Rational}[];required_start_stock:Quantities;presence:Quantities;net:Quantities}
+}
 export interface Trace {
   recipe_groups:RecipeGroup[]
   path_groups:PathGroup[]
@@ -88,7 +94,14 @@ export interface Trace {
       native_accounting:{tool_accounting:string|null;container_returns:string|null;input_accounting:string|null}
       scope:'selected_resource_category_only'
     }[]
+    material_detours?:MaterialDetour[]
   }[]
+  material_detour_analysis?: {
+    scope:'retained_2_3_recipe_windows';status:'complete'|'partial'
+    limits:{windows:number;cases:number;matching_rows:number;cases_per_window:number}
+    work:{windows:number;cases:number;matching_rows:number}
+    counts:{zero_net:number;conditional_zero_net:number;nonzero:number;unknown:number}
+  }
   branch_coverage: {target_process_id:string;slot_index:number;candidate_resources:number;paths:number;path_indices:number[];status:'represented'|'not_discovered'}[]
   snapshot_id: string; start_id: string; target_id: string; resources: Resource[]; processes: Process[]
   edges: { source: string; target: string; role: string; [key: string]: unknown }[]

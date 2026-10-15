@@ -103,7 +103,9 @@ add `--port PORT` to the command.
 - **Trace a processing chain.** Select start and target resources from the
   suggestions. Filter by voltage tier or required and excluded intermediates,
   then inspect complete recipes on the graph. Material searches support pause
-  and continue. Arrange the cards and export the board as PNG or SVG
+  and continue. Open path explanations to inspect possible material detours
+  and the starting stock they need. Arrange the cards and export the board
+  as PNG or SVG
 - **Investigate balance and cost.** Inspect recycling paths and material or
   chemical loops. The Analysis workspace can plan a target from selected base
   resources, compare nominal recipe energy with alternative networks, and

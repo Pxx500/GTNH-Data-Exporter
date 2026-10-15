@@ -123,6 +123,24 @@ lossless recycling. Inspect `search.recovery_preference` for the weight and
 candidate fact lookups. This metadata is read per query, without a new index
 version or a game dump. The extra lookups can increase query time.
 
+Inspect `path_details[].material_detours` in material traces for short windows
+with no net change in captured materials. `zero_net` covers every supported
+concrete input case compatible with the selected dependency spine.
+`conditional_zero_net` is an example only: some
+accepted choices have nonzero balances. Read its concrete selections and
+required starting stock before drawing a conclusion. Startup stock describes
+one selection even when every checked balance is zero. A mix/separate window
+may return Tin that was already required as an external input, rather than
+provide Tin from the selected Iron start.
+
+Read `material_detour_analysis` for bounds, unknown cases and added analysis
+visits. No annotation does not mean no detour. The evidence is descriptive and
+does not reorder or filter paths. It does not prove atom provenance, machine
+execution or that removing the window preserves all conditions. Starting
+stock includes presence requirements. Don't subtract the presence map to
+infer consumed stock. Use the existing selected-path accounting workflow
+when you need a specific concrete scenario.
+
 `path_selection="diverse"` spreads routes across target ingredient branches.
 `path_selection="shortest"` prefers fewer steps. Neither means lower EU or
 better ore utilization. Choose the policy explicitly when comparing results.

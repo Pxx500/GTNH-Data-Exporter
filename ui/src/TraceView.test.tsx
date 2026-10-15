@@ -243,6 +243,72 @@ const processes: Process[] = ['Furnace','Alloy Smelter','Bender'].map((display_n
 processes[1].inputs.push({role:'presence',choices:[{resource_id:'r4',amount:1,match:{mode:'exact'}}]})
 const trace: Trace = traceFixture({branch_coverage:[],path_selection:'diverse',snapshot_id:'fixture',start_id:'r0',target_id:'r3',resources:[resources[4],resources[2],resources[0],resources[3],resources[1]],processes:[processes[2],processes[0],processes[1]],edges:[{source:'resource:r0',target:'process:p0',role:'consume'},{source:'process:p0',target:'resource:r1',role:'output'},{source:'resource:r1',target:'process:p1',role:'consume'},{source:'resource:r4',target:'process:p1',role:'presence'},{source:'process:p1',target:'resource:r2',role:'output'},{source:'resource:r2',target:'process:p2',role:'consume'},{source:'process:p2',target:'resource:r3',role:'output'}],leaves:[],cycles:[],truncated:false,coverage:[],route:{status:'found',strategy:'shortest_known_dependency_path',resource_ids:['r0','r1','r2','r3'],process_ids:['p0','p1','p2']},search:{examined_processes:37,limit:1000,truncated:false},limit_reasons:[],paths:[{resource_ids:['r0','r1','r2','r3'],process_ids:['p0','p1','p2']}]})
 
+test('material detour evidence is discoverable but stays inside its exact path details',async()=>{
+  const detour={start_step:0,end_step:1,process_ids:['p0','p1'],resource_ids:['r0','r1','r0'],status:'zero_net' as const,scope:'all_concrete_choices' as const,cases_checked:1,zero_net_cases:1,
+    witness:{selections:{p0:{'0':{choice_index:0,resource_id:'r0'}},p1:{'0':{choice_index:0,resource_id:'r1'}}},executions:[{process_id:'p0',runs:{numerator:1,denominator:1}},{process_id:'p1',runs:{numerator:1,denominator:1}}],required_start_stock:{r0:{numerator:1,denominator:1}},presence:{},net:{}}}
+  const paths=[trace.paths[0],trace.paths[0]]
+  render(<TraceView trace={traceFixture({...trace,paths,path_details:[{path_index:0,selection_reason:'Selected dependency branch',material_continuity:'partial',byproduct_steps:[],target_process_id:'p2',target_slot_index:0,scope:'dependency_spine_with_external_inputs',material_detours:[detour]}]})} onSelect={vi.fn()}/>)
+  const summary=screen.getByText('Ordered paths and explanations (2) · 1 material detour')
+  expect(summary).toBeVisible()
+  const pathList=summary.closest('details')!
+  expect(pathList).not.toHaveAttribute('open')
+  pathList.setAttribute('open','')
+  const affected=within(pathList).getByRole('heading',{name:'Path 1 · 3 steps'}).closest('section')!
+  const other=within(pathList).getByRole('heading',{name:'Path 2 · 3 steps'}).closest('section')!
+  const annotation=within(affected).getByText('No net material change · Steps 1 to 2')
+  expect(annotation).toBeVisible()
+  expect(annotation.closest('details')).not.toHaveAttribute('open')
+  expect(within(other).queryByText(/No net material change/)).not.toBeInTheDocument()
+  annotation.closest('details')!.setAttribute('open','')
+  expect(within(affected).getByText(/All captured concrete choices checked for this window/)).toBeVisible()
+  expect(within(affected).getByText(/captured material accounting/)).toHaveTextContent('not proof of native execution or atom provenance')
+  const graph=screen.getByRole('region',{name:'Recipe path graph'})
+  expect(await within(graph).findByRole('article',{name:'Recipe Furnace'})).toBeVisible()
+  expect(within(graph).queryByText(/No net material change/)).not.toBeInTheDocument()
+  expect(within(screen.getByLabelText('Highlight route')).getAllByRole('option').map(option=>option.getAttribute('value'))).toEqual(['all','0','1'])
+})
+
+test('conditional material detours describe one concrete witness and keep presence within joint starting stock',async()=>{
+  const tin={...resources[1],display_name:'Tin Dust'}
+  const detour={start_step:1,end_step:2,process_ids:['p1','p2'],resource_ids:['r1','r2','r1'],status:'conditional_zero_net' as const,scope:'concrete_selection_witness_only' as const,cases_checked:2,zero_net_cases:1,
+    witness:{selections:{p1:{'0':{choice_index:1,resource_id:'r1'},'1':{choice_index:0,resource_id:'r4'}},p2:{'0':{choice_index:0,resource_id:'r2'}}},executions:[{process_id:'p1',runs:{numerator:1,denominator:2}},{process_id:'p2',runs:{numerator:1,denominator:1}}],required_start_stock:{r1:{numerator:3,denominator:1},r4:{numerator:1,denominator:1}},presence:{r4:{numerator:1,denominator:1}},net:{}}}
+  const report=traceFixture({...trace,resources:trace.resources.map(resource=>resource.id===tin.id?tin:resource),path_details:[{path_index:0,selection_reason:'Selected dependency branch',material_continuity:'partial',byproduct_steps:[],target_process_id:'p2',target_slot_index:0,scope:'dependency_spine_with_external_inputs',material_detours:[detour]}]})
+  vi.stubGlobal('fetch',vi.fn(async()=>new Response(JSON.stringify({snapshot_id:'fixture',item:tin}))))
+  const view=render(<TraceView trace={report} onSelect={vi.fn()}/>)
+  const pathList=screen.getByText(/Ordered paths and explanations/).closest('details')!
+  pathList.setAttribute('open','')
+  const summary=within(pathList).getByText('Possible material detour · Steps 2 to 3')
+  const evidence=summary.closest('details')!
+  expect(summary).toBeVisible()
+  expect(evidence).not.toHaveAttribute('open')
+  evidence.setAttribute('open','')
+  expect(within(evidence).getByText(/Some captured concrete choices/)).toHaveTextContent('Other checked choices change the material balance. The witness below is one zero-net selection.')
+  expect(within(evidence).getByText('Zero-net choices: 1 of 2 checked.')).toBeVisible()
+  const stock=within(evidence).getByRole('heading',{name:'Required starting stock (includes presence requirements)'}).closest('section')!
+  expect(within(within(stock).getByRole('button',{name:'Tin Dust'}).closest('li')!).getByText('3')).toBeVisible()
+  expect(within(within(stock).getByRole('button',{name:'Side input mold'}).closest('li')!).getByText('1')).toBeVisible()
+  const presence=within(evidence).getByRole('heading',{name:'Presence requirements'}).closest('section')!
+  expect(within(within(presence).getByRole('button',{name:'Side input mold'}).closest('li')!).getByText('1')).toBeVisible()
+  expect(within(evidence).getByText('Required by non-consuming slots. Already included in starting stock.')).toBeVisible()
+  expect(within(evidence).queryByText(/Consumed starting stock/)).not.toBeInTheDocument()
+  const selection=within(evidence).getByText('Concrete selection and recipe runs').closest('details')!
+  expect(selection).not.toHaveAttribute('open')
+  selection.setAttribute('open','')
+  expect(within(selection).getByText('Runs 1/2')).toBeVisible()
+  expect(within(selection).getByText(/Choice 2/).closest('li')).toHaveTextContent('Input 1: Tin Dust')
+  const graph=screen.getByRole('region',{name:'Recipe path graph'})
+  const tile=await within(graph).findByRole('article',{name:'Recipe Furnace'})
+  fireEvent.click(within(stock).getByRole('button',{name:'Tin Dust'}))
+  expect(await within(screen.getByRole('complementary')).findByRole('heading',{name:'Tin Dust'})).toBeVisible()
+  fireEvent.click(screen.getByRole('button',{name:'Close record inspector'}))
+  expect(within(graph).getByRole('article',{name:'Recipe Furnace'})).toBe(tile)
+  view.rerender(<TraceView trace={{...report,path_details:[],material_detour_analysis:{scope:'retained_2_3_recipe_windows',status:'partial',limits:{windows:128,cases:256,matching_rows:4096,cases_per_window:16},work:{windows:1,cases:0,matching_rows:0},counts:{zero_net:0,conditional_zero_net:0,nonzero:0,unknown:1}}}} onSelect={vi.fn()}/>)
+  expect(screen.getByText('Ordered paths and explanations (1)')).toBeVisible()
+  expect(screen.getByText('Material balance checks cover only short recipe fragments. Some fragments could not be checked.')).toBeVisible()
+  expect(screen.queryByText(/Possible material detour/)).not.toBeInTheDocument()
+  expect(screen.queryByText(/No net material change/)).not.toBeInTheDocument()
+})
+
 test('material path explanations identify their target ingredient branch and honest secondary-output hints',()=>{
   render(<TraceView trace={traceFixture({...trace,path_selection:'material',path_details:[{path_index:0,selection_reason:'Prioritized native material continuity and target ingredient coverage',material_continuity:'supported',byproduct_steps:[{process_id:'p0',resource_id:'r1',basis:'secondary_output_position_hint'}],target_process_id:'p2',target_slot_index:1,scope:'dependency_spine_with_external_inputs'}]})} onSelect={vi.fn()}/>)
   expect(screen.getByText(/Results prioritize native material continuity/)).toBeInTheDocument()

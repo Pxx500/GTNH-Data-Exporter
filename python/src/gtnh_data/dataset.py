@@ -2355,6 +2355,7 @@ class Dataset:
         from .flow_index import path_details
         ordering = self._order_material_paths(paths, resources, processes, route, branches) if path_selection == 'material' else None
         details = path_details(self, paths, resources, processes, branches) if path_selection == 'material' else []
+        detours = self._material_detours(paths, details, resources, processes, matching_candidates) if path_selection == 'material' else None
         result = {"snapshot_id": self.snapshot_id, "start_id": start_id, "target_id": target_id,
                 "resources": [resources[id] for id in sorted(resources)], "processes": [processes[id] for id in sorted(processes)],
                   "edges": edges_list, "leaves": leaves, "cycles": cycles, "truncated": bool(limit_reasons), "coverage": coverage,
@@ -2364,8 +2365,98 @@ class Dataset:
                   'group_exclusions': group_exclusions}
         if ordering is not None:
             result['path_ordering'] = ordering
+        if detours is not None:
+            result['material_detour_analysis'] = detours
         result.update(self._trace_groups(connection, processes, paths, matching_candidates))
         return self._compact_trace(result, connection, view=view) if view != 'full' else result
+
+    def _material_detours(self, paths, details, resources, processes, matching_candidates):
+        from .balance import ledger_json
+        limits = {'windows': 128, 'cases': 256, 'matching_rows': 4096, 'cases_per_window': 16}
+        work = {'windows': 0, 'cases': 0, 'matching_rows': 0}
+        counts = {'zero_net': 0, 'conditional_zero_net': 0, 'nonzero': 0, 'unknown': 0}
+        captured = {'resources': resources, 'processes': processes, 'matching_candidates': matching_candidates}
+        total = sum(max(0, len(path['process_ids']) - size + 1) for path in paths for size in (2, 3))
+        by_path = {detail['path_index']: detail for detail in details}
+        for detail in details:
+            detail['material_detours'] = []
+
+        def window(path, start, size):
+            pids = path['process_ids'][start:start + size]
+            rids = path['resource_ids'][start:start + size + 1]
+            records = [processes[pid] for pid in pids]
+            if not all(self._fixed_material_effects(record) for record in records):
+                return 'unknown', None
+            slots, row_count, case_count = [], 0, 1
+            for record in records:
+                for index, slot in enumerate(record['inputs']):
+                    rows = [(ci, matching_candidates[_json({'resource_id': choice.get('resource_id'), 'match': choice['match']})])
+                            for ci, choice in enumerate(slot['choices'])]
+                    if any(not ids for _, ids in rows):
+                        return 'unknown', None
+                    length = sum(len(ids) for _, ids in rows)
+                    if not length:
+                        return 'unknown', None
+                    row_count += length
+                    case_count *= length
+                    if case_count > limits['cases_per_window']:
+                        return 'unknown', None
+                    slots.append((record['id'], index, rows))
+            if (work['cases'] + case_count > limits['cases']
+                    or work['matching_rows'] + row_count * (case_count + 1) > limits['matching_rows']):
+                return 'unknown', None
+            options = []
+            for _, _, rows in slots:
+                options.append([(ci, rid) for ci, ids in rows for rid in ids])
+            work['matching_rows'] += row_count
+            checked, zeros, witness = 0, 0, None
+            for assignment in product(*options):
+                work['cases'] += 1
+                selections = {pid: {} for pid in pids}
+                for (pid, si, _), (ci, rid) in zip(slots, assignment):
+                    selections[pid][si] = {'choice_index': ci, 'resource_id': rid}
+                if any(not any(slot['role'] == 'consume' and selections[record['id']][si]['resource_id'] == rids[i]
+                               and slot['choices'][selections[record['id']][si]['choice_index']]['amount'] > 0
+                               for si, slot in enumerate(record['inputs'])) for i, record in enumerate(records)):
+                    continue
+                work['matching_rows'] += row_count
+                try:
+                    plan, _, _ = self._path_plan(None, {'resource_ids': rids, 'process_ids': pids}, 1,
+                                                selections, 'guaranteed', captured=captured, integer_batches=True)
+                except (DatasetError, ValueError, TypeError, KeyError):
+                    return 'unknown', None
+                if plan['status'] != 'complete' or plan['startup']['uncertainty']:
+                    return 'unknown', None
+                checked += 1
+                if not plan['ledger']['net']:
+                    zeros += 1
+                    if witness is None:
+                        witness = ledger_json({'selections': plan['selected_inputs'], 'executions': plan['executions'],
+                            'required_start_stock': plan['startup']['required_start_stock'],
+                            'presence': plan['startup']['presence'], 'net': plan['ledger']['net']})
+            if not checked:
+                return 'unknown', None
+            if not zeros:
+                return 'nonzero', None
+            status = 'zero_net' if zeros == checked else 'conditional_zero_net'
+            return status, {'start_step': start, 'end_step': start + size - 1, 'process_ids': pids,
+                'resource_ids': rids, 'status': status,
+                'scope': 'all_concrete_choices' if status == 'zero_net' else 'concrete_selection_witness_only',
+                'cases_checked': checked, 'zero_net_cases': zeros, 'witness': witness}
+
+        for index, path in enumerate(paths):
+            for size in (2, 3):
+                for start in range(len(path['process_ids']) - size + 1):
+                    if work['windows'] >= limits['windows']:
+                        break
+                    work['windows'] += 1
+                    status, evidence = window(path, start, size)
+                    counts[status] += 1
+                    if evidence is not None:
+                        by_path[index]['material_detours'].append(evidence)
+        counts['unknown'] += total - work['windows']
+        return {'scope': 'retained_2_3_recipe_windows', 'status': 'partial' if counts['unknown'] else 'complete',
+                'limits': limits, 'work': work, 'counts': counts}
 
     def _trace_groups(self, connection, processes, paths, matching_candidates):
         """Project retained native witnesses onto declared material transformations."""
@@ -2454,24 +2545,19 @@ class Dataset:
             return False
         return True
 
-    def _material_signature(self, record, auxiliary, matching_candidates):
+    def _fixed_material_effects(self, record, auxiliary=()):
         if not self._declared_material_effects(record):
-            return None
-
-        def amount(value):
-            return str(Fraction(str(value)))
+            return False
 
         def certain(value):
             return isinstance(value, dict) and value.get('numerator') == value.get('denominator')
 
-        singleton_inputs, requirements = {}, []
         for index, slot in enumerate(record['inputs']):
             if index in auxiliary:
                 continue
             if (set(slot) - {'role', 'choices', 'consumption_chance', 'native_slot'}
                     or ('consumption_chance' in slot and not certain(slot['consumption_chance']))):
-                return None
-            alternatives = set()
+                return False
             for choice in slot['choices']:
                 match = choice['match']
                 if (set(choice) - {'resource_id', 'amount', 'match', 'consumption_chance', 'native_amount', 'declared_stack_size'}
@@ -2479,7 +2565,24 @@ class Dataset:
                         or match['mode'] == 'native_unknown'
                         or (match['mode'] in ('ore_dict', 'unified') and not match.get('group_id'))
                         or ('consumption_chance' in choice and not certain(choice['consumption_chance']))):
-                    return None
+                    return False
+        return all(not (set(output) - {'resource_id', 'amount', 'chance'}) and certain(output['chance'])
+                   for output in record['outputs'])
+
+    def _material_signature(self, record, auxiliary, matching_candidates):
+        if not self._fixed_material_effects(record, auxiliary):
+            return None
+
+        def amount(value):
+            return str(Fraction(str(value)))
+
+        singleton_inputs, requirements = {}, []
+        for index, slot in enumerate(record['inputs']):
+            if index in auxiliary:
+                continue
+            alternatives = set()
+            for choice in slot['choices']:
+                match = choice['match']
                 key = _json({'resource_id': choice.get('resource_id'), 'match': match})
                 if not matching_candidates[key]:
                     return None
@@ -2491,9 +2594,6 @@ class Dataset:
                 requirements.append(sorted(alternatives))
         outputs = {}
         for output in record['outputs']:
-            # Cross-machine joint-roll semantics are not declared for stochastic outputs.
-            if set(output) - {'resource_id', 'amount', 'chance'} or not certain(output['chance']):
-                return None
             id = output['resource_id']
             outputs[id] = outputs.get(id, Fraction()) + Fraction(str(output['amount']))
         return {'singleton_inputs': sorted((id, str(quantity)) for id, quantity in singleton_inputs.items()),
@@ -2550,6 +2650,13 @@ class Dataset:
             retained.update(choice['resource_id'] for slot in process['inputs'] for choice in slot['choices']
                             if choice.get('resource_id') is not None)
             retained.update(output['resource_id'] for output in process['outputs'])
+        for detail in result['path_details']:
+            for window in detail.get('material_detours', []):
+                witness = window['witness']
+                retained.update(witness['required_start_stock'])
+                retained.update(witness['presence'])
+                retained.update(selection['resource_id'] for slots in witness['selections'].values()
+                                for selection in slots.values())
         candidates = {}
         for edge in result['edges']:
             if edge['source'].startswith('resource:') and edge['target'].startswith('process:'):
@@ -2635,7 +2742,7 @@ class Dataset:
             return [row[0] for row in connection.execute("SELECT id FROM resources WHERE " + clause + " ORDER BY id", values)]
         return [resource_id]
 
-    def _selected_path(self, connection, path, selections, preferred_input=None):
+    def _selected_path(self, connection, path, selections, preferred_input=None, *, captured=None):
         if not isinstance(path, dict) or set(path) != {'resource_ids', 'process_ids'}:
             raise DatasetError('main_path must contain resource_ids and process_ids')
         resource_ids, process_ids = path['resource_ids'], path['process_ids']
@@ -2645,10 +2752,13 @@ class Dataset:
                 or len(set(resource_ids)) != len(resource_ids) or len(set(process_ids)) != len(process_ids)):
             raise DatasetError('A selected path must be a complete simple path of 1 to 64 processes')
         for id in resource_ids:
-            self._record(connection, 'resources', id)
+            if captured is None:
+                self._record(connection, 'resources', id)
+            elif id not in captured['resources']:
+                raise DatasetError(f'No captured resource {id}')
         records, selected, unsupported = {}, {}, []
         for index, id in enumerate(process_ids):
-            raw = self._record(connection, 'processes', id)
+            raw = self._record(connection, 'processes', id) if captured is None else captured['processes'][id]
             previous, following = resource_ids[index:index + 2]
             if (raw['executable'] is False or raw['conditions'].get('dynamic_output') == 'unresolved'
                     or not any(o['resource_id'] == following and self._positive_output(o) for o in raw['outputs'])):
@@ -2658,15 +2768,15 @@ class Dataset:
             narrowed = json.loads(_json(raw))
             selected[id] = {}
             flow_slots = 0
+            unresolved_flow = False
             for slot_index, slot in enumerate(raw['inputs']):
-                candidates = [set(self._choice_resources(connection, c)) if c['match']['mode'] != 'native_unknown'
+                candidates = [set(self._choice_resources(connection, c) if captured is None else captured['matching_candidates'][
+                                _json({'resource_id': c.get('resource_id'), 'match': c['match']})]) if c['match']['mode'] != 'native_unknown'
                               and (c['match']['mode'] not in ('unified', 'ore_dict') or c['match'].get('group_id')) else set()
                               for c in slot['choices']]
                 requested = selections.get(id, {}).get(str(slot_index), selections.get(id, {}).get(slot_index))
                 flow_matches = [i for i, c in enumerate(slot['choices']) if slot['role'] == 'consume'
                                 and c['amount'] > 0 and previous in candidates[i]]
-                if flow_matches:
-                    flow_slots += 1
                 if requested is None:
                     if len(flow_matches) == 1:
                         requested = {'choice_index': flow_matches[0], 'resource_id': previous}
@@ -2677,6 +2787,7 @@ class Dataset:
                     if requested is None and len(slot['choices']) == 1 and slot['choices'][0]['match']['mode'] == 'exact':
                         requested = {'choice_index': 0, 'resource_id': slot['choices'][0].get('resource_id')}
                 if requested is None:
+                    unresolved_flow = unresolved_flow or bool(flow_matches)
                     unsupported.append({'process_id': id, 'reason': f'Input slot {slot_index} needs an explicit concrete OR/group selection'})
                     continue
                 if not isinstance(requested, dict) or set(requested) != {'choice_index', 'resource_id'}:
@@ -2684,22 +2795,27 @@ class Dataset:
                 ci, rid = requested['choice_index'], requested['resource_id']
                 if type(ci) is not int or not 0 <= ci < len(slot['choices']) or not isinstance(rid, str):
                     raise DatasetError('Invalid concrete input selection')
-                self._record(connection, 'resources', rid)
+                if captured is None:
+                    self._record(connection, 'resources', rid)
+                elif rid not in captured['resources']:
+                    raise DatasetError(f'No captured resource {rid}')
                 if rid not in candidates[ci]:
                     raise DatasetError(f'{rid} does not match {id} input slot {slot_index}')
+                if slot['role'] == 'consume' and slot['choices'][ci]['amount'] > 0 and rid == previous:
+                    flow_slots += 1
                 selected[id][str(slot_index)] = dict(requested)
                 narrowed_choice = dict(slot['choices'][ci], resource_id=rid,
                                        match={'mode': 'exact', 'nbt_sensitive': True})
                 narrowed['inputs'][slot_index]['choices'] = [narrowed_choice]
-            if not flow_slots:
+            if not flow_slots and not unresolved_flow:
                 raise DatasetError(f'{id} does not consume the selected preceding resource')
             # Input matching belongs here. Accounting receives resolved concrete facts.
             records[id] = narrowed
         return records, selected, unsupported
 
-    def _path_plan(self, connection, path, first_runs, selections, yield_mode, preferred_input=None):
+    def _path_plan(self, connection, path, first_runs, selections, yield_mode, preferred_input=None, *, captured=None, integer_batches=False):
         from .balance import net_ledger, witness_ledger
-        records, selected, unsupported = self._selected_path(connection, path, selections, preferred_input)
+        records, selected, unsupported = self._selected_path(connection, path, selections, preferred_input, captured=captured)
         result = {'status': 'unsupported', 'executions': [], 'selected_inputs': selected,
                   'ledger': None, 'startup': None, 'unsupported': unsupported,
                   'native_executability': {id: record['executable'] for id, record in records.items()},
@@ -2724,6 +2840,9 @@ class Dataset:
                 count = available / required
             steps.append({'process_id': id, 'runs': count})
             available = produced * count
+        if integer_batches:
+            scale = math.lcm(*(Fraction(step['runs']).denominator for step in steps))
+            steps = [{**step, 'runs': Fraction(step['runs']) * scale} for step in steps]
         result['executions'] = steps
         result['ledger'] = net_ledger(records, {step['process_id']: step['runs'] for step in steps}, yield_mode=yield_mode)
         result['startup'] = witness_ledger(records, steps, yield_mode=yield_mode)
