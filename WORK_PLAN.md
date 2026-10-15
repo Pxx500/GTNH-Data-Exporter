@@ -916,14 +916,33 @@ etap. Bieżące pomiary i decyzje są w SEARCH_EXPERIMENTS.md.
   dokładne drogi. Zgodne 48 hashy i natywne kroki, bez promocji do kodu.
   Opcjonalny miernik pamięci zawiódł przed pierwszym zapytaniem. Usunięto go
   w zapisanej korekcie setup, bez powtórki zapytań i bez pomiaru pamięci procesu.
-- [ ] Sprawdzić źródłowy kontrakt Space Mining i jego konsumentów. Rods/drills
+- [x] Sprawdzić źródłowy kontrakt Space Mining i jego konsumentów. Rods/drills
   są kosztami operacji, a ruda pochodzi z losowanej puli asteroidy. Ustalić,
   jak obecna interpretacja szans i nominalnych bilansów traktuje te wagi.
   Bez domyślnej listy wykluczeń i zmian surowych receptur przed analizą.
-- [ ] Sprawdzić odrębność i wykonalność relewancji wobec składników celu,
+  Dokładne źródła i JAR wersji .221 potwierdzają wielokrotne losowania z puli.
+  Ilość 64 i waga 3000/10000 opisują jeden draw, nie całą operację. Expected
+  może użyć błędnej ilości na wykonanie. Guaranteed nie finansuje tej rudy.
+  Opisowa zależność pozostaje przydatna. Potrzebna wspólna jawna odmowa
+  bilansu nierozwiązanego modelu, bez parsowania native_text i mnożenia przez
+  zgadywaną liczbę losowań. Wspólny structured issue odmawia bilansu obu
+  trybów, zachowuje nominalny tier i opisową zależność. Inspekcja podaje
+  powód poza niezmienionym item. Publiczne RED/GREEN i 210 testów Pythona
+  przechodzą. Jedna próba na natywnym p183528 spełnia 15/15 asercji,
+  zachowuje pięć wyjść, tier ZPM i zwykły probabilistyczny proces kontrolny.
+  Chronione hashe są zgodne. GUI pokazuje wspólny powód przy jawnej inspekcji,
+  bez dodatkowych zapytań dla kafelków grafu. Przechodzą 73 testy GUI,
+  typecheck i build kandydata. Działająca instancja nie została przełączona.
+- [x] Sprawdzić odrębność i wykonalność relewancji wobec składników celu,
   ważonych natywnymi ilościami. Tylko zapisane świadki i obecny właściciel
   deklaracji. Brak wzorów zgadywanych z nazw i brak promocji nieznanego składu.
   Najpierw porównanie z zakończonymi badaniami weighted semantic potential.
+  Obecność dokładnych Element ID ważona udziałami celu unika rozcieńczania
+  chloru w TiCl4 i Trichlorosilane. Dla PE Ethylene ma wsparcie 1, Hydrogen
+  1/7, Potassium 0. Polycaprolactam i pełna celka też mają 1, więc nie jest to
+  dowód usunięcia objazdów. Wafer nie ma składu, pozostaje unknown. Obecny
+  indeks nie przechowuje Element ID. Najpierw projekt kosztu przygotowania,
+  bez pilota i dodatkowych niepoliczonych odczytów w runtime.
 - [x] Wyjaśnić kolejność Scheelite: główna droga ma siedem kroków przez QFT
   i Space Mining, a trzyetapowy przerób chemiczny jest na indeksie 2.
   Sprawdzić właściciela wyboru głównej trasy. Zachować wszystkie legalne

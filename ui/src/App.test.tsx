@@ -11,6 +11,45 @@ function response(value: unknown, code=200) { return new Response(JSON.stringify
 function page(items: unknown[]) {return {snapshot_id:'test-snapshot',items,total:items.length,limit:30,offset:0}}
 
 test.each([
+  {native_model:'gtnhintergalactic.recipe.SpaceMiningData',reason:'Space Mining operation quantities are unmodeled. Captured output amounts and weights are not a supported per-operation yield model.',voltage_unresolved:false},
+  {native_model:'tectech.recipe.EyeOfHarmonyRecipe',reason:'Eye of Harmony operation quantities and voltage are unresolved in this fixture.',voltage_unresolved:true},
+])('recipe inspection carries the shared accounting issue for $native_model without changing ordinary recipes',async(issue)=>{
+  const flagged={...process,id:'flagged',display_name:'Flagged recipe',outputs:[{resource_id:resource.id,amount:2,chance:{numerator:1,denominator:4}}]}
+  const ordinary={...flagged,id:'ordinary',display_name:'Ordinary recipe'}
+  const inspected:string[]=[]
+  vi.stubGlobal('fetch',vi.fn(async(input:string)=>{
+    const url=new URL(input,'http://localhost')
+    if(url.pathname==='/api/status')return response(status)
+    if(url.pathname==='/api/environments')return response(page([]))
+    if(url.pathname==='/api/resources')return response(page([resource]))
+    if(url.pathname.startsWith('/api/resources/'))return response({snapshot_id:'test-snapshot',item:resource})
+    if(url.pathname==='/api/processes')return response(page([flagged,ordinary]))
+    if(url.pathname.startsWith('/api/processes/')){
+      const id=decodeURIComponent(url.pathname.slice('/api/processes/'.length))
+      inspected.push(id)
+      return response({snapshot_id:'test-snapshot',item:id==='flagged'?flagged:ordinary,...(id==='flagged'?{projection_issue:{status:'unsupported_accounting',...issue}}:{})})
+    }
+    throw new Error(`Unexpected route ${url.pathname}`)
+  }))
+  render(<App/>)
+  fireEvent.click(await screen.findByRole('button',{name:/Test mold/}))
+  const flaggedCard=(await screen.findByText('Flagged recipe')).closest('article')!
+  const ordinaryCard=screen.getByText('Ordinary recipe').closest('article')!
+  expect(inspected).toEqual([])
+  fireEvent.click(within(flaggedCard).getByRole('button',{name:/Flagged recipe/}))
+  expect(await within(flaggedCard).findByRole('heading',{name:'Operation accounting unavailable'})).toBeVisible()
+  expect(within(flaggedCard).getByText(issue.reason)).toBeVisible()
+  expect(within(flaggedCard).getByText('Amount 2')).toBeVisible()
+  expect(within(flaggedCard).getByText('Chance 25%')).toBeVisible()
+  expect(within(flaggedCard).queryByText('Informational / fake')).not.toBeInTheDocument()
+  fireEvent.click(within(ordinaryCard).getByRole('button',{name:/Ordinary recipe/}))
+  await waitFor(()=>expect(inspected).toEqual(['flagged','ordinary']))
+  expect(within(ordinaryCard).queryByRole('heading',{name:'Operation accounting unavailable'})).not.toBeInTheDocument()
+  expect(within(ordinaryCard).getByText('Amount 2')).toBeVisible()
+  expect(within(ordinaryCard).getByText('Chance 25%')).toBeVisible()
+})
+
+test.each([
   {label:'changed',changed:true,included:true},
   {label:'unchanged',changed:false,included:true},
   {label:'absent',changed:false,included:false},

@@ -39,6 +39,21 @@ def facts(material, quantity=Fraction(1), basis="gt_material_units"):
 
 
 class BalanceTests(unittest.TestCase):
+    def test_space_mining_pool_is_not_per_operation_expected_or_guaranteed_yield(self):
+        mining = recipe('mining', [slot('drill', 4), slot('drone', 1, 'presence')],
+                        [('ore', 64, Fraction(3, 10))])
+        mining.update(family='gregtech:gt.recipe.spaceMining',
+                      provenance={'owner': 'GTRecipe', 'map': 'gt.recipe.spaceMining'})
+        mining['conditions']['native_metadata'] = {'opaque native key': {
+            'type': 'gtnhintergalactic.recipe.SpaceMiningData', 'status': 'uninterpreted',
+            'native_text': 'not parsed'}}
+        for mode in ('expected', 'guaranteed'):
+            with self.subTest(yield_mode=mode):
+                result = net_ledger({'mining': mining}, {'mining': 1}, yield_mode=mode)
+                self.assertEqual(result['status'], 'unsupported')
+                self.assertEqual(result['produced'], {})
+                self.assertIn('Space Mining operation quantities are unmodeled', result['unsupported'][0]['reason'])
+
     def test_eye_of_harmony_projection_is_not_an_execution_ledger(self):
         original = recipe('proxy', [slot('dimension', 1, 'presence')], [('dust', 1, Fraction(1))])
         original.update(family='gregtech:gt.recipe.eyeofharmony', provenance={'owner': 'GTRecipe'})
@@ -59,6 +74,39 @@ class BalanceTests(unittest.TestCase):
                 normal = deepcopy(original)
                 (normal['conditions'] if key == 'special_items' else normal).pop(key)
                 self.assertEqual(net_ledger({'proxy': normal}, {'proxy': 1})['status'], 'complete')
+
+    def test_space_mining_marker_is_exact_and_capture_status_does_not_certify_yield(self):
+        original = recipe('mining', [slot('drill', 4)], [('ore', 64, Fraction(3, 10))])
+        original.update(provenance={'owner': 'GTRecipe', 'map': 'gt.recipe.spaceMining'})
+        original['conditions']['native_metadata'] = {'any key': {
+            'type': 'gtnhintergalactic.recipe.SpaceMiningData', 'status': 'uninterpreted'}}
+        for status in ('failed', 'captured_native_declaration'):
+            with self.subTest(status=status):
+                mining = deepcopy(original)
+                mining['conditions']['native_metadata']['any key']['status'] = status
+                self.assertEqual(net_ledger({'mining': mining}, {'mining': 1}, yield_mode='expected')['status'], 'unsupported')
+        for case in ('owner', 'map', 'container', 'value', 'type', 'native_text'):
+            with self.subTest(missing_marker=case):
+                normal = deepcopy(original)
+                if case in ('owner', 'map'):
+                    normal['provenance'][case] = 'other'
+                elif case == 'container':
+                    normal['conditions']['native_metadata'] = []
+                elif case == 'value':
+                    normal['conditions']['native_metadata']['any key'] = 'gtnhintergalactic.recipe.SpaceMiningData'
+                elif case == 'type':
+                    normal['conditions']['native_metadata']['any key']['type'] += 'Other'
+                else:
+                    normal['conditions']['native_metadata']['any key'] = {
+                        'native_text': 'gtnhintergalactic.recipe.SpaceMiningData', 'status': 'failed'}
+                result = net_ledger({'mining': normal}, {'mining': 1}, yield_mode='expected')
+                self.assertEqual(result['status'], 'complete')
+                self.assertEqual(result['produced'], {'ore': Fraction(96, 5)})
+        ordinary = deepcopy(original)
+        ordinary['conditions'].clear()
+        guaranteed = net_ledger({'mining': ordinary}, {'mining': 1})
+        self.assertEqual(guaranteed['status'], 'complete')
+        self.assertEqual(guaranteed['produced'], {})
 
     def test_undeclared_start_stock_is_a_net_change_and_differs_from_declared_empty_inventory(self):
         processes = {"r": recipe("r", [slot("water", 9000), slot("sulfur", 9)],

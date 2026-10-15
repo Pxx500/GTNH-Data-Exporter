@@ -374,6 +374,19 @@ include all runtime yield conditions. Accounting and discovery reject the exact
 typed projection in older supported snapshots too. Inspect its raw process for
 research, but do not present it as a solvable production step.
 
+Space Mining is another custom model. Its captured amounts and weights are
+output-pool declarations. They are not a supported per-operation yield model.
+Accounting and accounting discovery reject the exact typed native declaration
+in both yield modes, while possible-output lookup and dependency traces remain
+available. Its nominal voltage can remain known. Do not multiply a stack by its
+captured weight to claim ore per mining operation, or infer material conversion
+from consumed drill parts into ores.
+
+`get_process` can return `projection_issue` beside the unchanged `item`. Read
+its shared `reason` before using the process for accounting. The issue does not
+mean the machine cannot run. It means this application cannot account for that
+native operation model. Missing annotation does not certify executability.
+
 ### Audit loops and candidate anomalies
 
 ```json

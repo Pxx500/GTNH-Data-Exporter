@@ -29,6 +29,9 @@ export interface Environment { id: string; name: string; dimension_id: number | 
 export interface Coverage { id: string; domain: string; status: string; records: number; reason: string | null; provenance: unknown; [key: string]: unknown }
 export interface Page<T> { snapshot_id: string; items: T[]; total: number; limit: number; offset: number; matching_complete?: boolean; unresolved_matches?: number }
 export interface Single<T> { snapshot_id: string; item: T }
+export interface ProcessInspection extends Single<Process> {
+  projection_issue?: {status:'unsupported_accounting';native_model:string;reason:string;voltage_unresolved:boolean}
+}
 export interface Status { snapshot_id: string; manifest: Record<string, unknown>; counts: Record<string, number>; coverage: Coverage[] }
 export interface QueryScope {excluded_resource_ids?:string[];excluded_group_ids?:string[];excluded_namespaces?:string[];excluded_family_ids?:string[]}
 export interface BoundaryProfile {id:string;name:string;revision:number;base_resource_ids:string[];scope:QueryScope;semantics:string}

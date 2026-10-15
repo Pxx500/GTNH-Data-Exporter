@@ -43,12 +43,58 @@ class NetworkPlanningTests(unittest.TestCase):
                     start_stock={'dimension': 1}, max_tier=1, unknown_tier_policy='include')
                 self.assertEqual(plan['solutions'], [])
                 self.assertNotEqual(plan['status'], 'complete')
-                self.assertEqual(dataset.get_process(p['id'])['item'], p)
+                inspection = dataset.get_process(p['id'])
+                self.assertEqual(inspection['item'], p)
+                self.assertTrue(inspection['projection_issue']['voltage_unresolved'])
+                self.assertIn('Eye of Harmony', inspection['projection_issue']['reason'])
                 self.assertEqual(dataset.find_processes(output_id=target)['items'], [p])
                 for policy in ('shortest', 'diverse'):
                     self.assertEqual(dataset.trace_processes(start_id='dimension', target_id=target,
                         path_selection=policy)['paths'], [])
 
+
+    def test_space_mining_is_inspectable_and_traversable_but_not_operation_accounting(self):
+        mining = process('mining', [slot(choice('drill', amount=4)), slot(choice('rod', amount=4)),
+            slot(choice('drone'), role='presence')], ['ore', 'other_ore'],
+            family='gregtech:gt.recipe.spaceMining', conditions={'enabled': True, 'fake': False,
+                'native_metadata': {'opaque native key': {'type': 'gtnhintergalactic.recipe.SpaceMiningData',
+                    'status': 'uninterpreted', 'native_text': 'not parsed'}}})
+        mining['provenance'].update(owner='GTRecipe', map='gt.recipe.spaceMining')
+        mining['eu_per_tick'] = 480
+        for output, numerator in zip(mining['outputs'], (3000, 7000)):
+            output.update(amount=64, chance={'numerator': numerator, 'denominator': 10000})
+        ordinary = process('ordinary', [slot(choice('drill'))], ['ordinary_ore'])
+        dataset = self.dataset([mining, ordinary], ['drill', 'rod', 'drone', 'ore', 'other_ore', 'ordinary_ore'])
+        inspected = dataset.get_process('mining')
+        self.assertEqual(inspected['item'], mining)
+        issue = inspected['projection_issue']
+        self.assertEqual(issue, {'status': 'unsupported_accounting',
+            'native_model': 'gtnhintergalactic.recipe.SpaceMiningData',
+            'reason': 'Space Mining operation quantities are unmodeled. Captured output amounts and weights are not a supported per-operation yield model.',
+            'voltage_unresolved': False})
+        self.assertNotIn('projection_issue', dataset.get_process('ordinary'))
+        self.assertEqual(dataset.find_processes(input_id='drill', output_id='ore')['items'], [mining])
+        for policy in ('shortest', 'material'):
+            with self.subTest(path_selection=policy):
+                trace = dataset.trace_processes(start_id='drill', target_id='ore', path_selection=policy,
+                                                 max_tier=3, unknown_tier_policy='exclude')
+                self.assertEqual(trace['paths'][0]['process_ids'], ['mining'])
+                self.assertEqual(trace['processes'], [mining])
+                self.assertEqual(trace['recipe_tiers'][0]['status'], 'known')
+                self.assertEqual(trace['recipe_tiers'][0]['tier'], 3)
+        discovery = dataset.discover_network('ore', allowed_feed_ids=['drill', 'rod', 'drone'])
+        self.assertEqual(discovery['variants'], [])
+        self.assertEqual(discovery['exclusions']['counts'], {'unsupported_process': 1})
+        self.assertEqual(discovery['exclusions']['examples'][0]['detail'], issue['reason'])
+        plan = dataset.plan_network('ore', allowed_feed_ids=['drill', 'rod', 'drone'],
+                                    yield_mode='expected', objective='recipe_runs')
+        self.assertEqual(plan['solutions'], [])
+        self.assertNotEqual(plan['status'], 'complete')
+        self.assertEqual(plan['discovery']['exclusions']['examples'][0]['detail'], issue['reason'])
+        with self.assertRaisesRegex(DatasetError, 'Space Mining operation quantities are unmodeled'):
+            dataset.audit_energy('drill', 'ore', benchmark_process_id='mining',
+                                 allowed_feed_ids=['drill', 'rod', 'drone'], yield_mode='expected')
+        self.assertEqual(dataset.get_process('mining')['item'], mining)
 
     def test_candidate_discovery_keeps_all_and_inputs_presence_and_regeneration(self):
         main = process('main', [slot(choice('feed')), slot(choice('reagent')),

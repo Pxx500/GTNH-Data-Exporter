@@ -239,6 +239,17 @@ Accounting and discovery also reject the exact typed Eye of Harmony projection
 in supported older snapshots. Raw inspection remains available. Neither the
 display outputs nor the base declaration alone certify an executable network.
 
+Space Mining exposes weighted output-pool templates rather than a supported
+per-operation quantity model. The checked GT `.221` controller selects outputs
+repeatedly, with runtime plasma, parallelism and filtering effects. Captured
+amounts and weights remain unchanged. Possible-output lookup and descriptive
+dependency paths remain available. Ordinary operation-ledger accounting and
+accounting discovery reject the exact GT map and typed `SpaceMiningData`
+declaration in both yield modes. Expected `amount * chance` is not a supported
+operation yield. Guaranteed mode is also unsupported operation accounting,
+not a claim that its former zero-ore projection guaranteed ore. This issue
+does not invalidate the captured nominal voltage tier.
+
 Botania Mana Infusion retains one-item consumption, output quantity and typed
 NBT, plus `conditions.total_mana` and `energy_unit: mana`. Catalyst predicates
 in `conditions.catalyst_below` identify the required block one block below the
@@ -455,7 +466,12 @@ pagination, default 50 and maximum 500. Exact-resource lookup includes
 supported ingredient predicates, not only literal reference equality.
 Unsupported matching is reported as unresolved, never as an exact negative.
 No client reconstructs semantics from tooltip strings.
-Single-record results are `{snapshot_id, item}`. Status returns
+Single-record results are `{snapshot_id, item}`. Process inspection may also
+include `projection_issue` outside the unchanged `item`. This sparse object
+contains `status: unsupported_accounting`, `native_model`, `reason` and
+`voltage_unresolved`. It explains a recognized native model without a supported
+operation-accounting projection. Absence of this issue is not certification
+of native execution. Status returns
 `{snapshot_id, manifest, counts, coverage}`, with counts per record collection
 and coverage as an array of coverage records. Filtered process lists also
 report `matching_complete` and `unresolved_matches` where native predicates

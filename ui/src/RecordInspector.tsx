@@ -1,6 +1,6 @@
 import {useEffect,useRef,useState} from 'react'
-import type {ReactNode} from 'react'
-import type {Page,Process,Resource,Single} from './api'
+import type {ComponentProps,ReactNode} from 'react'
+import type {Page,Process,ProcessInspection,Resource,Single} from './api'
 import {query,useRequest} from './api'
 import {JsonData,ProcessDetail,RequestState} from './Details'
 import {ChemicalFacts} from './ChemicalFacts'
@@ -17,6 +17,16 @@ export function RecordInspector({children,onClose}:{children:ReactNode;onClose:(
     <header className="inspector-header"><h3>Selected record</h3><button ref={close} onClick={onClose} aria-label="Close record inspector">Close</button></header>
     <div className="inspector-content">{children}</div>
   </aside>
+}
+
+export function ProcessInspector(props:Omit<ComponentProps<typeof ProcessDetail>,'projectionIssue'>) {
+  const request=useRequest<ProcessInspection>(query(`processes/${encodeURIComponent(props.process.id)}`))
+  return <><RequestState {...request} retry={request.reload}/><ProcessDetail {...props} projectionIssue={request.data?.projection_issue}/></>
+}
+
+function RelatedProcess(props:ComponentProps<typeof ProcessInspector>) {
+  const [open,setOpen]=useState(false)
+  return <details onToggle={event=>setOpen(event.currentTarget.open)}><summary>{props.process.display_name||props.process.id}</summary>{open && <ProcessInspector {...props}/>}</details>
 }
 
 export function ResourceInspector({id,resources,onInspect,onOpenLibrary,onUseStart,onUseTarget}:{id:string;resources:ReadonlyMap<string,Resource>;onInspect:(id:string)=>void;onOpenLibrary:(id:string)=>void;onUseStart?:(id:string)=>void;onUseTarget?:(id:string)=>void}) {
@@ -36,7 +46,7 @@ export function ResourceInspector({id,resources,onInspect,onOpenLibrary,onUseSta
       <p className="help">These records produce this resource. Their ingredients and conditions still need to be supplied.</p>
       <RequestState {...processes} retry={processes.reload}/>{processes.data && <>
         <p>{processes.data.total.toLocaleString()} matching production recipes</p>{processes.data.matching_complete===false && <p className="warning-text">Matching is incomplete. Missing results are not an exact negative.</p>}
-        {processes.data.items.map(process=><details key={process.id}><summary>{process.display_name||process.id}</summary><ProcessDetail process={process} resources={resources} onSelect={onInspect}/></details>)}
+        {processes.data.items.map(process=><RelatedProcess key={process.id} process={process} resources={resources} onSelect={onInspect}/>)}
         <div className="pagination"><button disabled={offset===0} onClick={()=>setOffset(Math.max(0,offset-5))}>Previous recipes</button><button disabled={offset+processes.data.items.length>=processes.data.total} onClick={()=>setOffset(offset+5)}>Next recipes</button></div>
       </>}
     </>}</details>

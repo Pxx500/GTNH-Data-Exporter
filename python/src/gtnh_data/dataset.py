@@ -498,7 +498,12 @@ class Dataset:
         return self._get("resources", id)
 
     def get_process(self, id):
-        return self._get("processes", id)
+        from .balance import native_projection_issue
+        result = self._get("processes", id)
+        issue = native_projection_issue(result['item'])
+        if issue:
+            result['projection_issue'] = issue
+        return result
 
     def get_group(self, id):
         return self._get("groups", id)
@@ -800,7 +805,7 @@ class Dataset:
                         continue
                     issue = native_projection_issue(p)
                     if issue:
-                        exclude('unsupported_process', pid, issue)
+                        exclude('unsupported_process', pid, issue['reason'])
                         continue
                     if p['executable'] is not True or p['conditions'].get('dynamic_inputs') == 'unresolved' or p['conditions'].get('dynamic_output') == 'unresolved' or p['conditions'].get('enabled') is False or p['conditions'].get('fake') is True:
                         exclude('unsupported_process', pid)
@@ -1014,6 +1019,10 @@ class Dataset:
             max_depth=1, max_processes=1, max_variants=1, preferred_process_ids=[benchmark_process_id])
         variant = next((v for v in benchmark_discovery['variants'] if v['process_id'] == benchmark_process_id), None)
         if variant is None:
+            detail = next((item.get('detail') for item in benchmark_discovery['exclusions']['examples']
+                           if item['id'] == benchmark_process_id and item['reason'] == 'unsupported_process'), None)
+            if detail:
+                raise DatasetError(detail)
             raise DatasetError('Benchmark is not an executable target producer inside this scope')
         try:
             base = net_ledger({benchmark_process_id: variant['process']}, {benchmark_process_id: 1},
@@ -1278,8 +1287,9 @@ class Dataset:
                   'scope': 'recipe_voltage_not_machine_capability'}
         conditions = record['conditions']
         issue = native_projection_issue(record)
-        if issue or conditions.get('recipe_voltage_tier_status') == 'unresolved':
-            result['reason'] = issue or 'Native recipe-voltage declaration is unresolved'
+        if (issue and issue['voltage_unresolved']) or conditions.get('recipe_voltage_tier_status') == 'unresolved':
+            result['reason'] = (issue['reason'] if issue and issue['voltage_unresolved']
+                                else 'Native recipe-voltage declaration is unresolved')
             return result
         if (conditions.get('recipe_voltage_applicability') == 'not_applicable_crafting_grid'
                 and record['family'] == 'minecraft:crafting'

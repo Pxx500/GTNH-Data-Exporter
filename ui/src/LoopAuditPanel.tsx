@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import type { Process,Resource,Single,TierOptions } from './api'
+import type { ProcessInspection,Resource,TierOptions } from './api'
 import { query,useRequest } from './api'
 import { ActionHint,Badge,JsonData,ProcessDetail,RequestState,ResourceRef } from './Details'
 import { ResourcePicker } from './ResourcePicker'
@@ -24,7 +24,7 @@ export function LoopAuditPanel({startId,tierOptions,resources,onSelect}: {startI
   const [selected,setSelected]=useState(0)
   const [processId,setProcessId]=useState<string|null>(null)
   const request=useRequest<LoopReport>(url)
-  const process=useRequest<Single<Process>>(processId?query(`processes/${encodeURIComponent(processId)}`):null)
+  const process=useRequest<ProcessInspection>(processId?query(`processes/${encodeURIComponent(processId)}`):null)
   const currentUrl=query('loops',{start_id:start,kind,chemical_kind:chemicalKind,yield_mode:yieldMode,max_depth:depth,max_processes:200,max_paths:paths,max_states:5000,...tierOptions})
   const disabledReason=request.loading?'Searching and checking loop witnesses. Wait for this request to finish.':!start?'Select a loop start resource from the search results.':start!==resolved?'Wait for the selected loop resource to load.':undefined
   const current=url===currentUrl
@@ -36,7 +36,7 @@ export function LoopAuditPanel({startId,tierOptions,resources,onSelect}: {startI
       {request.data.witnesses.length===0 ? <div><p>No matching loop witness was established within this scope.</p><p className="help">Try a different start resource, relax the material or chemical filter, or raise the depth bound. Captured data and unsupported mechanics still limit the search.</p></div> : <label>Loop witness<select value={selected} onChange={event=>{setSelected(Number(event.target.value));setProcessId(null)}}>{request.data.witnesses.map((item,index)=><option key={index} value={index}>Loop {index+1} · Material {item.classification} · Chemistry {item.chemical_balance.classification}</option>)}</select></label>}
       {witness && <section className="loop-witness"><h4>Selected loop witness</h4><dl className="metrics"><div><dt>Material return</dt><dd>{witness.classification}</dd></div><div><dt>Return ratio</dt><dd>{quantity(witness.return_ratio)}</dd></div><div><dt>Material net closure</dt><dd>{witness.autonomous?'autonomous':Object.values(witness.external_consumption).some(amount=>amount.numerator>0)?'external consumption required':Object.values(witness.ledger.net).some(amount=>amount.numerator<0)?'net resource replenishment required':'autonomy unverified'}</dd></div><div><dt>Chemical balance</dt><dd>{witness.chemical_balance.classification} · {witness.chemical_balance.status}</dd></div></dl><ol>{witness.steps.map((step,index)=><li key={index}><button onClick={()=>setProcessId(step.process_id)}>{step.process_id}</button> · Runs {quantity(step.runs)}{witness.resource_ids[index+1] && <span> → <ResourceRef id={witness.resource_ids[index+1]} resources={resources} onSelect={onSelect}/></span>}</li>)}</ol>
         <QuantityList values={witness.required_start_stock} label="Loop starting stock" resources={resources} onSelect={onSelect}/><QuantityList values={witness.external_consumption} label="Loop external consumption" resources={resources} onSelect={onSelect}/><LedgerDetails ledger={witness.ledger} resources={resources} onSelect={onSelect}/><JsonData label="Chemical element balance and unsupported scope" value={witness.chemical_balance}/>
-        {processId && <><RequestState {...process} retry={process.reload}/>{process.data && <ProcessDetail process={process.data.item} resources={resources} onSelect={onSelect}/>}</>}
+        {processId && <><RequestState {...process} retry={process.reload}/>{process.data && <ProcessDetail process={process.data.item} projectionIssue={process.data.projection_issue} resources={resources} onSelect={onSelect}/>}</>}
       </section>}
       <JsonData label="Loop search bounds and unsupported mechanics" value={{search:request.data.search,unsupported:request.data.unsupported}}/>
     </>}

@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import type { Environment, Group, Page, Process, Resource, Single, Source, Status, Trace } from './api'
 import { query, useRequest } from './api'
-import { ActionHint, Badge, CoverageList, JsonData, ProcessDetail, RequestState, SourceDetail, ResourceRef } from './Details'
+import { ActionHint, Badge, CoverageList, JsonData, RequestState, SourceDetail, ResourceRef } from './Details'
+import { ProcessInspector } from './RecordInspector'
 import { TraceView } from './TraceView'
 import { ResourcePicker } from './ResourcePicker'
 import { ChemicalFacts } from './ChemicalFacts'
@@ -16,7 +17,7 @@ function Pagination({page, setOffset}: {page: Page<unknown>; setOffset: (offset:
 }
 function ProcessCard({process, onSelect}: {process: Process; onSelect: (id: string) => void}) {
   const [open, setOpen] = useState(false)
-  return <article className="process-card"><button className="process-summary" aria-expanded={open} onClick={() => setOpen(!open)}><span><strong>{process.display_name || process.id}</strong><small>{process.family} · {process.inputs.length} input slots · {process.outputs.length} outputs</small></span><span aria-hidden="true">{open ? '−' : '+'}</span></button>{open && <ProcessDetail process={process} onSelect={onSelect}/>}</article>
+  return <article className="process-card"><button className="process-summary" aria-expanded={open} onClick={() => setOpen(!open)}><span><strong>{process.display_name || process.id}</strong><small>{process.family} · {process.inputs.length} input slots · {process.outputs.length} outputs</small></span><span aria-hidden="true">{open ? '−' : '+'}</span></button>{open && <ProcessInspector process={process} onSelect={onSelect}/>}</article>
 }
 
 export default function App() {

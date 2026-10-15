@@ -1819,3 +1819,59 @@ Windows sampler fails before Dataset construction or any query and is removed
 through a preserved setup correction. Six calls run once, without tuning.
 No production code, index, dataset or service changes. Evidence and policy
 alternatives are in empty-container-routing-study/.
+
+### Space Mining declarations are not an operation-yield projection
+
+The saved Scheelite primary includes p183528, a native Space Mining declaration.
+Exact GT .221 source and the manifest-matching cached JAR establish weighted
+asteroid-pool selection with repeated output draws. Amount 64 is the actual
+selected stack size per draw. Weight 3000 out of 10000 describes its selection
+in this saved pool, not a 30 percent stack chance once per completed operation.
+Runtime plasma, parallelism, filters and asteroid selection add further context.
+
+Possible-output dependency lookup remains useful. Current expected accounting
+can instead treat 64 * 3000/10000 as output per execution. That is the proven
+model gap. Guaranteed accounting supplies zero ore for these individual
+outputs, so it does not falsely fund an ore target. Exact chemical accounting
+is already unresolved for the saved drill-tip and ore forms.
+
+The selected fix deepens the existing shared projection-issue owner. Accounting
+refuses the recognized unmodeled operation in both yield modes with a visible
+reason. Nominal voltage uncertainty remains separate. Inspection carries the
+same issue outside the unchanged raw process. Neither this guard nor the source
+study deletes dependency edges or claims rods transform into ore. No native
+text parser, guessed draw multiplier, broad family ban or version inference is
+introduced. Evidence and the two interface alternatives are in
+space-mining-role-study/.
+
+The implemented shared issue passes the public RED/GREEN regression and all
+210 Python tests. One native acceptance passes 15 frozen assertions. p183528
+retains its exact raw item, all five 64-stack outputs and weights, ZPM tier 7
+and direct dependency. Both ledgers report the shared unsupported reason.
+Ordinary p183912 retains its exact expected 1111/10000 coproduct. Canonical,
+private v6 and consumer hashes remain unchanged. The one tiny trace reports
+truncation, so it proves retention of this dependency rather than exhaustive
+coverage. Evidence is in space-mining-accounting-acceptance/.
+The GUI carries the same optional issue through explicit recipe inspection,
+without fetching every graph tile. All 73 GUI tests, typecheck and the private
+candidate build pass. No active UI bundle or running server was switched.
+
+### Target-Element presence needs prepared exact identities
+
+A target-conditioned support measure can sum the target's native mass fractions
+whose exact Element IDs occur in a complete intermediate declaration. It avoids
+diluting Ti support by the chlorine in TiCl4. Polymer's native C/H target gives
+Ethylene support 1, Hydrogen 1/7 and Potassium 0. Polycaprolactam and filled
+Polyethylene Cell also receive 1, so this is not a carrier-detour proof. Actual
+Wafer has no associated target declaration and remains unknown.
+
+Current prepared material tokens are names and material_basis is a status.
+Neither supplies exact Element IDs. The selected private pilot adds a nullable
+field in the existing prepared resource owner during its normal rebuild pass.
+Quantity-independent declaration support stays separate from eligible unit
+accounting in the existing chemistry owner. Target preparation, descriptor
+decoding and Element inspections must be charged. No per-intermediate canonical
+decoding is hidden in query timing. The one frozen twelve-case pilot must return
+a real cracking/polymerization primary, retain saved signatures and classes,
+and respect existing caps. No production promotion or speedup is presumed.
+Design and frozen protocol belong to target-constituent-relevance/.

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import type { Coverage, Environment, Group, Output, Process, Resource, Single, Source } from './api'
+import type { Coverage, Environment, Group, Output, Process, ProcessInspection, Resource, Single, Source } from './api'
 import { query, useRequest } from './api'
 
 export function Badge({children, tone = ''}: {children: React.ReactNode; tone?: string}) {
@@ -75,7 +75,7 @@ function Chance({value, label = 'Chance'}: {value: Output['chance']; label?: str
 export function OutputRows({outputs, onSelect, resources, onRecycle}: {outputs: Output[]; onSelect?: (id: string) => void; resources?: ReadonlyMap<string, Resource>;onRecycle?:(id:string)=>void}) {
   return <div className="output-list">{outputs.map((output, index) => <div className="choice" key={index}><ResourceRef id={output.resource_id} onSelect={onSelect} resources={resources} amount={output.amount??null}/><div className="choice-meta"><Chance value={output.chance}/>{onRecycle && <button onClick={()=>onRecycle(output.resource_id)} aria-label={`Recycle output ${output.resource_id}`}>Recycle output</button>}</div></div>)}</div>
 }
-export function ProcessDetail({process, onSelect, resources, onRecycle}: {process: Process; onSelect?: (id: string) => void; resources?: ReadonlyMap<string, Resource>;onRecycle?:(id:string)=>void}) {
+export function ProcessDetail({process, projectionIssue, onSelect, resources, onRecycle}: {process: Process; projectionIssue?:ProcessInspection['projection_issue']; onSelect?: (id: string) => void; resources?: ReadonlyMap<string, Resource>;onRecycle?:(id:string)=>void}) {
   const roles: Record<string, string> = {presence: 'Required presence', tool: 'Tool'}
   const conditions = process.conditions
   const native = conditions !== null && typeof conditions === 'object' ? conditions as Record<string, unknown> : undefined
@@ -112,7 +112,7 @@ export function ProcessDetail({process, onSelect, resources, onRecycle}: {proces
     <div className="recipe-io"><div className="recipe-inputs"><h4 title="All slots are required. Choose one alternative within each slot.">Inputs</h4>
     {process.inputs.length === 0 && <p className="empty-inline">No input slots captured.</p>}
     <div className="slot-list">{process.inputs.map((slot, index) => <section className="slot" key={index}><div className="slot-heading"><strong>Slot {index + 1}</strong>{slot.role !== 'consume' && <Badge tone="presence">{roles[slot.role] || slot.role}</Badge>}{slot.consumption_chance !== undefined && <Chance value={slot.consumption_chance} label="Consumption chance"/>} {slot.choices.length > 1 && <small>{slot.choices.length} alternatives</small>}</div>{slot.choices.map((choice, choiceIndex) => <div className="choice" key={choiceIndex}>{choiceIndex > 0 && <span className="choice-or">OR</span>}{choice.resource_id !== null && <ResourceRef id={choice.resource_id} onSelect={onSelect} resources={resources} amount={choice.amount}/>}<div className="choice-meta">{choice.resource_id===null && <Amount value={choice.amount}/>}{!['exact','unified','ore_dict'].includes(choice.match.mode) && <Badge>{choice.match.mode}</Badge>}{choice.match.nbt_sensitive === true && <Badge>NBT-sensitive</Badge>}{choice.consumption_chance !== undefined && <Chance value={choice.consumption_chance} label="Consumption chance"/>}</div>{choice.match.group_id && <GroupRef id={choice.match.group_id} onSelect={onSelect} resources={resources}/>}</div>)}</section>)}</div>
-    </div><div className="recipe-outputs"><h4>{outputTemplates ? 'Output templates' : 'Outputs'}</h4><OutputRows outputs={process.outputs} onSelect={onSelect} resources={resources} onRecycle={onRecycle}/></div></div>
+    </div><div className="recipe-outputs"><h4>{outputTemplates ? 'Output templates' : 'Outputs'}</h4>{projectionIssue?.status==='unsupported_accounting' && <section className="notice warning"><h4>Operation accounting unavailable</h4><p>{projectionIssue.reason}</p></section>}<OutputRows outputs={process.outputs} onSelect={onSelect} resources={resources} onRecycle={onRecycle}/></div></div>
     <ConditionFacts value={process.conditions}/><JsonData label="Technical data: full process record" value={process}/>
   </section>
 }

@@ -1,11 +1,11 @@
 import { useCallback, useMemo, useState } from 'react'
 import type { Trace, TierOptions } from './api'
-import { Badge, CoverageList, JsonData, ProcessDetail, ResourceRef } from './Details'
+import { Badge, CoverageList, JsonData, ResourceRef } from './Details'
 import { pathConnections, recipeGraphForTrace, RecipeGraph } from './RecipeGraph'
 import type { AttachedConnection } from './RecipeGraph'
 import { RecyclePanel } from './RecyclePanel'
 import type { RecyclingPlan } from './RecyclePanel'
-import { RecordInspector, ResourceInspector } from './RecordInspector'
+import { ProcessInspector, RecordInspector, ResourceInspector } from './RecordInspector'
 import { LoopAuditPanel } from './LoopAuditPanel'
 
 const limitDescriptions: Record<Trace['limit_reasons'][number],string> = {
@@ -91,7 +91,7 @@ export function TraceView({trace,onSelect,onUseStart,onUseTarget,tierOptions}: {
     <div className="graph-toolbar"><label>Highlight path<select value={highlight===null ? 'all' : highlight} onChange={event=>setHighlight(event.target.value==='all' ? null : Number(event.target.value))}><option value="all">All paths</option>{trace.paths.map((path,index)=><option value={index} key={index}>Path {index+1} · {path.process_ids.length} steps</option>)}</select></label></div>
     <div className={`trace-layout ${selection ? 'has-inspector' : ''}`}>
       <div className="free-recipe-graph" role="region" aria-label="Recipe path graph">{hasRecipes ? <RecipeGraph key={JSON.stringify([graphTrace.snapshot_id,graphTrace.paths])} graph={graph} highlight={highlight} inspect={inspect} inspectResource={selectResource} recycle={beginRecycle} recycleProcesses={overlay?.plan.main_path.process_ids}/> : <div className="empty-state"><h3>No production recipe tiles</h3><p>{route.status==='same_resource' ? 'The endpoints identify the same resource.' : 'No complete recipe path was emitted within this search.'}</p></div>}</div>
-      {selection && <RecordInspector onClose={()=>setSelection(null)}>{selectedProcess ? <ProcessDetail process={selectedProcess} resources={resourceById} onSelect={selectResource} onRecycle={trace.paths.some(path=>path.process_ids.includes(selectedProcess.id)) ? id=>beginRecycle(selectedProcess.id,id) : undefined}/> : selection.startsWith('resource:') && <ResourceInspector key={selection} id={selection.slice(9)} resources={resourceById} onInspect={selectResource} onOpenLibrary={onSelect} onUseStart={onUseStart} onUseTarget={onUseTarget}/>}</RecordInspector>}
+      {selection && <RecordInspector onClose={()=>setSelection(null)}>{selectedProcess ? <ProcessInspector process={selectedProcess} resources={resourceById} onSelect={selectResource} onRecycle={trace.paths.some(path=>path.process_ids.includes(selectedProcess.id)) ? id=>beginRecycle(selectedProcess.id,id) : undefined}/> : selection.startsWith('resource:') && <ResourceInspector key={selection} id={selection.slice(9)} resources={resourceById} onInspect={selectResource} onOpenLibrary={onSelect} onUseStart={onUseStart} onUseTarget={onUseTarget}/>}</RecordInspector>}
     </div>
       {overlay && <div className="notice"><strong>Main path and secondary return path</strong><p>The graph now shows the chosen main plan and one return path. Output and return links are presentation connections, not simultaneous execution proof.</p><ul>{attachments.map((link,index)=><li key={index}>{link.label}: {recipeName(link.source)} → {recipeName(link.target)} · {resourceName(link.resourceId)}</li>)}</ul><button onClick={()=>setOverlay(null)}>Show all main paths</button></div>}
       {recycle && <RecyclePanel key={`${trace.snapshot_id}:${recycle.ownerId}:${recycle.byproductId}`} trace={trace} {...recycle} tierOptions={tierOptions} onSelect={selectResource} onOverlay={(plan,index)=>{setHighlight(null);setOverlay({plan,index,ownerId:recycle.ownerId})}}/>}

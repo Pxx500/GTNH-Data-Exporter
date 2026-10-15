@@ -93,12 +93,24 @@ def _empty(yield_mode):
 
 
 def native_projection_issue(process):
-    """Identify captured display projections that cannot certify execution facts."""
-    special = process.get("conditions", {}).get("special_items")
-    if (process.get("provenance", {}).get("owner") == "GTRecipe"
+    """Describe recognized native models without a supported operation ledger."""
+    conditions = process.get("conditions", {})
+    provenance = process.get("provenance", {})
+    special = conditions.get("special_items")
+    if (provenance.get("owner") == "GTRecipe"
             and process.get("family") == "gregtech:gt.recipe.eyeofharmony"
             and isinstance(special, dict) and special.get("type") == "tectech.recipe.EyeOfHarmonyRecipe"):
-        return "Eye of Harmony custom-machine projection has unresolved execution quantities, yield and voltage"
+        return {"status": "unsupported_accounting", "native_model": "tectech.recipe.EyeOfHarmonyRecipe",
+                "reason": "Eye of Harmony custom-machine projection has unresolved execution quantities, yield and voltage",
+                "voltage_unresolved": True}
+    metadata = conditions.get("native_metadata")
+    if (provenance.get("owner") == "GTRecipe" and provenance.get("map") == "gt.recipe.spaceMining"
+            and isinstance(metadata, dict) and any(isinstance(value, dict)
+                and value.get("type") == "gtnhintergalactic.recipe.SpaceMiningData" for value in metadata.values())):
+        return {"status": "unsupported_accounting", "native_model": "gtnhintergalactic.recipe.SpaceMiningData",
+                "reason": "Space Mining operation quantities are unmodeled. Captured output amounts and weights "
+                          "are not a supported per-operation yield model.",
+                "voltage_unresolved": False}
     return None
 
 
@@ -115,7 +127,7 @@ def net_ledger(processes, executions, *, selections=None, groups=None, yield_mod
             process = processes[pid]
             issue = native_projection_issue(process)
             if issue:
-                raise ValueError(issue)
+                raise ValueError(issue["reason"])
             if process.get("executable") is not True:
                 raise ValueError("Native recipe executability is false or unresolved")
             conditions = process.get("conditions", {})
