@@ -24,7 +24,12 @@ test('trace starts with optional controls collapsed and keeps source, target and
   }))
   render(<App/>)
   await screen.findByText('Pack: Synthetic contract fixture')
+  const title=screen.getByRole('heading',{level:1,name:'Explore the pack’s mechanics'})
+  const navigation=screen.getByRole('navigation',{name:'Workspace'})
   fireEvent.click(screen.getByRole('button',{name:'Trace'}))
+  expect(screen.getByRole('heading',{level:1,name:'Explore the pack’s mechanics'})).toBe(title)
+  expect(title).toBeVisible()
+  expect(screen.getByRole('navigation',{name:'Workspace'})).toBe(navigation)
   const dataset=screen.getByText('Dataset details').closest('details')!
   expect(dataset).not.toHaveAttribute('open')
   expect(screen.getByText('Pack: Synthetic contract fixture')).not.toBeVisible()
@@ -41,6 +46,12 @@ test('trace starts with optional controls collapsed and keeps source, target and
   }
   for(const label of ['Required intermediate','Excluded intermediate','Search captured groups','Tools and parts in paths','Minimum recipe voltage tier','Route selection','Maximum depth','Search time per run (seconds)']){
     expect(screen.getByLabelText(label)).not.toBeVisible()
+  }
+  for(const tab of ['Library','Trace']){
+    fireEvent.click(within(navigation).getByRole('button',{name:tab}))
+    expect(screen.getByRole('heading',{level:1,name:'Explore the pack’s mechanics'})).toBe(title)
+    expect(title).toBeVisible()
+    expect(screen.getByRole('navigation',{name:'Workspace'})).toBe(navigation)
   }
 })
 
