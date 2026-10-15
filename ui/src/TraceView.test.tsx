@@ -4,6 +4,22 @@ import type { Process, Resource, Trace } from './api'
 import { TraceView } from './TraceView'
 
 afterEach(() => {cleanup(); vi.unstubAllGlobals()})
+
+test('unfinished or failed job snapshots do not present an empty board as a finished negative search',()=>{
+  const empty:Trace={...trace,paths:[],route:{...trace.route,status:'not_found',resource_ids:[],process_ids:[]}}
+  const view=render(<TraceView trace={empty} jobStatus="running" boardId="retained" onSelect={vi.fn()}/>)
+  expect(screen.getByRole('heading',{name:'No complete path retained yet'})).toBeVisible()
+  expect(screen.getByText(/Search examined/)).toHaveTextContent('Search running with retained results')
+  view.rerender(<TraceView trace={empty} jobStatus="paused" boardId="retained" onSelect={vi.fn()}/>)
+  expect(screen.queryByRole('heading',{name:'No known route found'})).not.toBeInTheDocument()
+  expect(screen.getByText(/Search examined/)).toHaveTextContent('Search paused with retained results')
+  view.rerender(<TraceView trace={empty} jobStatus="failed" boardId="retained" onSelect={vi.fn()}/>)
+  expect(screen.getByText(/Search examined/)).toHaveTextContent('Search failed with retained results')
+  view.rerender(<TraceView trace={empty} jobStatus="closed" boardId="retained" onSelect={vi.fn()}/>)
+  expect(screen.getByText(/Search examined/)).toHaveTextContent('Search closed with retained results')
+  view.rerender(<TraceView trace={empty} jobStatus="finished" boardId="retained" onSelect={vi.fn()}/>)
+  expect(screen.getByRole('heading',{name:'No known route found'})).toBeVisible()
+})
 test('complete alternative paths share recipe tiles and never add unrelated support or cross-links', async () => {
   const dust: Resource = {id:'dust',display_name:'Iron Dust',registry_name:'fixture:dust',kind:'item',metadata:0,nbt:null,provenance:{}}
   const crusher = {...processes[0],id:'crusher',display_name:'Crusher',outputs:[{resource_id:'dust',amount:1,chance:{numerator:1,denominator:1}}]}

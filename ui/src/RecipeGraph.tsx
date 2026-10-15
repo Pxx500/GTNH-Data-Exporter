@@ -59,24 +59,48 @@ function Flow({graph:recipeGraph,highlight,inspect,inspectResource,recycle,recyc
   const [nodes,setNodes,onNodesChange] = useNodesState<RecipeNode>(initialNodes)
   const loadedTrace = useRef(recipeGraph)
   const arrangedTrace = useRef<RecipeGraphData | null>(null)
-  useEffect(()=>{if(loadedTrace.current!==recipeGraph){loadedTrace.current=recipeGraph;setNodes(initialNodes);setExportImage(null);setExportNotice('');setExportError('')}},[recipeGraph,initialNodes,setNodes])
+  const placed=useRef(new Set<string>())
+  useEffect(()=>{if(loadedTrace.current!==recipeGraph){
+    loadedTrace.current=recipeGraph
+    const ids=new Set(initialNodes.map(node=>node.id))
+    placed.current=new Set([...placed.current].filter(id=>ids.has(id)))
+    setNodes(current=>{
+      const existing=new Map(current.map(node=>[node.id,node]))
+      return initialNodes.map(node=>{
+        const data={...node.data,muted:highlight!==null && !node.data.paths.includes(highlight)}
+        return existing.has(node.id)?{...existing.get(node.id)!,data}:{...node,data}
+      })
+    })
+    setExportImage(null);setExportNotice('');setExportError('')
+  }},[recipeGraph,initialNodes,setNodes,highlight])
   const initialized = useNodesInitialized()
   const {getNodes,fitView} = useReactFlow<RecipeNode>()
   const dimensions = nodes.map(node => `${node.id}:${node.measured?.width}:${node.measured?.height}`).join('|')
   const connections=recipeGraph.connections
   const edges: Edge[] = useMemo(()=>connections.map(link=>({id:link.id,source:link.source,target:link.target,label:(link.label ? `${link.label}: ` : '')+(resources.get(link.resourceId)?.display_name || resources.get(link.resourceId)?.registry_name || link.resourceId),markerEnd:{type:MarkerType.ArrowClosed},style:{stroke:highlight===null || (link.paths??[]).includes(highlight) ? '#087c70' : '#bac5ce',strokeWidth:highlight===null || (link.paths??[]).includes(highlight) ? 2.5 : 1},labelStyle:{fontSize:11,fill:'#38596c'},labelBgPadding:[7,4] as [number,number],labelBgBorderRadius:4})),[connections,resources,highlight])
-  const arrange = useCallback(() => {
+  const arrange = useCallback((onlyNew=false) => {
     const graph = new dagre.graphlib.Graph().setGraph({rankdir:'TB',nodesep:40,ranksep:60,marginx:24,marginy:24}).setDefaultEdgeLabel(()=>({}))
     const current = getNodes()
     if(current.length!==initialNodes.length || current.some(node=>!initialNodes.some(expected=>expected.id===node.id) || !node.measured?.width || !node.measured?.height)) return false
-    current.forEach(node=>graph.setNode(node.id,{width:node.measured!.width!,height:node.measured!.height!}))
-    connections.forEach(edge=>graph.setEdge(edge.source,edge.target))
+    const moving=onlyNew?current.filter(node=>!placed.current.has(node.id)):current
+    if(moving.length===0)return true
+    const movingIds=new Set(moving.map(node=>node.id))
+    const fixed=current.filter(node=>!movingIds.has(node.id))
+    moving.forEach(node=>graph.setNode(node.id,{width:node.measured!.width!,height:node.measured!.height!}))
+    connections.filter(edge=>movingIds.has(edge.source) && movingIds.has(edge.target)).forEach(edge=>graph.setEdge(edge.source,edge.target))
     dagre.layout(graph)
-    setNodes(current.map(node=>{const point=graph.node(node.id);return {...node,position:{x:point.x-node.measured!.width!/2,y:point.y-node.measured!.height!/2}}}))
-    requestAnimationFrame(()=>{void fitView({padding:.16,maxZoom:.9})})
+    const offsetX=fixed.length?Math.max(...fixed.map(node=>node.position.x+node.measured!.width!))+40:0
+    const offsetY=fixed.length?Math.min(...fixed.map(node=>node.position.y)):0
+    setNodes(current.map(node=>{
+      if(!movingIds.has(node.id))return node
+      const point=graph.node(node.id)
+      return {...node,position:{x:point.x-node.measured!.width!/2+offsetX,y:point.y-node.measured!.height!/2+offsetY}}
+    }))
+    moving.forEach(node=>placed.current.add(node.id))
+    if(!onlyNew || fixed.length===0)requestAnimationFrame(()=>{void fitView({padding:.16,maxZoom:.9})})
     return true
   },[getNodes,setNodes,connections,fitView,initialNodes])
-  useEffect(()=>{if(initialized && arrangedTrace.current!==recipeGraph && arrange()) arrangedTrace.current=recipeGraph},[initialized,dimensions,arrange,recipeGraph])
+  useEffect(()=>{if(initialized && arrangedTrace.current!==recipeGraph && arrange(true)) arrangedTrace.current=recipeGraph},[initialized,dimensions,arrange,recipeGraph])
   useEffect(()=>{setNodes(current=>current.map(node=>({...node,data:{...node.data,muted:highlight!==null && !node.data.paths.includes(highlight)}})))},[highlight,setNodes])
   const exportReady=initialized && nodes.length>0 && nodes.length===initialNodes.length
   async function exportBoard(format:BoardImageFormat){
@@ -98,7 +122,7 @@ function Flow({graph:recipeGraph,highlight,inspect,inspectResource,recycle,recyc
       setExporting(null)
     }
   }
-  return <div className="recipe-board">    <section aria-label="Recipe board actions" className="recipe-board-actions"><div className="recipe-board-buttons"><button onClick={arrange}>Arrange recipes</button><button disabled={!exportReady || !!exporting} onClick={()=>void exportBoard('png')}>Export whole board PNG</button><button disabled={!exportReady || !!exporting} onClick={()=>void exportBoard('svg')}>Export whole board SVG</button></div><p>Scroll the page normally. Ctrl+scroll or pinch zooms the graph. Drag the canvas to pan and a tile header to move it.</p><p>Export, then use the Download link to save. PNG uses 2× tile size. SVG suits larger boards and browser viewing.</p>{!exportReady && <p role="status">Wait for recipe tiles to finish loading before exporting.</p>}{exportNotice && <p role="status">{exportNotice}</p>}{exportImage && <div className="recipe-board-download"><a href={exportImage.image.dataUrl} download={`recipe-board.${exportImage.format}`}>Download {exportImage.format.toUpperCase()}</a><span>recipe-board.{exportImage.format}</span></div>}{exportError && <p className="warning-text" role="alert">{exportError}</p>}</section><div className="recipe-board-canvas"><ReactFlow ref={graphRoot} nodes={nodes} edges={edges} onNodesChange={onNodesChange} nodeTypes={nodeTypes} minZoom={.1} maxZoom={2} nodesConnectable={false} zoomOnScroll={false} panOnScroll={false} preventScrolling={false} zoomOnPinch zoomActivationKeyCode="Control" onNodeClick={(_,node)=>inspect(node.id)} fitView ariaLabelConfig={{'controls.fitView.ariaLabel':'Fit all recipes','controls.zoomIn.ariaLabel':'Zoom in','controls.zoomOut.ariaLabel':'Zoom out'}}>
+  return <div className="recipe-board">    <section aria-label="Recipe board actions" className="recipe-board-actions"><div className="recipe-board-buttons"><button onClick={()=>arrange()}>Arrange recipes</button><button disabled={!exportReady || !!exporting} onClick={()=>void exportBoard('png')}>Export whole board PNG</button><button disabled={!exportReady || !!exporting} onClick={()=>void exportBoard('svg')}>Export whole board SVG</button></div><p>Scroll the page normally. Ctrl+scroll or pinch zooms the graph. Drag the canvas to pan and a tile header to move it.</p><p>Export, then use the Download link to save. PNG uses 2× tile size. SVG suits larger boards and browser viewing.</p>{!exportReady && <p role="status">Wait for recipe tiles to finish loading before exporting.</p>}{exportNotice && <p role="status">{exportNotice}</p>}{exportImage && <div className="recipe-board-download"><a href={exportImage.image.dataUrl} download={`recipe-board.${exportImage.format}`}>Download {exportImage.format.toUpperCase()}</a><span>recipe-board.{exportImage.format}</span></div>}{exportError && <p className="warning-text" role="alert">{exportError}</p>}</section><div className="recipe-board-canvas"><ReactFlow ref={graphRoot} nodes={nodes} edges={edges} onNodesChange={onNodesChange} nodeTypes={nodeTypes} minZoom={.1} maxZoom={2} nodesConnectable={false} zoomOnScroll={false} panOnScroll={false} preventScrolling={false} zoomOnPinch zoomActivationKeyCode="Control" onNodeClick={(_,node)=>inspect(node.id)} fitView ariaLabelConfig={{'controls.fitView.ariaLabel':'Fit all recipes','controls.zoomIn.ariaLabel':'Zoom in','controls.zoomOut.ariaLabel':'Zoom out'}}>
     <Background gap={20}/><Controls/><MiniMap pannable={false} zoomable={false} style={{pointerEvents:'none'}} nodeColor="#c0dfd3"/>
 
   </ReactFlow></div></div>

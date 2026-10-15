@@ -108,6 +108,13 @@ export interface Trace {
 }
 export interface TierOptions {min_tier?:number;max_tier?:number;unknown_tier_policy:'exclude'|'include'}
 
+export interface TraceJob {
+  job_id:string;snapshot_id:string;revision:number
+  status:'running'|'paused'|'finished'|'failed'|'closed'
+  phase:string;elapsed_seconds:number;progress:Record<string,unknown>
+  result_revision:number;result?:Trace;request:Record<string,unknown>;error?:string
+}
+
 export function query(path: string, params: Record<string, string | number | string[] | undefined> = {}) {
   const search = new URLSearchParams()
   Object.entries(params).forEach(([key, value]) => { if (Array.isArray(value)) value.forEach(item => search.append(key, item)); else if (value !== undefined && value !== '') search.set(key, String(value)) })

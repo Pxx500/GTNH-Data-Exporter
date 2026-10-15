@@ -9,6 +9,140 @@ const process: Process = {id:'process/opaque:1',family:'test',display_name:'Mold
 const status = {snapshot_id:'test-snapshot',manifest:{created_at:'2026-10-11',capture:{kind:'synthetic'},pack:{name:'Synthetic contract fixture'}},counts:{resources:1,groups:0,processes:1,sources:0,environments:0,coverage:1},coverage:[{id:'coverage',domain:'test',status:'partial',records:1,reason:'Fixture only',provenance:{}}]}
 function response(value: unknown, code=200) { return new Response(JSON.stringify(value), {status:code,headers:{'Content-Type':'application/json'}}) }
 function page(items: unknown[]) {return {snapshot_id:'test-snapshot',items,total:items.length,limit:30,offset:0}}
+function finishedJob(result:unknown,state='finished') {return response({job_id:'fixture-job',snapshot_id:status.snapshot_id,revision:state==='closed'?2:1,status:state,phase:state,elapsed_seconds:1,progress:{},result_revision:1,request:{path_selection:'material'},result})}
+
+test('pause can deliver the first result and replacing a running job waits for cooperative closure',async()=>{
+  const target={...resource,id:'cooperative-target',display_name:'Cooperative target'}
+  const next={...process,id:'replacement',display_name:'Replacement recipe'}
+  const result:Trace={path_selection:'material',snapshot_id:status.snapshot_id,start_id:resource.id,target_id:target.id,resources:[resource,target],processes:[process],edges:[],leaves:[],cycles:[],truncated:false,coverage:[],route:{status:'found',strategy:'shortest_known_dependency_path',resource_ids:[resource.id,target.id],process_ids:[process.id]},paths:[{resource_ids:[resource.id,target.id],process_ids:[process.id]}],branch_coverage:[],search:{examined_processes:1,limit:1000,truncated:false},limit_reasons:[]}
+  let creations=0
+  let closing=false
+  let oldRead:((value:Response)=>void)|undefined
+  let finishClosure:((value:Response)=>void)|undefined
+  const envelope=(revision:number,state:string,extra={})=>({job_id:'old-job',snapshot_id:status.snapshot_id,revision,status:state,phase:'searching',elapsed_seconds:1,progress:{},result_revision:revision>=3?1:0,request:{path_selection:'material'},...extra})
+  vi.stubGlobal('fetch',vi.fn(async(input:string,init?:RequestInit)=>{
+    const url=new URL(input,'http://localhost')
+    if(url.pathname==='/api/status')return response(status)
+    if(url.pathname==='/api/environments')return response(page([]))
+    if(url.pathname==='/api/resources')return response(page(url.searchParams.get('q')==='Cooperative target'?[target]:[resource]))
+    if(url.pathname.startsWith('/api/resources/'))return response({snapshot_id:status.snapshot_id,item:decodeURIComponent(url.pathname).endsWith(target.id)?target:resource})
+    if(url.pathname==='/api/trace-jobs'){
+      creations++
+      return creations===1?response(envelope(1,'running')):response({...envelope(1,'finished'),job_id:'new-job',result_revision:1,result:{...result,processes:[next],paths:[{resource_ids:[resource.id,target.id],process_ids:[next.id]}]}})
+    }
+    if(init?.method==='DELETE'){closing=true;return response(envelope(5,'running'))}
+    if(url.pathname.endsWith('/pause'))return response(envelope(3,'paused',{result}))
+    if(url.pathname.endsWith('/continue'))return response(envelope(4,'running'))
+    if(url.pathname==='/api/trace-jobs/old-job')return new Promise<Response>(resolve=>{if(closing)finishClosure=resolve;else oldRead=resolve})
+    throw new Error(`Unexpected route ${url.pathname}`)
+  }))
+  render(<App/>)
+  await screen.findByText('Pack: Synthetic contract fixture')
+  fireEvent.click(screen.getByRole('button',{name:'Trace'}))
+  for(const [label,name] of [['Supplied start resource','Test mold'],['Target resource','Cooperative target']]){
+    fireEvent.focus(screen.getByLabelText(label));fireEvent.change(screen.getByLabelText(label),{target:{value:name}})
+    fireEvent.click(await screen.findByRole('option',{name:new RegExp(name)}))
+  }
+  fireEvent.click(screen.getByRole('button',{name:'Trace dependencies'}))
+  await waitFor(()=>expect(oldRead).toBeDefined(),{timeout:2000})
+  expect(screen.queryByRole('article',{name:'Recipe Mold cast'})).not.toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button',{name:'Stop search'}))
+  const tile=await screen.findByRole('article',{name:'Recipe Mold cast'})
+  expect(screen.getByRole('button',{name:'Continue search'})).toBeEnabled()
+  fireEvent.click(screen.getByRole('button',{name:'Continue search'}))
+  await waitFor(()=>expect(screen.getByRole('button',{name:'Stop search'})).toBeEnabled())
+  fireEvent.change(screen.getByLabelText('Maximum depth'),{target:{value:'8'}})
+  fireEvent.click(screen.getByRole('button',{name:'Trace dependencies'}))
+  await waitFor(()=>expect(finishClosure).toBeDefined(),{timeout:2000})
+  expect(screen.getByText(/Closing the previous search/)).toBeVisible()
+  expect(creations).toBe(1)
+  expect(screen.getByRole('article',{name:'Recipe Mold cast'})).toBe(tile)
+  await act(async()=>{finishClosure!(response(envelope(6,'closed')))})
+  await screen.findByRole('article',{name:'Recipe Replacement recipe'})
+  expect(creations).toBe(2)
+  await act(async()=>{oldRead!(response(envelope(2,'running')))})
+  expect(screen.queryByRole('article',{name:'Recipe Mold cast'})).not.toBeInTheDocument()
+})
+
+
+test('material jobs show retained results, stop and continue the same search without moving the board',async()=>{
+  const target={...resource,id:'job-target',display_name:'Job target'}
+  const second={...process,id:'job-second',display_name:'Second job recipe'}
+  const result:Trace={path_selection:'material',snapshot_id:status.snapshot_id,start_id:resource.id,target_id:target.id,resources:[resource,target],processes:[process],edges:[],leaves:[],cycles:[],truncated:false,coverage:[],route:{status:'found',strategy:'shortest_known_dependency_path',resource_ids:[resource.id,target.id],process_ids:[process.id]},paths:[{resource_ids:[resource.id,target.id],process_ids:[process.id]}],branch_coverage:[],search:{examined_processes:1,limit:1000,truncated:false},limit_reasons:[]}
+  const requests:{path:string;method:string;body:Record<string,unknown>}[]=[]
+  let late:((value:Response)=>void)|undefined
+  let polls=0
+  const envelope=(revision:number,state:string,extra={})=>({job_id:'retained-job',snapshot_id:status.snapshot_id,revision,status:state,phase:'searching',elapsed_seconds:1,progress:{},result_revision:revision>=6?2:revision>=2?1:0,request:{start_id:resource.id,target_id:target.id,path_selection:'material'},...extra})
+  vi.stubGlobal('fetch',vi.fn(async(input:string,init?:RequestInit)=>{
+    const url=new URL(input,'http://localhost')
+    const body=init?.body?JSON.parse(String(init.body)):{}
+    if(url.pathname==='/api/status')return response(status)
+    if(url.pathname==='/api/environments')return response(page([]))
+    if(url.pathname==='/api/resources')return response(page(url.searchParams.get('q')==='Job target'?[target]:[resource]))
+    if(url.pathname.startsWith('/api/resources/'))return response({snapshot_id:status.snapshot_id,item:decodeURIComponent(url.pathname).endsWith(target.id)?target:resource})
+    if(url.pathname.startsWith('/api/processes/'))return response({snapshot_id:status.snapshot_id,item:process})
+    if(url.pathname.startsWith('/api/trace-jobs')){
+      requests.push({path:url.pathname,method:init?.method??'GET',body})
+      if(init?.method==='DELETE')return response(envelope(7,'closed'))
+      if(url.pathname==='/api/trace-jobs')return response(envelope(1,'running'))
+      if(url.pathname.endsWith('/pause'))return response(envelope(4,'paused'))
+      if(url.pathname.endsWith('/continue'))return response(envelope(5,'running'))
+      polls++
+      if(polls===1)return response(envelope(2,'running',{result}))
+      if(polls===2)return new Promise<Response>(resolve=>{late=resolve})
+      return response(envelope(6,'finished',{result:{...result,processes:[process,second],paths:[{resource_ids:[resource.id,target.id],process_ids:[second.id]},...result.paths],limit_reasons:['search_work_limit'],truncated:true}}))
+    }
+    throw new Error(`Unexpected route ${url.pathname}`)
+  }))
+  const view=render(<App/>)
+  await screen.findByText('Pack: Synthetic contract fixture')
+  fireEvent.click(screen.getByRole('button',{name:'Trace'}))
+  for(const [label,name] of [['Supplied start resource','Test mold'],['Target resource','Job target']]){
+    fireEvent.focus(screen.getByLabelText(label));fireEvent.change(screen.getByLabelText(label),{target:{value:name}})
+    fireEvent.click(await screen.findByRole('option',{name:new RegExp(name)}))
+  }
+  fireEvent.change(screen.getByLabelText('Search time per run (seconds)'),{target:{value:'2'}})
+  fireEvent.change(screen.getByLabelText('Search work budget'),{target:{value:'2'}})
+  fireEvent.click(screen.getByRole('button',{name:'Trace dependencies'}))
+  expect(await screen.findByText(/Preparing the first retained result/)).toBeVisible()
+  expect(screen.queryByText('No known route found')).not.toBeInTheDocument()
+  const tile=(await screen.findByRole('article',{name:'Recipe Mold cast'})).closest('.react-flow__node') as HTMLElement
+  expect(requests[0].body).toMatchObject({time_budget_seconds:2,budget_multiplier:2,path_selection:'material',required_resource_ids:[],excluded_resource_ids:[],excluded_group_ids:[],view:'compact'})
+  expect(screen.getByRole('button',{name:'Stop search'})).toBeEnabled()
+  await waitFor(()=>expect(tile.style.transform).not.toBe('translate(0px,0px)'))
+  const before=tile.style.transform
+  fireEvent.click(tile);tile.focus();fireEvent.keyDown(tile,{key:'ArrowRight'})
+  await waitFor(()=>expect(tile.style.transform).not.toBe(before))
+  const position=tile.style.transform
+  fireEvent.change(screen.getByLabelText('Highlight path'),{target:{value:'0'}})
+  const viewport=tile.closest('.react-flow__viewport') as HTMLElement
+  const originalCamera=viewport.style.transform
+  fireEvent.wheel(tile,{deltaY:-80,ctrlKey:true,clientX:100,clientY:100})
+  await waitFor(()=>expect(viewport.style.transform).not.toBe(originalCamera))
+  const camera=viewport.style.transform
+  await waitFor(()=>expect(late).toBeDefined(),{timeout:2000})
+  fireEvent.click(screen.getByRole('button',{name:'Stop search'}))
+  expect(await screen.findByText(/^Search paused ·/)).toBeVisible()
+  await act(async()=>{late!(response(envelope(3,'running',{result:{...result,processes:[],paths:[]}})))})
+  expect(screen.getByRole('article',{name:'Recipe Mold cast'}).closest('.react-flow__node')).toBe(tile)
+  fireEvent.change(screen.getByLabelText('Maximum depth'),{target:{value:'8'}})
+  expect(screen.getByText(/Settings changed.*new search/)).toBeVisible()
+  expect(screen.getByRole('article',{name:'Recipe Mold cast'})).toBeVisible()
+  fireEvent.click(screen.getByRole('button',{name:'Continue search'}))
+  await screen.findByRole('article',{name:'Recipe Second job recipe'})
+  expect(requests.filter(r=>r.path.endsWith('/continue'))).toEqual([{path:'/api/trace-jobs/retained-job/continue',method:'POST',body:{time_budget_seconds:2}}])
+  expect(requests.filter(r=>r.path==='/api/trace-jobs')).toHaveLength(1)
+  expect(tile.style.transform).toBe(position)
+  expect(viewport.style.transform).toBe(camera)
+  expect(screen.getByLabelText('Highlight path')).toHaveValue('1')
+  expect(screen.getByRole('article',{name:'Recipe Second job recipe'})).toHaveClass('path-muted')
+  expect(screen.getByRole('button',{name:'Continue search'})).toBeDisabled()
+  expect(screen.getByText(/Search finished.*new search/)).toBeVisible()
+  fireEvent.click(screen.getByRole('button',{name:'Arrange recipes'}))
+  await waitFor(()=>expect(tile.style.transform).not.toBe(position))
+  view.unmount()
+  await waitFor(()=>expect(requests.some(r=>r.method==='DELETE')).toBe(true))
+})
 
 test('Using switches between input matches and captured references with independent pagination and resource identity',async()=>{
   const other={...resource,id:'other-variant',display_name:'Other variant',nbt:{type:'compound',value:{marker:{type:'string',value:'other'}}}}
@@ -148,13 +282,14 @@ test.each([
   const cutterPreference={changed:cutterChanged??false,eligible_paths:2,classification_visits:{paths:2,recipes:1,slots:2,choices:2,outputs:1}}
   const acquisitionVisits={paths:2,process_references:4,processes:3,manifest_mods:1}
   const ordering:Trace['path_ordering']=!included?undefined:kind==='neutral'?{policy:'unchanged_material_order',scope:'retained_material_paths',changed:false,eligible_paths:0,classification_visits:acquisitionVisits,original_path_indices:[0,1]}:kind==='cutter'?{policy:'cutter_consumed_item_first',scope:'comparable_retained_final_cutter_paths',...cutterPreference,original_path_indices:changed?[1,0]:[0,1]}:{policy:'native_acquisition_after_retained_alternatives',scope:'retained_material_paths',changed,acquisition_changed:acquisitionChanged,eligible_paths:2,acquisition_paths:1,unknown_role_paths:0,source_evidence:{status:'verified',mod_id:'gtnhintergalactic',version:'fixture',source:'fixture source',sha256:'a'.repeat(64)},acquisition_process_ids:[acquisitionChanged?itemMaker.id:fluidMaker.id],classification_visits:acquisitionVisits,original_path_indices:changed?[1,0]:[0,1],...(cutterChanged===undefined?{}:{cutter_preference:cutterPreference})}
-  vi.stubGlobal('fetch',vi.fn(async(input:string)=>{
+  vi.stubGlobal('fetch',vi.fn(async(input:string,init?:RequestInit)=>{
     const url=new URL(input,'http://localhost')
+    if(init?.method==='DELETE')return finishedJob(undefined,'closed')
     if(url.pathname==='/api/status')return response(status)
     if(url.pathname==='/api/environments')return response(page([]))
     if(url.pathname==='/api/resources')return response(page(url.searchParams.get('q')==='Test output'?[target]:[resource]))
     if(url.pathname.startsWith('/api/resources/'))return response({snapshot_id:'test-snapshot',item:decodeURIComponent(url.pathname).endsWith(target.id)?target:resource})
-    if(url.pathname==='/api/trace')return response({branch_coverage:[],path_selection:'material',snapshot_id:'test-snapshot',start_id:resource.id,target_id:target.id,resources:[resource,item,fluid,target],processes:[itemMaker,fluidMaker,cutter],edges:[],leaves:[],cycles:[],truncated:false,coverage:[],route:{status:'found',strategy:'shortest_known_dependency_path',...paths[0]},paths,search:{examined_processes:3,limit:1000,truncated:false},limit_reasons:[],path_ordering:ordering})
+    if(url.pathname==='/api/trace-jobs')return finishedJob({branch_coverage:[],path_selection:'material',snapshot_id:'test-snapshot',start_id:resource.id,target_id:target.id,resources:[resource,item,fluid,target],processes:[itemMaker,fluidMaker,cutter],edges:[],leaves:[],cycles:[],truncated:false,coverage:[],route:{status:'found',strategy:'shortest_known_dependency_path',...paths[0]},paths,search:{examined_processes:3,limit:1000,truncated:false},limit_reasons:[],path_ordering:ordering})
     throw new Error(`Unexpected route ${url.pathname}`)
   }))
   render(<App/>)
@@ -179,17 +314,19 @@ test.each([
 test('terminal endpoint policy rejection explains the constraint and preserves selections across filter changes',async()=>{
   const ordinary={...resource,id:'ordinary-target',display_name:'Ordinary target'}
   const terminal={...resource,id:'terminal-target',display_name:'Tool target'}
-  const traceCalls:URL[]=[]
-  vi.stubGlobal('fetch',vi.fn(async(input:string)=>{
+  const traceCalls:Record<string,unknown>[]=[]
+  vi.stubGlobal('fetch',vi.fn(async(input:string,init?:RequestInit)=>{
     const url=new URL(input,'http://localhost')
+    if(init?.method==='DELETE')return finishedJob(undefined,'closed')
     if(url.pathname==='/api/status')return response(status)
     if(url.pathname==='/api/environments')return response(page([]))
     if(url.pathname==='/api/resources')return response(page(url.searchParams.get('q')==='Ordinary target'?[ordinary]:url.searchParams.get('q')==='Tool target'?[terminal]:[resource]))
     if(url.pathname.startsWith('/api/resources/'))return response({snapshot_id:'test-snapshot',item:[resource,ordinary,terminal].find(item=>decodeURIComponent(url.pathname).endsWith(item.id))})
-    if(url.pathname==='/api/trace'){
-      traceCalls.push(url)
-      const target=url.searchParams.get('target_id')===ordinary.id?ordinary:terminal
-      return response({branch_coverage:[],path_selection:'material',snapshot_id:'test-snapshot',start_id:resource.id,target_id:target.id,resources:[resource,target],processes:[],edges:[],leaves:[],cycles:[],truncated:false,coverage:[],route:{status:'not_found',strategy:'shortest_known_dependency_path',resource_ids:[],process_ids:[]},paths:[],search:{examined_processes:0,limit:1000,truncated:false,terminal_artifacts:{policy:'direct_targets_only',basis:'runtime_item_class_hierarchy',scope:'selected_consumed_spine_edges',recognition_status:'captured_for_checked_resources',endpoint_checks:2,endpoint_compatibility:target===ordinary?'incompatible':'compatible',checked_edges:0,blocked_edges:0,resource_lookups:2,terminal_resources:target===ordinary?1:2,unknown_resources:0,not_applicable_resources:0,charged_work:2}},limit_reasons:[]})
+    if(url.pathname==='/api/trace-jobs'){
+      const arguments_=JSON.parse(String(init?.body))
+      traceCalls.push(arguments_)
+      const target=arguments_.target_id===ordinary.id?ordinary:terminal
+      return finishedJob({branch_coverage:[],path_selection:'material',snapshot_id:'test-snapshot',start_id:resource.id,target_id:target.id,resources:[resource,target],processes:[],edges:[],leaves:[],cycles:[],truncated:false,coverage:[],route:{status:'not_found',strategy:'shortest_known_dependency_path',resource_ids:[],process_ids:[]},paths:[],search:{examined_processes:0,limit:1000,truncated:false,terminal_artifacts:{policy:'direct_targets_only',basis:'runtime_item_class_hierarchy',scope:'selected_consumed_spine_edges',recognition_status:'captured_for_checked_resources',endpoint_checks:2,endpoint_compatibility:target===ordinary?'incompatible':'compatible',checked_edges:0,blocked_edges:0,resource_lookups:2,terminal_resources:target===ordinary?1:2,unknown_resources:0,not_applicable_resources:0,charged_work:2}},limit_reasons:[]})
     }
     throw new Error(`Unexpected route ${url.pathname}`)
   }))
@@ -217,9 +354,9 @@ test('terminal endpoint policy rejection explains the constraint and preserves s
   await waitFor(()=>expect(screen.getByRole('button',{name:'Trace dependencies'})).toBeEnabled())
   fireEvent.click(screen.getByRole('button',{name:'Trace dependencies'}))
   await screen.findByRole('heading',{name:'No known route found'})
-  expect(traceCalls[1].searchParams.get('target_id')).toBe(terminal.id)
-  expect(traceCalls[1].searchParams.get('max_depth')).toBe('8')
-  expect(traceCalls[1].searchParams.get('terminal_artifact_policy')).toBe('direct_targets_only')
+  expect(traceCalls[1].target_id).toBe(terminal.id)
+  expect(traceCalls[1].max_depth).toBe(8)
+  expect(traceCalls[1].terminal_artifact_policy).toBe('direct_targets_only')
   expect(screen.queryByText(/The selected start is a tool or part/)).not.toBeInTheDocument()
 })
 
@@ -228,19 +365,21 @@ test('trace excludes selected captured groups by exact namespace while retaining
   const side={...resource,id:'side-input',display_name:'Side mold'}
   const groups=[{id:'ore:nuggetIron',name:'nuggetIron',kind:'ore_dict',members:['a','b','c','d','e'],member_count:5},{id:'unified:nuggetIron',name:'nuggetIron',kind:'unified',members:['a','b','c'],member_count:3}]
   const recipe={...process,inputs:[{role:'consume',choices:[{resource_id:resource.id,amount:1,match:{mode:'exact'}}]},{role:'presence',choices:[{resource_id:side.id,amount:1,match:{mode:'exact'}}]}],outputs:[{resource_id:target.id,amount:1,chance:{numerator:1,denominator:1}}]}
-  const traceCalls:URL[]=[]
+  const traceCalls:Record<string,unknown>[]=[]
   let recognitionStatus='partial'
-  vi.stubGlobal('fetch',vi.fn(async(input:string)=>{
+  vi.stubGlobal('fetch',vi.fn(async(input:string,init?:RequestInit)=>{
     const url=new URL(input,'http://localhost')
+    if(init?.method==='DELETE')return finishedJob(undefined,'closed')
     if(url.pathname==='/api/status')return response(status)
     if(url.pathname==='/api/environments')return response(page([]))
     if(url.pathname==='/api/resources')return response(page(url.searchParams.get('q')==='Test output'?[target]:url.searchParams.get('q')==='Side mold'?[side]:[resource]))
     if(url.pathname.startsWith('/api/resources/'))return response({snapshot_id:'test-snapshot',item:[resource,target,side].find(item=>decodeURIComponent(url.pathname).endsWith(item.id))})
     if(url.pathname==='/api/resource-groups')return response(page(groups))
     if(url.pathname.startsWith('/api/groups/'))return response({snapshot_id:'test-snapshot',item:groups.find(group=>decodeURIComponent(url.pathname).endsWith(group.id))})
-    if(url.pathname==='/api/trace'){
-      traceCalls.push(url)
-      return response({branch_coverage:[],path_selection:'material',snapshot_id:'test-snapshot',start_id:resource.id,target_id:target.id,resources:[resource,target,side],processes:[recipe],edges:[],leaves:[],cycles:[],truncated:false,coverage:[],route:{status:'found',strategy:'shortest_known_dependency_path',resource_ids:[resource.id,target.id],process_ids:[recipe.id]},paths:[{resource_ids:[resource.id,target.id],process_ids:[recipe.id]}],search:{examined_processes:1,limit:1000,truncated:false,terminal_artifacts:{policy:url.searchParams.get('terminal_artifact_policy'),basis:'runtime_item_class_hierarchy',scope:'selected_consumed_spine_edges',recognition_status:recognitionStatus,checked_edges:1,blocked_edges:0,resource_lookups:2,terminal_resources:0,unknown_resources:recognitionStatus==='partial'?2:0,not_applicable_resources:0,charged_work:2}},limit_reasons:[],group_exclusions:groups.filter(group=>url.searchParams.getAll('excluded_group_id').includes(group.id)).map(group=>({group_id:group.id,name:group.name,kind:group.kind,member_count:group.member_count}))})
+    if(url.pathname==='/api/trace-jobs'){
+      const arguments_=JSON.parse(String(init?.body))
+      traceCalls.push(arguments_)
+      return finishedJob({branch_coverage:[],path_selection:'material',snapshot_id:'test-snapshot',start_id:resource.id,target_id:target.id,resources:[resource,target,side],processes:[recipe],edges:[],leaves:[],cycles:[],truncated:false,coverage:[],route:{status:'found',strategy:'shortest_known_dependency_path',resource_ids:[resource.id,target.id],process_ids:[recipe.id]},paths:[{resource_ids:[resource.id,target.id],process_ids:[recipe.id]}],search:{examined_processes:1,limit:1000,truncated:false,terminal_artifacts:{policy:arguments_.terminal_artifact_policy,basis:'runtime_item_class_hierarchy',scope:'selected_consumed_spine_edges',recognition_status:recognitionStatus,checked_edges:1,blocked_edges:0,resource_lookups:2,terminal_resources:0,unknown_resources:recognitionStatus==='partial'?2:0,not_applicable_resources:0,charged_work:2}},limit_reasons:[],group_exclusions:groups.filter(group=>arguments_.excluded_group_ids.includes(group.id)).map(group=>({group_id:group.id,name:group.name,kind:group.kind,member_count:group.member_count}))})
     }
     throw new Error(`Unexpected route ${url.pathname}`)
   }))
@@ -265,10 +404,10 @@ test('trace excludes selected captured groups by exact namespace while retaining
   fireEvent.click(unified)
   fireEvent.click(screen.getByRole('button',{name:'Trace dependencies'}))
   await screen.findByRole('article',{name:'Recipe Mold cast'})
-  expect(traceCalls[0].searchParams.getAll('excluded_group_id')).toEqual(groups.map(group=>group.id))
-  expect(traceCalls[0].searchParams.getAll('excluded_resource_id')).toEqual(['side-input'])
-  expect(traceCalls[0].searchParams.get('view')).toBe('compact')
-  expect(traceCalls[0].searchParams.get('terminal_artifact_policy')).toBe('direct_targets_only')
+  expect(traceCalls[0].excluded_group_ids).toEqual(groups.map(group=>group.id))
+  expect(traceCalls[0].excluded_resource_ids).toEqual(['side-input'])
+  expect(traceCalls[0].view).toBe('compact')
+  expect(traceCalls[0].terminal_artifact_policy).toBe('direct_targets_only')
   expect(screen.getByText(/Tool and part recognition is incomplete for this search/)).toHaveTextContent('2 inspected resources')
   fireEvent.click(screen.getByRole('button',{name:'Process Mold cast'}))
   expect(within(screen.getByRole('complementary')).getByText('Required presence')).toBeInTheDocument()
@@ -288,9 +427,9 @@ test('trace excludes selected captured groups by exact namespace while retaining
   expect(unified).toBeChecked()
   fireEvent.click(screen.getByRole('button',{name:'Trace dependencies'}))
   await waitFor(()=>expect(traceCalls).toHaveLength(2))
-  expect(traceCalls[1].searchParams.getAll('excluded_group_id')).toEqual(['unified:nuggetIron'])
-  expect(traceCalls[1].searchParams.getAll('excluded_resource_id')).toEqual(['side-input'])
-  expect(traceCalls[1].searchParams.get('terminal_artifact_policy')).toBe('direct_targets_only')
+  expect(traceCalls[1].excluded_group_ids).toEqual(['unified:nuggetIron'])
+  expect(traceCalls[1].excluded_resource_ids).toEqual(['side-input'])
+  expect(traceCalls[1].terminal_artifact_policy).toBe('direct_targets_only')
   await waitFor(()=>expect(screen.queryByText(/Tool and part recognition is incomplete for this search/)).not.toBeInTheDocument())
 })
 
@@ -413,7 +552,7 @@ test('labels synthetic data and forwards trace controls to Dataset while retaini
   expect(screen.queryByLabelText('Highlight path')).not.toBeInTheDocument()
 })
 
-test('concrete intermediate tags forward repeated IDs and changing filters invalidates the displayed result', async () => {
+test('concrete intermediate tags forward repeated IDs and changed filters label the retained result', async () => {
   const catalog = ['Start ore','Target plate','Iron Dust','Purified Dust','Iron Nugget'].map((display_name,index)=>({...resource,id:`opaque:${index}`,display_name,metadata:index}))
   const calls: URL[]=[]
   vi.stubGlobal('fetch',vi.fn(async(input:string)=>{
@@ -431,6 +570,7 @@ test('concrete intermediate tags forward repeated IDs and changing filters inval
   render(<App/>)
   await screen.findByText('Synthetic verification data')
   fireEvent.click(screen.getByRole('button',{name:/^Trace$/}))
+  fireEvent.change(screen.getByLabelText('Route selection'),{target:{value:'shortest'}})
   async function choose(label:string,name:string){
     const input=screen.getByRole('combobox',{name:label})
     fireEvent.focus(input)
@@ -450,9 +590,10 @@ test('concrete intermediate tags forward repeated IDs and changing filters inval
   expect(calls[0].searchParams.getAll('required_resource_id')).toEqual(['opaque:2','opaque:3'])
   expect(calls[0].searchParams.getAll('excluded_resource_id')).toEqual(['opaque:4'])
   fireEvent.click(screen.getByRole('button',{name:'Remove required material opaque:2'}))
-  expect(screen.queryByRole('heading',{name:'No known route found'})).not.toBeInTheDocument()
-  expect(screen.getByText(/Search selections or filters changed/)).toBeInTheDocument()
+  expect(screen.getByRole('heading',{name:'No known route found'})).toBeInTheDocument()
+  expect(screen.getByText(/Settings changed/)).toBeInTheDocument()
   fireEvent.click(screen.getByRole('button',{name:'Trace dependencies'}))
+  await waitFor(()=>expect(calls).toHaveLength(2))
   await screen.findByRole('heading',{name:'No known route found'})
   expect(calls[1].searchParams.getAll('required_resource_id')).toEqual(['opaque:3'])
 })
@@ -473,6 +614,7 @@ test('typing iron dust and iron plate selects concrete IDs, and later editing in
   render(<App/>)
   await screen.findByText('Synthetic verification data')
   fireEvent.click(screen.getByRole('button',{name:/^Trace$/}))
+  fireEvent.change(screen.getByLabelText('Route selection'),{target:{value:'shortest'}})
   const start = screen.getByRole('combobox',{name:'Supplied start resource'})
   const target = screen.getByRole('combobox',{name:'Target resource'})
   const submit = screen.getByRole('button',{name:'Trace dependencies'})

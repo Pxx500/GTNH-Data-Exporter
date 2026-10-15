@@ -1,5 +1,5 @@
-import { useCallback, useMemo, useState } from 'react'
-import type { Trace, TierOptions } from './api'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import type { Trace, TierOptions, TraceJob } from './api'
 import { Badge, CoverageList, JsonData, ResourceRef } from './Details'
 import { pathConnections, recipeGraphForTrace, RecipeGraph } from './RecipeGraph'
 import type { AttachedConnection } from './RecipeGraph'
@@ -19,12 +19,18 @@ const limitDescriptions: Record<Trace['limit_reasons'][number],string> = {
   path_process_limit:'An additional complete path exceeded the included recipe limit. Increase that limit to include more paths.',
 }
 
-export function TraceView({trace,onSelect,onUseStart,onUseTarget,tierOptions}: {trace: Trace;onSelect:(id:string)=>void;onUseStart?:(id:string)=>void;onUseTarget?:(id:string)=>void;tierOptions?:TierOptions}) {
+export function TraceView({trace,onSelect,onUseStart,onUseTarget,tierOptions,boardId,jobStatus,resultRevision}: {trace: Trace;onSelect:(id:string)=>void;onUseStart?:(id:string)=>void;onUseTarget?:(id:string)=>void;tierOptions?:TierOptions;boardId?:string;jobStatus?:TraceJob['status'];resultRevision?:number}) {
   const [selection,setSelection] = useState<string|null>(null)
-  const [highlight,setHighlight] = useState<number|null>(null)
+  const pathKey=(path:Trace['paths'][number])=>JSON.stringify([path.resource_ids,path.process_ids])
+  const [highlightPath,setHighlightPath] = useState<{key:string;index:number}|null>(null)
+  const highlightedIndex=highlightPath && trace.paths[highlightPath.index] && pathKey(trace.paths[highlightPath.index])===highlightPath.key ? highlightPath.index : trace.paths.findIndex(path=>pathKey(path)===highlightPath?.key)
+  const highlight=highlightedIndex<0?null:highlightedIndex
+  const setHighlight=(index:number|null)=>setHighlightPath(index===null?null:{key:pathKey(trace.paths[index]),index})
   const [auditOpen,setAuditOpen]=useState(false)
   const [recycle,setRecycle]=useState<{ownerId:string;byproductId:string}|null>(null)
   const [overlay,setOverlay]=useState<{plan:RecyclingPlan;index:number;ownerId:string}|null>(null)
+  useEffect(()=>{setOverlay(null);setRecycle(null)},[resultRevision])
+  useEffect(()=>{if(selection?.startsWith('process:') && !trace.processes.some(process=>process.id===selection.slice(8)))setSelection(null)},[trace.processes,selection])
   const graphTrace=useMemo(()=>{
     if(!overlay)return trace
     const secondary=overlay.plan.secondary_trace
@@ -49,6 +55,7 @@ export function TraceView({trace,onSelect,onUseStart,onUseTarget,tierOptions}: {
   },[trace,overlay])
   const graph=useMemo(()=>recipeGraphForTrace(graphTrace,attachments),[graphTrace,attachments])
   const {route}=trace
+  const pending=jobStatus!==undefined && jobStatus!=='finished'
   const resourceById=useMemo(()=>new Map(graphTrace.resources.map(resource=>[resource.id,resource])),[graphTrace.resources])
   const processById=useMemo(()=>new Map(graphTrace.processes.map(process=>[process.id,process])),[graphTrace.processes])
   const connections=useMemo(()=>pathConnections(graphTrace),[graphTrace])
@@ -66,16 +73,16 @@ export function TraceView({trace,onSelect,onUseStart,onUseTarget,tierOptions}: {
       <div className="detail-title">
         <div>
           <p className="eyebrow">Target-directed discovery</p>
-          <h3>{route.status === 'found' ? 'Known paths found' : route.status === 'not_found' ? 'No known route found' : route.status === 'incomplete' ? 'Route discovery is incomplete' : 'Start and target are the same resource'}</h3>
+            <h3>{route.status === 'found' ? 'Known paths found' : pending && route.status!=='same_resource' ? 'No complete path retained yet' : route.status === 'not_found' ? 'No known route found' : route.status === 'incomplete' ? 'Route discovery is incomplete' : 'Start and target are the same resource'}</h3>
         </div>
-        <Badge tone={route.status === 'found' ? 'good' : route.status === 'same_resource' ? '' : 'warning'}>{route.status.replaceAll('_', ' ')}</Badge>
+        <Badge tone={route.status === 'found' ? 'good' : route.status === 'same_resource' ? '' : 'warning'}>{pending && route.status==='not_found'?jobStatus:route.status.replaceAll('_', ' ')}</Badge>
       </div>
         {route.status === 'found' && <p className="help">{trace.path_selection === 'material' ? 'Results prioritize native material continuity and target ingredient coverage using captured hints. This is a heuristic, not a chemical balance proof.' : trace.path_selection === 'diverse' ? 'Results spread across target ingredient branches, including longer alternatives within the requested bounds. The first path has the fewest known steps.' : 'Results prefer the fewest qualifying process steps within the requested extra-step allowance. The first path has the fewest known steps.'} This does not optimize yield. Every tile retains its additional ingredients, machine requirements and conditions.</p>}
-      {route.status === 'not_found' && <p className="help">No connecting dependency path was found in the captured data. Coverage and unresolved mechanics still limit that conclusion. Check the selected resource variants, relax intermediate filters, or raise the Advanced search bounds.</p>}
+        {route.status === 'not_found' && !pending && <p className="help">No connecting dependency path was found in the captured data. Coverage and unresolved mechanics still limit that conclusion. Check the selected resource variants, relax intermediate filters, or raise the Advanced search bounds.</p>}
       {route.status === 'incomplete' && <p className="help">The bounded result does not establish a complete route to the target. Inspect the limits and coverage before using these records.</p>}
       {route.status === 'same_resource' && <p className="help">Zero production steps are required to identify the same resource. This does not establish its availability or quantity.</p>}
       <div className="route-endpoints"><span>Supplied start</span><ResourceRef id={trace.start_id} resources={resourceById} onSelect={selectResource}/><span>Target</span><ResourceRef id={trace.target_id} resources={resourceById} onSelect={selectResource}/></div>
-      <p className="route-search-summary">Search examined {trace.search.examined_processes.toLocaleString()} processes · Server search limit {trace.search.limit.toLocaleString()} · {trace.search.truncated ? 'Search truncated' : 'Search finished within its bound'}</p>
+        <p className="route-search-summary">Search examined {trace.search.examined_processes.toLocaleString()} processes · Server search limit {trace.search.limit.toLocaleString()} · {pending?`Search ${jobStatus} with retained results`:trace.search.truncated ? 'Search truncated' : 'Search finished within its bound'}</p>
       {!!trace.group_exclusions?.length && <p className="help" title="Exclusions use literal captured members on paths. Other recipe inputs remain visible.">Excluded groups on paths: {trace.group_exclusions.map(group=>`${group.name} (${group.kind}, ${group.member_count.toLocaleString()} members)`).join(', ')}.</p>}
     </section>
     {(trace.truncated || trace.limit_reasons.length > 0 || trace.search.truncated) && <div className="notice warning" role="status">
@@ -90,7 +97,7 @@ export function TraceView({trace,onSelect,onUseStart,onUseTarget,tierOptions}: {
 
     <div className="graph-toolbar"><label>Highlight path<select value={highlight===null ? 'all' : highlight} onChange={event=>setHighlight(event.target.value==='all' ? null : Number(event.target.value))}><option value="all">All paths</option>{trace.paths.map((path,index)=><option value={index} key={index}>Path {index+1} · {path.process_ids.length} steps</option>)}</select></label></div>
     <div className={`trace-layout ${selection ? 'has-inspector' : ''}`}>
-      <div className="free-recipe-graph" role="region" aria-label="Recipe path graph">{hasRecipes ? <RecipeGraph key={JSON.stringify([graphTrace.snapshot_id,graphTrace.paths])} graph={graph} highlight={highlight} inspect={inspect} inspectResource={selectResource} recycle={beginRecycle} recycleProcesses={overlay?.plan.main_path.process_ids}/> : <div className="empty-state"><h3>No production recipe tiles</h3><p>{route.status==='same_resource' ? 'The endpoints identify the same resource.' : 'No complete recipe path was emitted within this search.'}</p></div>}</div>
+        <div className="free-recipe-graph" role="region" aria-label="Recipe path graph">{hasRecipes ? <RecipeGraph key={boardId??JSON.stringify([graphTrace.snapshot_id,graphTrace.paths])} graph={graph} highlight={highlight} inspect={inspect} inspectResource={selectResource} recycle={beginRecycle} recycleProcesses={overlay?.plan.main_path.process_ids}/> : <div className="empty-state"><h3>No production recipe tiles</h3><p>{route.status==='same_resource' ? 'The endpoints identify the same resource.' : pending?'No complete recipe path has been retained yet.':'No complete recipe path was emitted within this search.'}</p></div>}</div>
       {selection && <RecordInspector onClose={()=>setSelection(null)}>{selectedProcess ? <ProcessInspector process={selectedProcess} resources={resourceById} onSelect={selectResource} onRecycle={trace.paths.some(path=>path.process_ids.includes(selectedProcess.id)) ? id=>beginRecycle(selectedProcess.id,id) : undefined}/> : selection.startsWith('resource:') && <ResourceInspector key={selection} id={selection.slice(9)} resources={resourceById} onInspect={selectResource} onOpenLibrary={onSelect} onUseStart={onUseStart} onUseTarget={onUseTarget}/>}</RecordInspector>}
     </div>
       {overlay && <div className="notice"><strong>Main path and secondary return path</strong><p>The graph now shows the chosen main plan and one return path. Output and return links are presentation connections, not simultaneous execution proof.</p><ul>{attachments.map((link,index)=><li key={index}>{link.label}: {recipeName(link.source)} → {recipeName(link.target)} · {resourceName(link.resourceId)}</li>)}</ul><button onClick={()=>setOverlay(null)}>Show all main paths</button></div>}

@@ -226,6 +226,14 @@ additional alternatives across target ingredients. Fewest steps first is also
 available. CLI, HTTP and MCP keep their explicit `diverse` default. Trace defaults
 allow six extra steps within a total depth of 12. The GUI admits up to 150
 distinct processes across eight whole paths. These bounds remain editable.
+Material searches can publish results while they run. Pause keeps the current
+board and unfinished search state. Continue resumes the same operation with
+another time allowance. New result revisions preserve retained tile positions
+and the camera. The time allowance is cooperative, and path/depth/work guards
+can finish a search earlier. A finished job needs a new request to change its
+bounds. The explicit budget multiplier permits more search work without changing
+recipe facts or claiming a more efficient algorithm. Other selectors retain
+their synchronous behavior.
 Filters run in Dataset before results are selected. Fewest steps does not
 mean best yield or minimum energy. No-route, identical-resource and search
 limits remain explicit. Every included recipe belongs to a returned path.
