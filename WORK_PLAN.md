@@ -941,8 +941,20 @@ etap. Bieżące pomiary i decyzje są w SEARCH_EXPERIMENTS.md.
   chloru w TiCl4 i Trichlorosilane. Dla PE Ethylene ma wsparcie 1, Hydrogen
   1/7, Potassium 0. Polycaprolactam i pełna celka też mają 1, więc nie jest to
   dowód usunięcia objazdów. Wafer nie ma składu, pozostaje unknown. Obecny
-  indeks nie przechowuje Element ID. Najpierw projekt kosztu przygotowania,
-  bez pilota i dodatkowych niepoliczonych odczytów w runtime.
+  indeks produkcyjny nie przechowuje Element ID. Projekt pilota wymaga
+  policzonego przygotowania i jawnego kosztu dodatkowej pracy w runtime.
+  Jeden odizolowany pilot v7 został odrzucony po 12 zamrożonych wywołaniach.
+  Pierwsze dziesięć zachowuje dokładne drogi i klasy bez poprawy. Scheelite
+  traci cztery z ośmiu dróg, w tym chemię. Polymer nadal zwraca trasę przez
+  celki. Praca rośnie 205787 do 317457, w tym 134584 jednostki wsparcia.
+  Natywne rekordy i chronione hashe są zgodne. Nie promujemy kodu pilota.
+  Indeks dodaje 380928 bajtów. Przygotowanie 266,6 s ze śledzeniem alokacji
+  nie jest porównywalne z wcześniejszym pomiarem bez tej instrumentacji.
+- [ ] Osobno sprawdzić zapamiętanie dokładnego 1-support raz na RID w prywatnym
+  wariancie. Powtórzone odejmowanie stanowi 84,60% nowych jednostek pilota.
+  Zachować identyczne wartości ocen, profil celu, unknowns, limity i kryteria.
+  Ponownie użyć niezmiennego prywatnego v7 bez przebudowy. Jedna seria tych
+  samych 12 żądań, bez promocji i bez zmiany zasad bilansu ilości.
 - [x] Wyjaśnić kolejność Scheelite: główna droga ma siedem kroków przez QFT
   i Space Mining, a trzyetapowy przerób chemiczny jest na indeksie 2.
   Sprawdzić właściciela wyboru głównej trasy. Zachować wszystkie legalne

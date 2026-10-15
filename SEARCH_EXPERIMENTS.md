@@ -1856,6 +1856,14 @@ The GUI carries the same optional issue through explicit recipe inspection,
 without fetching every graph tile. All 73 GUI tests, typecheck and the private
 candidate build pass. No active UI bundle or running server was switched.
 
+An adjacent exact-.221 Space Pumping source check is negative. Its catalog
+quantity scales directly with parallels and batch size. The checked controller
+does not use Mining-style weighted repeated draws. A zero-amount NEI display
+stack has a separate per-operation quantity in its wrapper. No snapshot query
+was performed, so this is not a persisted exporter defect. Normal execution
+scaling does not justify another accounting guard. Evidence is in
+space-mining-role-study/ADDENDUM-space-pumping.md.
+
 ### Target-Element presence needs prepared exact identities
 
 A target-conditioned support measure can sum the target's native mass fractions
@@ -1875,3 +1883,41 @@ decoding is hidden in query timing. The one frozen twelve-case pilot must return
 a real cracking/polymerization primary, retain saved signatures and classes,
 and respect existing caps. No production promotion or speedup is presumed.
 Design and frozen protocol belong to target-constituent-relevance/.
+
+The one private v7 pilot is rejected after all twelve frozen calls once. The
+first ten preserve exact ordered routes and classes without a gain. Scheelite
+falls from eight routes/classes to four and loses the frozen chemical witness.
+Polymer returns the same supplied-polymer container route without an Ethylene
+processing path. Returned records and hops remain native-correct. Saved outputs
+do not establish every unretained candidate visited during exploration.
+
+Total charged work rises from 205787 to 317457, including 134584 support units.
+Scheelite reports 100001 at the inherited increment-before-rejection boundary,
+not unbounded continuation. The quality regression rejects the variant even
+without that one-unit boundary. Polymer reaches the work cap exactly. No work
+limit, score, query or acceptance gate was changed to promote it.
+
+One private rebuild adds 380928 sidecar bytes, including 254506 Element payload
+bytes. There are 19058 complete supports and 99659 unknowns. Rebuild wall time
+266.589 seconds includes tracemalloc instrumentation. Peak traced Python
+allocations are 218080561 bytes, excluding native allocations and physical
+memory. No controlled preparation-speed comparison follows. Protected stores
+and frozen private sources remain exact. The initial copied version-fixture
+expectation and its authorized setup correction are preserved. Evidence is in
+target-constituent-relevance/pilot/REPORT.md. Production format stays v6.
+
+Saved-counter interpretation identifies 113864 repeated exact `1 - support`
+subtractions, 84.60 percent of added support units. Support is already cached
+per RID. Its immutable complement can be reused in that same entry without a
+numeric policy change. This is charged-operation evidence, not CPU attribution
+or proof that more useful routes would follow. Known guidance applies to 27.43
+percent of attempts. Seven target profiles are unavailable.
+
+Casing and Hull have a complete primary Steel declaration, but the pilot's
+whole-resource accounting gate rejects their prefix quantity. Relative primary
+composition is a different evidence scope from per-item accounting. Hull also
+declares Tin, so primary Steel cannot be called whole-item composition. No gate
+was loosened. A separate complement-cache pilot is frozen around computation
+reuse alone, with the original score, target eligibility and quality gates.
+It reuses the immutable private v7 preparation and does not change production.
+See pilot/COST-INTERPRETATION.md for the measured scope and limits.
