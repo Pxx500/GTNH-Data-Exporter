@@ -961,6 +961,32 @@ etap. Bieżące pomiary i decyzje są w SEARCH_EXPERIMENTS.md.
   Praca spada do 231582, nadal 12,5% ponad v6. Scheelite dobija limit
   procesów, Polymer limit przyjęć stanów. Problem nie wynika tylko z kosztu
   powtórzonej arytmetyki. Natywne dowody i hashe są zgodne, bez przebudowy.
+- [x] Sprawdzić śledzenie atomów w konkretnych reakcjach bez usuwania z grafu
+  zasobów często używanych jako reagenty. ReTrace wymaga map atomów, których
+  snapshot nie ma.
+  Lista Element ID nie wystarcza. Nie dodajemy pozornego causal graph.
+- [x] Zaprojektować pasywny capture osobnego katalogu Space Pumping. Ilość
+  natywnego płynu i selektory planety/gazu muszą pozostać wierne. Rozdzielić
+  kontekst pozyskania od swobodnej produkcji płynu bez wejść. Użyć obecnego
+  właściciela eksportu i istniejącego modelu źródeł lub procesów. Najpierw
+  kontrakt, potem implementacja i ograniczona weryfikacja runtime.
+  Wybrano proces informacyjny z executable null zamiast automatycznego
+  źródła zapasów. Adapter i prezentacja selektorów są zaimplementowane.
+  Przechodzą kompilacja, 32 testy Javy, 74 testy GUI, typecheck i build.
+  IntelliJ zakończył analizę bez zgłoszeń w adapterze. Wspólny runner
+  pominął PMD z powodu zagnieżdżonego wrappera. Osobny PMD zakończył
+  analizę zmienionego pliku bez błędów przetwarzania. Cztery ostrzeżenia
+  o metrykach i źródłowej wartości 20 ticków pozostawiono z uzasadnieniem.
+  Jeden izolowany capture na .225 i import zakończyły się w 202,16 s.
+  Pokrycie podaje 40 wpisów, 40 procesów, zero niepoprawnych wpisów.
+  Dokładne lookupy, 80 odmów ledger oraz jedno discovery przechodzą.
+  Dotychczasowe bazy i konfiguracje pozostały niezmienione. Brakuje
+  niezależnego obserwatora całego natywnego katalogu, co ogranicza dowód
+  odbioru do odczytu popartego źródłem i spójności danych/coverage.
+- [x] Sprawdzić podziemne płyny przed dodawaniem kolejnego collectora.
+  Katalog jest już obsługiwany: 48 definicji i 55 zarejestrowanych ID wymiarów.
+  Wagi, zakresy ilości i parametry zużycia są zachowane. Mapowanie providerów,
+  blacklist i stan rzeczywistych złóż pozostają jawnie nierozwiązane.
 - [x] Wyjaśnić kolejność Scheelite: główna droga ma siedem kroków przez QFT
   i Space Mining, a trzyetapowy przerób chemiczny jest na indeksie 2.
   Sprawdzić właściciela wyboru głównej trasy. Zachować wszystkie legalne

@@ -1936,3 +1936,57 @@ work budget. Every current call respects its fixed caps. Native QA and protected
 hashes pass. There is no rebuild or production promotion. Evidence is in
 target-constituent-relevance/complement-cache-pilot/REPORT.md. Saved results
 do not establish the content of unretained candidate histories.
+
+### Reaction-local correspondence needs more than Element presence
+
+The checked ReTrace primary paper and official KEGG REACTION documentation
+distinguish substrate-product correspondence from the full input-output graph.
+ReTrace retains currency-compound endpoint queries by following mapped atom
+positions instead of deleting those compounds globally. Its checked graph maps
+C, N and P, so it does not establish Hydrogen/water coverage for this project.
+Our Element-presence declarations supply neither atom positions nor transfer
+relations within a reaction. This is a missing representation prerequisite, not a
+ready scoring improvement or justification to infer atom lineage. One Heath
+full-text request returned HTTP 500 and was not treated as freshly verified.
+Primary links and limits are in causal-reaction-pairing/RESEARCH.md.
+
+### Space Pumping is outside the current canonical catalog collectors
+
+The source and saved coverage check finds no adapter for
+SpacePumpingRecipes.RECIPES, a separate native selector-to-fluid catalog rather
+than a registered GT RecipeMap. This does not establish a persisted recipe with
+the wrong amount or a database-wide absence count. The optional NEI reference
+owner does not convert its zero-size display stack and separate wrapper amount
+into a canonical process. A passive acquisition/capture model needs actual
+catalog quantities, selector context and explicit execution uncertainty. Its
+existing-owner design is pending, without a new guard or native capture.
+Evidence is in space-mining-role-study/ADDENDUM-pumping-capture.md.
+
+The implemented informational adapter passes compilation, 32 Java tests,
+74 GUI tests, typecheck and candidate build. IntelliJ completes without a new
+adapter finding. The combined runner skips PMD on its nested-root check.
+Supplemental PMD completes on the changed file with the actual classpath,
+retaining bounded-pass complexity and the source-defined 20-tick literal
+advisories without suppression or unrelated refactoring.
+
+One isolated `.225` capture/import completes in 202.155 seconds. Snapshot
+c74341b1-a58d-4207-986b-c7ac965a2201 contains 40 informational pumping records,
+with 40 catalog entries and zero invalid entries in coverage. All exact lookup
+checks, 80 ledger refusals and one bounded native-record discovery refusal
+pass. Nominal energy is 1966080 EU/t, with selectors and actual fluid amounts
+preserved. Protected original stores/configuration remain unchanged.
+
+The previous `.225` manifest has 259785 processes and the new one 259825.
+Both have 118719 resources, 25228 sources and 119 environments. This is a
+count/cohort check, not semantic equality of every existing record. Actual
+runtime JAR SHA matches the verified `.225` source. Acceptance is source-backed
+capture/coverage consistency, not an independent observation of every live
+Pair/FluidStack. Evidence is in space-pumping-runtime-acceptance/.
+
+An underground-fluid coverage check finds the native catalog already supported:
+48 saved definitions and 55 registered numeric dimension IDs. The current
+source model preserves relative weights, amount bounds and depletion settings,
+without a fixed one-unit yield. Provider matching, raw blacklist, seeded
+deposits and current availability remain explicit partial context. No duplicate
+collector or new supply assumption was added. Exact `.221`/`.225` owners and
+consumer limits are documented in underground-fluid-coverage/REPORT.md.

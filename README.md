@@ -30,6 +30,15 @@ draws, while joint inventory feasibility and final tool/event delivery remain
 unresolved. Grinding-ball variants and other non-GT machine families are still
 incomplete or unsupported.
 
+An isolated 2026-10-15 capture on GT `.225` verifies 40 native Space Pumping
+catalog declarations. They preserve actual fluid amounts and planet/gas
+selectors, with unresolved machine execution and environment mapping. These
+informational records remain available for exact lookup and are excluded from
+production accounting. The full capture/import took 202.16 seconds locally.
+Validation checks source-backed traversal, output/coverage consistency and
+consumer refusal. An independent observer of every live catalog entry is not
+available. Existing snapshots keep their original contents.
+
 A previous full-pack run verified declared inputs in all 34,881 GT shaped and
 2,702 GT shapeless records. That snapshot has 257,788 processes and 122,972
 resources. Its compressed streams total 10.46 MiB. Capture took about nine

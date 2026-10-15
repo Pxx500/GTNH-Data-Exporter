@@ -387,6 +387,15 @@ its shared `reason` before using the process for accounting. The issue does not
 mean the machine cannot run. It means this application cannot account for that
 native operation model. Missing annotation does not certify executability.
 
+New captures can also include informational Space Pumping catalog processes
+under `gtnhintergalactic:space_pumping`. Their native fluid amounts describe one
+selected line, one parallel and batch size one. Read the planet/gas selectors
+in `conditions.native_metadata.space_pumping` as native selectors, not dimension
+IDs. Environment mapping and runtime machine requirements remain unresolved.
+These records have `executable: null`, so lookup does not make them eligible
+production-network steps or assumed inventory sources. Use actual captured
+fluid identities rather than a roster copied from another pack version.
+
 ### Audit loops and candidate anomalies
 
 ```json

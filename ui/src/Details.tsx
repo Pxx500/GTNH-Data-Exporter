@@ -26,6 +26,12 @@ export function ConditionFacts({value,label='Conditions and research'}:{value:un
       const implementation=['recipe_voltage_tier_source','recipe_voltage_tier_semantics'].includes(key)
         || (parent==='recipe_voltage' && ['source','semantics'].includes(key))
       if(routine || implementation)return []
+      if(parent==='native_metadata' && key==='space_pumping' && item!==null && typeof item==='object' && !Array.isArray(item)){
+        const pumping=item as Record<string,unknown>
+        if(pumping.status==='captured_native_declaration' && pumping.quantity_scope==='selected_line_one_parallel_batch_one'){
+          return [[key,{planet_selector:pumping.planet_type,gas_selector:pumping.gas_type,quantity_scope:'Nominal one line, one parallel, batch one',runtime_requirements:pumping.runtime_execution,environment_mapping:pumping.environment_mapping}]]
+        }
+      }
       const result=compact(item,key)
       if(result!==null && typeof result==='object' && Object.keys(result).length===0)return []
       return [[key,result]]

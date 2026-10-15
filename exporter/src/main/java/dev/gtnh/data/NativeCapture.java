@@ -20,6 +20,8 @@ import gregtech.api.util.GTUtility;
 import gregtech.api.util.recipe.Sievert;
 import gregtech.common.blocks.ItemMachines;
 import gtPlusPlus.xmod.gregtech.api.enums.GregtechItemList;
+import gtnhintergalactic.recipe.SpacePumpingRecipes;
+import gtnhintergalactic.tile.multi.elevatormodules.TileEntityModulePump;
 import java.io.IOException;
 import java.lang.reflect.Array;
 import java.lang.reflect.Field;
@@ -30,6 +32,7 @@ import java.nio.file.Path;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.IdentityHashMap;
@@ -45,6 +48,7 @@ import net.minecraft.item.crafting.FurnaceRecipes;
 import net.minecraft.util.StatCollector;
 import net.minecraftforge.fluids.FluidStack;
 import net.minecraftforge.oredict.OreDictionary;
+import org.apache.commons.lang3.tuple.Pair;
 import tectech.recipe.EyeOfHarmonyRecipe;
 import tectech.recipe.TecTechRecipeMaps;
 import tectech.util.FluidStackLong;
@@ -64,6 +68,7 @@ final class NativeCapture {
     private static final int CALLSITE_RECIPE_BYTE_LIMIT = 16 * 1024;
     private static final long CALLSITE_TOTAL_BYTE_LIMIT = 128L * 1024 * 1024;
     private static final int CALLSITE_ISSUE_LIMIT = 32;
+    private static final int PUMPING_ISSUE_LIMIT = 32;
     private final SnapshotWriter writer;
     private final MaterialFacts materialFacts;
     private final Map<String, String> resourceIds = new HashMap<>();
@@ -95,6 +100,7 @@ final class NativeCapture {
         new ForestryCapture(this).capture();
         new BotaniaCapture(this).capture();
         new WorldgenCapture(this, writer).capture();
+        spacePumping();
         coverage("resources", "partial", writer.count("resources"),
             "Resources referenced by captured recipes, ore groups and acquisition definitions. Not an exhaustive NEI item catalog");
         coverage("resource.material_facts", "partial", writer.count("resources"),
@@ -102,9 +108,63 @@ final class NativeCapture {
         coverage("recipe-semantics", "partial", writer.count("processes"),
             "Dynamic native matching, machine-specific metadata and custom crafting remain unresolved. Uninterpreted metadata: " + unknownMetadata);
         coverage("other-mod-recipes", "unsupported", 0,
-            "Other non-GT machine recipes beyond bounded EnderIO, Forestry Centrifuge and Botania Mana Infusion adapters remain unsupported");
+            "Other non-GT machine recipes beyond bounded EnderIO, Forestry Centrifuge, Botania Mana Infusion and Space Pumping catalog adapters remain unsupported");
         coverage("other-acquisition", "unsupported", 0,
             "Mob drops, trades, other-mod worldgen, mining drop distributions and saved deposits are not captured");
+    }
+
+    private void spacePumping() throws IOException {
+        String sourceApi = "gtnhintergalactic.recipe.SpacePumpingRecipes.RECIPES";
+        ModContainer owner = Loader.instance().getIndexedModList().get("gtnhintergalactic");
+        String version = owner == null ? null : owner.getVersion();
+        if (!"5.09.54.221".equals(version) && !"5.09.54.223".equals(version) && !"5.09.54.225".equals(version)) {
+            coverage("gtnhintergalactic.space_pumping", "unsupported", 0,
+                "No verified native Space Pumping contract for this version",
+                object("source_api", sourceApi, "native_version", version));
+            return;
+        }
+        int energy = Math.toIntExact(TileEntityModulePump.ENERGY_CONSUMPTION);
+        List<Map.Entry<Pair<Integer, Integer>, FluidStack>> entries =
+            new ArrayList<>(SpacePumpingRecipes.RECIPES.entrySet());
+        entries.sort(Map.Entry.comparingByKey(Comparator.nullsFirst(Comparator.naturalOrder())));
+        long captured = 0, invalid = 0;
+        JsonArray issues = new JsonArray();
+        for (Map.Entry<Pair<Integer, Integer>, FluidStack> entry : entries) {
+            Pair<Integer, Integer> selector = entry.getKey();
+            FluidStack stack = entry.getValue();
+            String issue = selector == null || selector.getLeft() == null || selector.getRight() == null
+                ? "invalid_selector" : stack == null || stack.getFluid() == null
+                ? "missing_native_fluid" : stack.amount <= 0 ? "nonpositive_native_amount" : null;
+            if (issue != null) {
+                invalid++;
+                if (issues.size() < PUMPING_ISSUE_LIMIT) issues.add(object("reason", issue,
+                    "planet_type", selector == null ? null : selector.getLeft(),
+                    "gas_type", selector == null ? null : selector.getRight(),
+                    "native_amount", stack == null ? null : stack.amount));
+                continue;
+            }
+            JsonArray outputs = new JsonArray();
+            outputs.add(object("resource_id", fluid(stack), "amount", stack.amount,
+                "chance", object("numerator", 1, "denominator", 1)));
+            JsonObject declaration = object("status", "captured_native_declaration", "source_api", sourceApi,
+                "planet_type", selector.getLeft(), "gas_type", selector.getRight(),
+                "quantity_scope", "selected_line_one_parallel_batch_one", "runtime_execution", "unresolved",
+                "environment_mapping", "unresolved", "controller_class", TileEntityModulePump.class.getName(),
+                "duration_source_api", "gtnhintergalactic.tile.multi.elevatormodules.TileEntityModulePump.checkProcessing_EM",
+                "energy_source_api", "gtnhintergalactic.tile.multi.elevatormodules.TileEntityModulePump.ENERGY_CONSUMPTION");
+            JsonObject conditions = object("machine_behavior", "native_machine_conditions_not_fully_interpreted",
+                "recipe_voltage_tier_status", "unresolved", "native_metadata", object("space_pumping", declaration),
+                "runtime_requirements", "Module structure/connection, energy, configuration and output handling are not evaluated");
+            emitProcess("gtnhintergalactic:space_pumping", "Space Pumping", new JsonArray(), outputs, 20, energy, 1,
+                null, conditions, object("owner", sourceApi, "native_version", version));
+            captured++;
+        }
+        coverage("gtnhintergalactic.space_pumping", "partial", captured,
+            "Native catalog declarations only. Selected-line quantities use one parallel and batch one. Runtime execution and environment mapping remain unresolved",
+            object("source_api", sourceApi, "native_version", version, "catalog_entries", entries.size(),
+                "catalog_status", entries.isEmpty() ? "empty" : invalid == 0 ? "captured" : "partial",
+                "catalog_traversal", "complete", "invalid_entries", invalid, "issues", issues,
+                "omitted_issue_details", invalid - issues.size()));
     }
 
     private void prepareSourceReferences() throws IOException {

@@ -250,6 +250,25 @@ operation yield. Guaranteed mode is also unsupported operation accounting,
 not a claim that its former zero-ore projection guaranteed ore. This issue
 does not invalidate the captured nominal voltage tier.
 
+Space Pumping's separate native catalog uses family
+`gtnhintergalactic:space_pumping`. Each valid catalog entry is an informational
+process with no material inputs, one actual native fluid output and
+`executable: null`. The output amount comes from the runtime catalog stack,
+not NEI's zero-size display stack. It describes one selected line, one parallel
+and batch size one. Nominal duration is 20 ticks and nominal energy comes from
+the native controller constant under its verified contract. Recipe voltage
+and runtime execution remain unresolved.
+
+`conditions.native_metadata.space_pumping` preserves `planet_type` and
+`gas_type` selectors, source APIs and the quantity scope. These selectors are
+not dimension IDs. Environment mapping and the elevator/module execution
+requirements remain unresolved. The process adds no assumed inventory supply.
+Ordinary ledger and network discovery reject its null executable status,
+while exact process/output lookup remains available. Source-verified contracts
+cover GT `.221`, `.223` and `.225`. Unsupported contracts and invalid native
+entries are reported in coverage. Actual runtime fluid identity stays
+authoritative across catalog differences between those versions.
+
 Botania Mana Infusion retains one-item consumption, output quantity and typed
 NBT, plus `conditions.total_mana` and `energy_unit: mana`. Catalyst predicates
 in `conditions.catalyst_below` identify the required block one block below the

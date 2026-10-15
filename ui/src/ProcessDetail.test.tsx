@@ -9,6 +9,37 @@ const manaProcess: Process = {id:'mana-recipe',family:'botania:mana_infusion',di
   inputs:[],outputs:[],duration_ticks:null,eu_per_tick:null,amperage:null,executable:true,
   conditions:{total_mana:1000000,energy_unit:'mana',effective_duration:'collision_runtime_gate_unknown'},provenance:{}}
 
+test('captured Space Pumping selectors and nominal scope are readable without guessing environment mappings',()=>{
+  const metadata={status:'captured_native_declaration',planet_type:3,gas_type:5,quantity_scope:'selected_line_one_parallel_batch_one',runtime_execution:'unresolved',environment_mapping:'unresolved',controller_class:'fixture.Controller',source_api:'fixture.entries',duration_source_api:'fixture.duration',energy_source_api:'fixture.energy'}
+  const gas={id:'gas',kind:'fluid',registry_name:'fixture:gas',display_name:'Captured gas',metadata:null,nbt:null,provenance:{}}
+  const resources=new Map([[gas.id,gas]])
+  const recipe:Process={...manaProcess,id:'pumping',family:'test',display_name:'Captured gas declaration',outputs:[{resource_id:gas.id,amount:1000,chance:{numerator:1,denominator:1}}],duration_ticks:20,eu_per_tick:8192,executable:null,conditions:{native_metadata:{space_pumping:metadata}}}
+  const view=render(<ProcessDetail process={recipe} resources={resources}/>)
+  const panel=screen.getByText('Conditions and research').closest('details')!
+  expect(panel).not.toHaveAttribute('open')
+  fireEvent.click(within(panel).getByText('Conditions and research'))
+  expect(within(panel).getByText('Planet selector')).toBeVisible()
+  expect(within(panel).getByText('3')).toBeVisible()
+  expect(within(panel).getByText('Gas selector')).toBeVisible()
+  expect(within(panel).getByText('5')).toBeVisible()
+  expect(within(panel).getByText('Nominal one line, one parallel, batch one')).toBeVisible()
+  expect(panel).toHaveTextContent(/Runtime requirements\s*unresolved/)
+  expect(panel).toHaveTextContent(/Environment mapping\s*unresolved/)
+  expect(within(panel).queryByText('fixture.Controller')).not.toBeInTheDocument()
+  expect(within(panel).queryByText('fixture.entries')).not.toBeInTheDocument()
+  expect(screen.getByText('20 ticks')).toBeVisible()
+  expect(screen.getByText(/^Amount 1[\s,.]?000$/)).toBeVisible()
+  expect(screen.getByText('mB')).toBeVisible()
+  expect(screen.getByText('Execution unknown')).toBeVisible()
+  expect(screen.queryByText('Informational / fake')).not.toBeInTheDocument()
+  const technical=screen.getByText('Technical data: full process record').closest('details')!.querySelector('pre')!
+  expect(JSON.parse(technical.textContent!)).toEqual(recipe)
+  view.rerender(<ProcessDetail process={{...recipe,conditions:{planet_type:7,gas_type:9}}} resources={resources}/>)
+  expect(within(panel).queryByText('Planet selector')).not.toBeInTheDocument()
+  expect(within(panel).getByText('Planet type')).toBeVisible()
+  expect(within(panel).getByText('Gas type')).toBeVisible()
+})
+
 test('a fetched EBF fluid identity supplies its name and millibucket quantity through one lookup',async()=>{
   const fetch=vi.fn(async()=>new Response(JSON.stringify({snapshot_id:'native',item:{id:'r32743',kind:'fluid',display_name:'Oxygen',registry_name:'oxygen',metadata:null,nbt:null,provenance:{owner:'native_registry'}}})))
   vi.stubGlobal('fetch',fetch)
