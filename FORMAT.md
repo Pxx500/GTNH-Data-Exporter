@@ -597,12 +597,32 @@ alternative production plans. Shortest selection prioritizes fewest steps.
 For diverse and shortest selection, the primary `route` remains the shortest
 qualifying witness discovered. Material selection prioritizes native material
 evidence and distinct target requirements through prepared analysis. Its primary
-route is the first qualifying material witness, without a yield or energy claim.
+route follows the presented material witnesses, without a yield or energy claim.
 Recovery preference reads the captured family from prepared process metadata,
 with the existing per-query cache. Its `recipe_family_source` is
 `prepared_process_metadata`. The original process record remains complete in
 canonical inspection and trace results. This changes metadata lookup storage,
 not route scores, recipe eligibility or search bounds.
+
+For comparable final Cutter transformations, material presentation lists
+retained paths through the consumed item before paths through consumed fluids.
+Comparison preserves ordered nonfluid input slots, outputs, conditions, EU/t
+and amperage. Fluid declarations and duration remain in each complete recipe.
+The preference leaves discovery, path count and fluid participation intact.
+Unknown, mixed or unresolved templates stay in their original positions.
+Other selectors and machine families keep their existing order.
+
+Relevant material results include optional `path_ordering` with policy
+`cutter_consumed_item_first`, scope `comparable_retained_final_cutter_paths`,
+`changed`, `eligible_paths`, `classification_visits` and `original_path_indices`.
+The permutation maps each new path position to its original position. Visit
+counts describe retained paths, unique inspected recipes, slots, choices and
+outputs. They are presentation metadata, separate from discovery counters.
+The primary route, branch path indices and path details use the presented
+order. This is an explicit mechanical item-continuity preference. Fluid input
+purpose and material contribution remain unknown. Required fluid waypoints
+and paths entering only through fluids remain supported.
+
 `branch_coverage` contains `{target_process_id, slot_index,
 candidate_resources, paths, path_indices, status}` for consumed target slots.
 `paths` counts emitted witnesses and `path_indices` points into `paths`.

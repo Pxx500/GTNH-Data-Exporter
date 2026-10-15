@@ -9,6 +9,134 @@ from .artifacts import choice, process, resource, slot, snapshot
 
 
 class DatasetTests(unittest.TestCase):
+    def cutter_trace_fixture(self, name, *, change=None):
+        rows = [resource(id) for id in ('start', 'middle', 'item-feed', 'fluid-feed', 'circuit', 'target', 'offcut')]
+        next(row for row in rows if row['id'] == 'fluid-feed').update(kind='fluid', metadata=None)
+        next(row for row in rows if row['id'] == 'item-feed')['nbt'] = {
+            'type': 'compound', 'value': {'grade': {'type': 'byte', 'value': 1}}}
+        cutter = process('cut', [slot(choice('item-feed')), slot(choice('fluid-feed', amount=7)),
+                                 slot(choice('circuit'), role='presence')], ['target', 'offcut'],
+                         family='gregtech:gt.recipe.cuttingsaw')
+        cutter['provenance'].update(owner='GTRecipe', map='gt.recipe.cuttingsaw',
+                                    map_class='gregtech.api.recipe.RecipeMap', recipe_class='gregtech.api.util.GTRecipe')
+        cutter['outputs'][0]['amount'] = 16
+        cutter['outputs'][1]['amount'] = 4
+        recipes = [process('fluid-maker', [slot(choice('start'))], ['fluid-feed']),
+                   process('item-stage', [slot(choice('start'))], ['middle']),
+                   process('item-maker', [slot(choice('middle'))], ['item-feed']), cutter]
+        if change:
+            change(rows, recipes)
+        dataset = Dataset.import_snapshot(snapshot(self.root / name, resources=rows, processes=recipes),
+                                          self.root / f'{name}.sqlite')
+        return dataset, recipes
+
+    def test_material_cutter_presentation_prefers_item_entry_and_preserves_native_alignment(self):
+        dataset, recipes = self.cutter_trace_fixture('cutter-order')
+        result = dataset.trace_processes(start_id='start', target_id='target', path_selection='material')
+        self.assertEqual({tuple(p['resource_ids']) for p in result['paths']},
+                         {('start', 'fluid-feed', 'target'), ('start', 'middle', 'item-feed', 'target')})
+        self.assertEqual(result['paths'][0]['resource_ids'], ['start', 'middle', 'item-feed', 'target'])
+        self.assertEqual(result['route']['resource_ids'], result['paths'][0]['resource_ids'])
+        self.assertEqual(result['route']['process_ids'], result['paths'][0]['process_ids'])
+        self.assertEqual(next(p for p in result['processes'] if p['id'] == 'cut'), recipes[-1])
+        self.assertEqual(result['path_ordering']['policy'], 'cutter_consumed_item_first')
+        self.assertTrue(result['path_ordering']['changed'])
+        self.assertEqual(result['path_ordering']['original_path_indices'], [1, 0])
+        self.assertEqual(result['path_ordering']['eligible_paths'], 2)
+        for detail in result['path_details']:
+            path = result['paths'][detail['path_index']]
+            self.assertEqual(detail['target_process_id'], path['process_ids'][-1])
+            self.assertEqual(detail['target_slot_index'], {'item-feed': 0, 'fluid-feed': 1}[path['resource_ids'][-2]])
+        branches = {b['slot_index']: b for b in result['branch_coverage']}
+        self.assertEqual(branches[0]['path_indices'], [0])
+        self.assertEqual(branches[1]['path_indices'], [1])
+        compact = dataset.trace_processes(start_id='start', target_id='target', path_selection='material', view='compact')
+        for field in ('route', 'paths', 'path_details', 'branch_coverage', 'processes', 'path_ordering'):
+            self.assertEqual(compact[field], result[field])
+
+    def test_cutter_ordering_keeps_neutral_positions_and_stable_peer_entry_order(self):
+        def variants(rows, recipes):
+            alternate = deepcopy(recipes[-1])
+            alternate.update(id='cut-fast', duration_ticks=5)
+            alternate['inputs'][1]['choices'][0]['amount'] = 2
+            recipes.extend([alternate, process('direct', [slot(choice('start'))], ['target'])])
+        dataset, recipes = self.cutter_trace_fixture('cutter-peers', change=variants)
+        result = dataset.trace_processes(start_id='start', target_id='target', path_selection='material')
+        self.assertEqual([(p['process_ids'][-1], p['resource_ids'][-2]) for p in result['paths']],
+                         [('direct', 'start'), ('cut', 'item-feed'), ('cut-fast', 'item-feed'),
+                          ('cut', 'fluid-feed'), ('cut-fast', 'fluid-feed')])
+        self.assertEqual(result['path_ordering']['original_path_indices'], [0, 3, 4, 1, 2])
+        self.assertEqual(result['route']['process_ids'], ['direct'])
+        self.assertEqual(result['path_ordering']['classification_visits']['paths'], 5)
+        self.assertEqual(result['path_ordering']['classification_visits']['recipes'], 2)
+        native = {p['id']: p for p in recipes}
+        for record in result['processes']:
+            self.assertEqual(record, native[record['id']])
+        for branch in result['branch_coverage']:
+            for index in branch['path_indices']:
+                self.assertEqual(result['paths'][index]['process_ids'][-1], branch['target_process_id'])
+
+    def test_cutter_ordering_leaves_unknown_mixed_and_incompatible_templates_neutral(self):
+        for case in ('mixed', 'unknown_match', 'unknown_chance', 'extra_item', 'unknown_owner', 'unknown_executable'):
+            with self.subTest(case=case):
+                def change(rows, recipes):
+                    cutter = recipes[-1]
+                    if case == 'mixed':
+                        cutter['inputs'][0]['choices'].append(choice('fluid-feed'))
+                    elif case == 'unknown_match':
+                        cutter['inputs'][0]['choices'].append(choice('item-feed', 'native_unknown'))
+                    elif case == 'unknown_chance':
+                        cutter['inputs'][1]['consumption_chance'] = None
+                    elif case == 'extra_item':
+                        cutter['inputs'].append(slot(choice('circuit')))
+                    elif case == 'unknown_owner':
+                        cutter['provenance']['owner'] = 'uninterpreted'
+                    else:
+                        cutter['executable'] = None
+                dataset, _ = self.cutter_trace_fixture('cutter-' + case, change=change)
+                result = dataset.trace_processes(start_id='start', target_id='target', path_selection='material')
+                self.assertEqual(result['paths'][0]['resource_ids'], ['start', 'fluid-feed', 'target'])
+                self.assertFalse(result['path_ordering']['changed'])
+                self.assertEqual(result['path_ordering']['eligible_paths'], 0)
+                self.assertEqual(result['path_ordering']['original_path_indices'], list(range(len(result['paths']))))
+
+    def test_cutter_ordering_keeps_distinct_typed_item_transformations_in_their_positions(self):
+        def variants(rows, recipes):
+            original = next(row for row in rows if row['id'] == 'item-feed')
+            original.update(registry_name='test:piece', metadata=7)
+            alternate = dict(resource('other-feed', registry_name='test:piece', metadata=7),
+                             nbt={'type': 'compound', 'value': {'grade': {'type': 'int', 'value': 1}}})
+            rows.append(alternate)
+            other = deepcopy(recipes[-1])
+            other['id'] = 'cut-other'
+            other['inputs'][0]['choices'][0]['resource_id'] = 'other-feed'
+            recipes.append(other)
+        dataset, recipes = self.cutter_trace_fixture('cutter-distinct', change=variants)
+        result = dataset.trace_processes(start_id='start', target_id='target', path_selection='material')
+        self.assertEqual([(p['process_ids'][-1], p['resource_ids'][-2]) for p in result['paths']],
+                         [('cut', 'item-feed'), ('cut-other', 'fluid-feed'), ('cut', 'fluid-feed')])
+        self.assertEqual(result['path_ordering']['original_path_indices'], [2, 1, 0])
+        self.assertEqual(next(p for p in result['processes'] if p['id'] == 'cut-other'), recipes[-1])
+
+    def test_cutter_preference_preserves_other_selectors_and_required_fluid_spines(self):
+        dataset, recipes = self.cutter_trace_fixture('cutter-fluid-controls')
+        for selection in ('shortest', 'diverse'):
+            with self.subTest(selection=selection):
+                result = dataset.trace_processes(start_id='start', target_id='target', path_selection=selection)
+                self.assertEqual(result['paths'][0]['resource_ids'], ['start', 'fluid-feed', 'target'])
+                self.assertNotIn('path_ordering', result)
+        for filters in ({'required_resource_ids': ['fluid-feed']}, {'excluded_resource_ids': ['middle']}):
+            with self.subTest(filters=filters):
+                result = dataset.trace_processes(start_id='start', target_id='target', path_selection='material', **filters)
+                self.assertEqual([p['resource_ids'] for p in result['paths']], [['start', 'fluid-feed', 'target']])
+                self.assertFalse(result['path_ordering']['changed'])
+                self.assertEqual(next(p for p in result['processes'] if p['id'] == 'cut'), recipes[-1])
+        fluid = dataset.trace_processes(start_id='fluid-feed', target_id='target', path_selection='material')
+        self.assertEqual([p['resource_ids'] for p in fluid['paths']], [['fluid-feed', 'target']])
+        self.assertFalse(fluid['path_ordering']['changed'])
+        ordinary, _ = self.cutter_trace_fixture('ordinary-final', change=lambda rows, recipes: recipes[-1].update(family='assembler'))
+        self.assertNotIn('path_ordering', ordinary.trace_processes(start_id='start', target_id='target', path_selection='material'))
+
     def test_trace_group_exclusions_block_alias_spines_and_keep_native_cofeeds(self):
         groups = [
             {'id': 'ore:nuggetIron', 'kind': 'ore_dict', 'name': 'nuggetIron',

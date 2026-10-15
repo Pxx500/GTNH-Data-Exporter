@@ -48,6 +48,11 @@ export interface StatisticsReport {snapshot_id:string;overview:{resources:{count
 export interface Trace {
   path_selection: 'diverse' | 'shortest' | 'material'
   group_exclusions?: {group_id:string;name:string;kind:string;member_count:number}[]
+  path_ordering?: {
+    policy:'cutter_consumed_item_first';scope:'comparable_retained_final_cutter_paths';changed:boolean;eligible_paths:number
+    classification_visits:{paths:number;recipes:number;slots:number;choices:number;outputs:number}
+    original_path_indices:number[]
+  }
   path_details?: {
     path_index:number;selection_reason:string;material_continuity:'supported'|'partial'|'discontinuous'
     byproduct_steps:{process_id:string;resource_id:string;basis:'secondary_output_position_hint'}[]

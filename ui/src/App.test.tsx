@@ -10,6 +10,45 @@ const status = {snapshot_id:'test-snapshot',manifest:{created_at:'2026-10-11',ca
 function response(value: unknown, code=200) { return new Response(JSON.stringify(value), {status:code,headers:{'Content-Type':'application/json'}}) }
 function page(items: unknown[]) {return {snapshot_id:'test-snapshot',items,total:items.length,limit:30,offset:0}}
 
+test.each([
+  {label:'changed',changed:true,included:true},
+  {label:'unchanged',changed:false,included:true},
+  {label:'absent',changed:false,included:false},
+])('Cutter ordering note is scoped to the $label trace result',async({changed,included})=>{
+  const target={...resource,id:'result-id',display_name:'Test output'}
+  const item={...resource,id:'cutter-item',display_name:'Cutter input'}
+  const fluid={...resource,id:'cutting-fluid',display_name:'Cutting fluid',registry_name:'fixture:cutting_fluid',kind:'fluid',metadata:null}
+  const input=(resource_id:string)=>({role:'consume',choices:[{resource_id,amount:1,match:{mode:'exact'}}]})
+  const output=(resource_id:string)=>({resource_id,amount:1,chance:{numerator:1,denominator:1}})
+  const itemMaker={...process,id:'make-item',display_name:'Item preparation',inputs:[input(resource.id)],outputs:[output(item.id)]}
+  const fluidMaker={...process,id:'make-fluid',display_name:'Fluid preparation',inputs:[input(resource.id)],outputs:[output(fluid.id)]}
+  const cutter={...process,id:'cutter',display_name:'Cutter',family:'gregtech:gt.recipe.cuttingsaw',inputs:[input(item.id),input(fluid.id)],outputs:[output(target.id)]}
+  const paths=[{resource_ids:[resource.id,item.id,target.id],process_ids:[itemMaker.id,cutter.id]},{resource_ids:[resource.id,fluid.id,target.id],process_ids:[fluidMaker.id,cutter.id]}]
+  vi.stubGlobal('fetch',vi.fn(async(input:string)=>{
+    const url=new URL(input,'http://localhost')
+    if(url.pathname==='/api/status')return response(status)
+    if(url.pathname==='/api/environments')return response(page([]))
+    if(url.pathname==='/api/resources')return response(page(url.searchParams.get('q')==='Test output'?[target]:[resource]))
+    if(url.pathname.startsWith('/api/resources/'))return response({snapshot_id:'test-snapshot',item:decodeURIComponent(url.pathname).endsWith(target.id)?target:resource})
+    if(url.pathname==='/api/trace')return response({branch_coverage:[],path_selection:'material',snapshot_id:'test-snapshot',start_id:resource.id,target_id:target.id,resources:[resource,item,fluid,target],processes:[itemMaker,fluidMaker,cutter],edges:[],leaves:[],cycles:[],truncated:false,coverage:[],route:{status:'found',strategy:'shortest_known_dependency_path',...paths[0]},paths,search:{examined_processes:3,limit:1000,truncated:false},limit_reasons:[],path_ordering:included?{policy:'cutter_consumed_item_first',scope:'comparable_retained_final_cutter_paths',changed,eligible_paths:2,classification_visits:{paths:2,recipes:1,slots:2,choices:2,outputs:1},original_path_indices:changed?[1,0]:[0,1]}:undefined})
+    throw new Error(`Unexpected route ${url.pathname}`)
+  }))
+  render(<App/>)
+  await screen.findByText('Pack: Synthetic contract fixture')
+  fireEvent.click(screen.getByRole('button',{name:'Trace'}))
+  fireEvent.focus(screen.getByLabelText('Supplied start resource'));fireEvent.change(screen.getByLabelText('Supplied start resource'),{target:{value:'Test mold'}})
+  fireEvent.click(await screen.findByRole('option',{name:/Test mold/}))
+  fireEvent.focus(screen.getByLabelText('Target resource'));fireEvent.change(screen.getByLabelText('Target resource'),{target:{value:'Test output'}})
+  fireEvent.click(await screen.findByRole('option',{name:/Test output/}))
+  await waitFor(()=>expect(screen.getByRole('button',{name:'Trace dependencies'})).toBeEnabled())
+  fireEvent.click(screen.getByRole('button',{name:'Trace dependencies'}))
+  await screen.findByRole('article',{name:'Recipe Cutter'})
+  const text='For comparable Cutter recipes, paths through the consumed item are shown first. Fluid routes remain available.'
+  if(changed)expect(screen.getByText(text)).toBeVisible()
+  else expect(screen.queryByText(text)).not.toBeInTheDocument()
+  expect(screen.getByRole('option',{name:'Path 2 · 2 steps'})).toBeInTheDocument()
+})
+
 test('terminal endpoint policy rejection explains the constraint and preserves selections across filter changes',async()=>{
   const ordinary={...resource,id:'ordinary-target',display_name:'Ordinary target'}
   const terminal={...resource,id:'terminal-target',display_name:'Tool target'}

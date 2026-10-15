@@ -117,6 +117,7 @@ function TraceWorkspace({startId,targetId,setStartId,setTargetId,onSelect}: {sta
   const [url,setUrl]=useState<string|null>(null)
   const trace=useRequest<Trace>(url)
   const terminalArtifacts=trace.data?.search.terminal_artifacts
+  const pathOrdering=trace.data?.path_ordering
   const ready=!!startId && !!targetId && resolvedStart===startId && resolvedTarget===targetId
   const currentUrl=query('trace',{start_id:startId,target_id:targetId,max_depth:depth,max_processes:maxProcesses,max_paths:maxPaths,max_extra_steps:extraSteps,path_selection:pathSelection,terminal_artifact_policy:terminalArtifactPolicy,required_resource_id:required,excluded_resource_id:excluded,excluded_group_id:excludedGroups,min_tier:minTier,max_tier:maxTier,unknown_tier_policy:unknownTierPolicy,view:'compact'})
   const current=url===currentUrl
@@ -131,6 +132,7 @@ function TraceWorkspace({startId,targetId,setStartId,setTargetId,onSelect}: {sta
     <ActionHint id="trace-action-hint" reason={disabledReason} ready="Ready to find paths between the selected resources."/><div className="trace-submit"><button aria-describedby="trace-action-hint" className="primary" disabled={!!disabledReason}>Trace dependencies</button></div>
   </form>
   {current && <RequestState {...trace} retry={trace.reload}/>}
+  {current && pathOrdering?.policy==='cutter_consumed_item_first' && pathOrdering.changed && <p className="help">For comparable Cutter recipes, paths through the consumed item are shown first. Fluid routes remain available.</p>}
   {current && terminalArtifacts?.policy==='direct_targets_only' && terminalArtifacts.endpoint_compatibility==='incompatible' && <p className="notice" role="status">The selected start is a tool or part. Direct targets only won't use it to make other products. Select Allow intermediates for unrestricted path inspection.</p>}
   {current && terminalArtifacts?.policy==='direct_targets_only' && terminalArtifacts.recognition_status==='partial' && <p className="notice" role="status">Tool and part recognition is incomplete for this search: {terminalArtifacts.unknown_resources.toLocaleString()} inspected resources lack usable captured class evidence. Direct-target restrictions apply only to recognized tools and parts.</p>}
   {url && !current && <p className="notice">Search selections or filters changed. Submit to search the Dataset with these settings.</p>}

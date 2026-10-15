@@ -1561,3 +1561,106 @@ No supported single-element grade pair exists in this witness. Native display
 Si* and recipe output cannot certify composition or purity. No alias, formula
 parser, compound-atom union or new scan is added. Exact evidence is in
 `elemental-alias-evidence/`.
+
+### Known-resource batching stops below the performance gate
+
+A private Dataset clone runs one baseline and one batching query for Casing
+and Wafer, in alternating pair order over the accepted read-only v6 copy.
+Every full response and work counter is equal except distance elapsed time.
+Casing reduces changed payload SELECT calls from 2177 to 20 for the same 2177
+rows. Instrumented wall time changes from 2.188101 to 2.130459 seconds, a
+2.634% gain. Wafer changes 51 to 43 calls for 51 equal rows and saves 1.172 ms.
+The frozen 5% Casing gate fails. No production helper, nine-case extension or
+repeat follows. Tracemalloc and counter instrumentation remain in the timing
+scope. This is not an uninstrumented latency estimate. Temporary raw-row
+storage adds about 555 KB for Casing. All protection hashes match.
+Evidence is in `trace-record-batching/pilot/`.
+
+### Trace-enrichment statements have separate measured costs
+
+One exact Casing statement diagnostic preserves the accepted v6 response and
+work. Acquisition executes 2179 times, returning 41 rows for two resource IDs,
+and takes 55.870 ms including fetch. The unresolved-producer probe executes
+2179 times, returning 2160 LIMIT-1 positives, and takes 96.863 ms. The query
+takes 507.225 ms wall. Measured wrapper bookkeeping takes 17.445 ms, with
+additional instrumentation overhead unmeasured. Fetched rows are not internal
+SQLite row visits. No treatment or second query runs.
+
+The unresolved-producer Boolean is snapshot-invariant but includes every
+captured declaration. Existing prepared positive eligible outputs cannot
+substitute for its exact canonical SQL scope. Any proposed owner must preserve
+availability explanations and shortest/diverse without a prepared sidecar.
+It must never become an exclusion or acquisition proof. Evidence is in
+`trace-enrichment-profile/`.
+
+### Molten recovery has native evidence, but no baseline regression
+
+The rejected Hull treatment's p84812 consumes a prefix-free item with positive
+explicit ItemData composition and primary Plastic. Its output has one native
+molten association with the same primary. Polyethylene Pulp and Tin Dust
+controls instead have declared dust prefixes, no explicit extra constituents
+and preserve normal processing. The old pilot prose's item coproduct label
+was corrected to Titanium Ingot from the unchanged native JSON.
+
+These fields support a narrow descriptive soft-recovery guard. The bad route
+occurs only in the rejected treatment, not the nine unchanged-baseline returns.
+There is no current native route improvement claim or new production penalty.
+The study inspected no latex witness and cannot certify all natural inputs or
+atom flow. Evidence is in `fluid-recovery-evidence/`.
+
+### Correlated boundary probes pass the fixed pilot
+
+The exact unresolved-producer predicate is evaluated request-locally through
+bounded correlated EXISTS statements. It retains every canonical declaration
+and introduces no persisted flag, cache or prepared-format requirement.
+One Casing pair changes 2179 point probes to five statements and measured
+instrumented wall time from 472.788 to 403.799 ms. One treatment-first Wafer
+pair changes 53 probes to one, with 376.067 versus 373.415 ms wall. Wafer CPU
+increases 4.35% at the observed clock granularity, below the declared 5% gate.
+Full responses, work and unresolved-ID sets match exactly. Observer overhead
+also falls with call count, so this is not an isolated production speedup.
+Root integrates the same small Dataset helper, with acquisition unchanged.
+Evidence and exact SQL are in `trace-enrichment-profile/pilot/`.
+
+### Declared Cutter ordering improves the retained material story
+
+The old fixed-pool result can support a declared presentation convention,
+while its proposed universal coolant claim remains rejected. Material results
+now order retained item-entry paths before fluid-entry paths within exact
+comparable final Cutter transformations. Native ownership, typed positive
+templates, conditions and full transformation fields constrain comparison.
+Missing, mixed and unresolved evidence stays neutral. No discovery score,
+path pool, quantity, matcher or native role is changed. UU-Matter consumption
+is an explicit counterexample to interpreting this convention as fluid purpose.
+
+The result owner remaps route, branch indices and path details consistently.
+Optional path_ordering discloses the policy, permutation and structural visits.
+GUI explanation appears only after a real reorder. A public ordering regression
+follows RED then GREEN. Five public tests protect NBT, native cofeeds, peer/neutral
+positions, other selectors and required/fluid-only paths. Combined code passes
+202 Python tests and 71 GUI tests, with typecheck and candidate build.
+
+One integrated nine-pair acceptance compares the frozen ed44c34 trace with the
+current Dataset and unchanged v6 engine. Wafer reproduces [1,2,3,4,0,5,6,7],
+promoting p139174/p139349/p118805/p51142 while retaining every fluid path.
+Classification visits eight paths, four recipes, eight slots, eight choices
+and eight outputs. Undoing the independently verified bijection restores exact
+paths, route, details and branch indices. Every other response/work field is
+equal except distance elapsed time. Non-Cutter cases retain their exact order.
+The old 205-step native proof is reused through exact body/path/store equality.
+
+One paired series totals 5.436 s baseline and 4.993 s treatment, median ratio
+0.925. No observer or allocation tracer runs inside latency windows. These
+single observations do not isolate the two changes or establish a repeated
+benchmark. All 13 protected hashes, including served bundle files, match.
+No rebuild, capture, service switch or new matcher expansion runs. Evidence is
+in `mechanical-continuity-design/` and `cutter-and-boundary-acceptance/`.
+
+Targeted transport QA makes exactly one HTTP ASGI and one fresh stdio MCP
+Wafer call. Both full payloads equal accepted treatment except distance time,
+with eight paths, five classes and aligned route/details/branch indices.
+HTTP returns 200. MCP negotiates protocol 2025-11-25, returns a complete
+successful structured result and serves the updated format-6 guide. Seventeen
+protected hashes match. Only the SDK-owned QA child is closed. This does not
+establish a reload of connected MCP or served UI. Evidence is in
+`cutter-transport-acceptance/`.

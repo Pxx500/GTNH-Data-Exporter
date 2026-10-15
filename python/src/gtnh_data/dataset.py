@@ -1201,6 +1201,24 @@ class Dataset:
                     AND (mode='native_unknown' OR (mode='unified' AND group_id IS NULL)))
         )"""
 
+    def _unresolved_producer_ids(self, connection, resource_ids):
+        ids = tuple(resource_ids)
+        batch_size = min(500, connection.getlimit(sqlite3.SQLITE_LIMIT_VARIABLE_NUMBER))
+        predicate = self._unresolved_input_clause()
+        found = set()
+        for offset in range(0, len(ids), batch_size):
+            chunk = ids[offset:offset + batch_size]
+            values = ','.join('(?)' for _ in chunk)
+            rows = connection.execute(
+                "WITH requested(resource_id) AS (VALUES " + values + ") "
+                "SELECT requested.resource_id FROM requested WHERE EXISTS ("
+                "SELECT 1 FROM records WHERE collection='processes' "
+                "AND id IN (SELECT process_id FROM outputs WHERE outputs.resource_id=requested.resource_id) "
+                "AND (" + predicate + " OR json_extract(payload,'$.conditions.dynamic_output')='unresolved') LIMIT 1)",
+                chunk)
+            found.update(row[0] for row in rows)
+        return found
+
     def find_processes(self, *, input_id=None, output_id=None, family=None, offset=0, limit=50):
         clauses, parameters = ["1"], ()
         with self._connect() as connection:
@@ -1944,6 +1962,105 @@ class Dataset:
         duplicates.extend(item for item in primary_duplicates if item['representative_id'] not in duplicate_ids)
         return route, paths, search, sorted(reasons), duplicates, branches
 
+    def _order_material_cutter_paths(self, paths, resources, processes, route, branches):
+        from .balance import quantity
+        visits = dict(paths=0, recipes=0, slots=0, choices=0, outputs=0)
+        templates, peers, kinds = {}, {}, {}
+        relevant = False
+
+        def template(record):
+            visits['recipes'] += 1
+            provenance = record.get('provenance') or {}
+            if (record.get('executable') is not True or provenance.get('owner') != 'GTRecipe'
+                    or provenance.get('map') != 'gt.recipe.cuttingsaw'
+                    or record['conditions'].get('dynamic_inputs') == 'unresolved'
+                    or record['conditions'].get('dynamic_output') == 'unresolved'):
+                return None
+            nonfluid, slot_kinds, consumed_items, fluids = [], {}, 0, 0
+            try:
+                for index, slot in enumerate(record['inputs']):
+                    visits['slots'] += 1
+                    declared_kinds = set()
+                    for choice in slot['choices']:
+                        visits['choices'] += 1
+                        amount = quantity(choice['amount'])
+                        chance = quantity(choice.get('consumption_chance', slot.get('consumption_chance', 1)))
+                        if amount <= 0 or chance <= 0:
+                            continue
+                        match = choice['match']
+                        if (match['mode'] not in ('exact', 'wildcard', 'ore_dict', 'unified')
+                                or match['mode'] in ('ore_dict', 'unified') and not match.get('group_id')):
+                            return None
+                        declared_kinds.add(resources.get(choice.get('resource_id'), {}).get('kind'))
+                    if len(declared_kinds) != 1 or not declared_kinds <= {'item', 'fluid'}:
+                        return None
+                    kind = next(iter(declared_kinds))
+                    if kind == 'item':
+                        nonfluid.append(slot)
+                        if slot['role'] == 'consume':
+                            consumed_items += 1
+                        elif slot['role'] != 'presence':
+                            return None
+                    elif slot['role'] == 'consume':
+                        fluids += 1
+                    else:
+                        return None
+                    if slot['role'] == 'consume':
+                        slot_kinds[index] = kind
+                positive_outputs = 0
+                for output in record['outputs']:
+                    visits['outputs'] += 1
+                    if quantity(output['amount']) <= 0 or quantity(output.get('chance', 1)) <= 0:
+                        continue
+                    if resources.get(output['resource_id'], {}).get('kind') != 'item':
+                        return None
+                    positive_outputs += 1
+            except (KeyError, TypeError, ValueError):
+                return None
+            if consumed_items != 1 or not fluids or not positive_outputs:
+                return None
+            signature = _json([record['family'], nonfluid, record['outputs'], record['conditions'],
+                               record['eu_per_tick'], record['amperage']])
+            return signature, slot_kinds
+
+        for index, path in enumerate(paths):
+            visits['paths'] += 1
+            if not path['process_ids']:
+                continue
+            pid = path['process_ids'][-1]
+            record = processes[pid]
+            if record['family'] != 'gregtech:gt.recipe.cuttingsaw':
+                continue
+            relevant = True
+            if pid not in templates:
+                templates[pid] = template(record)
+            if templates[pid] is None or resources[path['resource_ids'][-1]]['kind'] != 'item':
+                continue
+            signature, slot_kinds = templates[pid]
+            kind = resources[path['resource_ids'][-2]]['kind']
+            if not any(branch['target_process_id'] == pid and index in branch['path_indices']
+                       and slot_kinds.get(branch['slot_index']) == kind for branch in branches):
+                continue
+            peers.setdefault(signature, []).append(index)
+            kinds[index] = kind
+        if not relevant:
+            return None
+        order = list(range(len(paths)))
+        for indices in peers.values():
+            preferred = sorted(indices, key=lambda index: kinds[index] != 'item')
+            for position, original in zip(indices, preferred):
+                order[position] = original
+        changed = order != list(range(len(paths)))
+        if changed:
+            paths[:] = [paths[index] for index in order]
+            route.update(resource_ids=paths[0]['resource_ids'], process_ids=paths[0]['process_ids'])
+            positions = {original: index for index, original in enumerate(order)}
+            for branch in branches:
+                branch['path_indices'] = sorted(positions[index] for index in branch['path_indices'])
+        return {'policy': 'cutter_consumed_item_first', 'scope': 'comparable_retained_final_cutter_paths',
+                'changed': changed, 'eligible_paths': len(kinds), 'classification_visits': visits,
+                'original_path_indices': order}
+
     def trace_processes(self, *, start_id, target_id, max_depth=12, max_processes=300, max_paths=8,
                         required_resource_ids=None, excluded_resource_ids=None, excluded_group_ids=None, max_extra_steps=6,
                         min_tier=None, max_tier=None, unknown_tier_policy='exclude', path_selection='diverse', view='full',
@@ -2048,7 +2165,7 @@ class Dataset:
             source_ids = {}
             generation_only = set()
             rule_only = set()
-            unresolved_boundaries = set()
+            unresolved_boundaries = self._unresolved_producer_ids(connection, resources)
             for resource_id in resources:
                 rows = connection.execute("SELECT DISTINCT payload FROM records JOIN source_outputs ON source_outputs.source_id=records.id WHERE collection='sources' AND resource_id=? ORDER BY records.id", (resource_id,))
                 sources = [json.loads(row[0]) for row in rows]
@@ -2064,9 +2181,6 @@ class Dataset:
                     if any(output['resource_id'] == resource_id and output.get('resource_semantics') == 'mined_item_rule_candidate'
                            for source in sources for output in source['outputs']):
                         rule_only.add(resource_id)
-                if connection.execute("SELECT 1 FROM records WHERE collection='processes' AND id IN (SELECT process_id FROM outputs WHERE resource_id=?) AND (" + self._unresolved_input_clause()
-                                      + " OR json_extract(payload,'$.conditions.dynamic_output')='unresolved') LIMIT 1", (resource_id,)).fetchone():
-                    unresolved_boundaries.add(resource_id)
                 if resource_id == start_id:
                     source_states[resource_id] = "assumed"
                 elif any(source["status"] == "active" and not source["conditions"] for source in inventory_sources):
@@ -2109,6 +2223,7 @@ class Dataset:
                     leaf["reason"] = "Producer inputs, matching or outputs are unresolved"
                 leaves.append(leaf)
             from .flow_index import path_details
+            ordering = self._order_material_cutter_paths(paths, resources, processes, route, branches) if path_selection == 'material' else None
             details = path_details(self, paths, resources, processes, branches) if path_selection == 'material' else []
             result = {"snapshot_id": self.snapshot_id, "start_id": start_id, "target_id": target_id,
                     "resources": [resources[id] for id in sorted(resources)], "processes": [processes[id] for id in sorted(processes)],
@@ -2117,6 +2232,8 @@ class Dataset:
                       'tier_filter': tier_filter, 'recipe_tiers': [self._recipe_tier(processes[id]) for id in sorted(processes)],
                       'path_selection': path_selection, 'branch_coverage': branches, 'path_details': details,
                       'group_exclusions': group_exclusions}
+            if ordering is not None:
+                result['path_ordering'] = ordering
             return self._compact_trace(result, connection) if view == 'compact' else result
 
     def _compact_trace(self, result, connection):

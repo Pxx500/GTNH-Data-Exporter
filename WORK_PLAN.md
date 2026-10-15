@@ -769,7 +769,7 @@ etap. Bieżące pomiary i decyzje są w SEARCH_EXPERIMENTS.md.
   Rebuild trwa 46,481 s i tworzy indeks 142098432 bajtów, o 7262208 większy
   od kopii v5. Matcher wykonuje tyle samo pracy. Aktywne pliki i usługi
   pozostają bez zmian. Miernik pamięci naprawiono przed pierwszym rebuild.
-- [ ] Sprawdzić istniejące metody grupowego ładowania rekordów i wąski odczyt
+- [x] Sprawdzić istniejące metody grupowego ładowania rekordów i wąski odczyt
   znanego zbioru zasobów w Dataset. Zachować błędy brakujących ID, kolejność,
   pełne rekordy i kontekst akwizycji. Bez przedwczesnego usuwania alternatyw
   i optymalizacji niezmierzonych zapytań o producentów.
@@ -777,6 +777,59 @@ etap. Bieżące pomiary i decyzje są w SEARCH_EXPERIMENTS.md.
   lub listy wyjść. SQLite IN ma najwyżej 500 ID i respektuje limit połączenia.
   Prywatna próba Casing i Wafer zaczyna się dopiero po zakończeniu pomiaru
   rodziny. Bez zmian produkcyjnych przed wynikiem tej próby.
+  Cztery wywołania zachowują całe odpowiedzi i pracę. Casing redukuje odczyty
+  zasobów 2177 do 20, lecz oszczędza 57,6 ms z 2,188 s pomiaru instrumentowanego.
+  Wafel oszczędza 1,2 ms. Wynik jest poniżej zadeklarowanego progu 5%.
+  Nie dodajemy helpera produkcyjnego ani kolejnej serii. Wszystkie hashe są zgodne.
+- [x] Zmierzyć dokładne zapytania metadanych w jednym trace casingu.
+  Akwizycja wykonuje 2179 odczytów, zwraca 41 wierszy dla dwóch zasobów
+  i zajmuje 55,9 ms. Sprawdzenie nierozwiązanych producentów wykonuje 2179
+  odczytów, zwraca 2160 dodatnich wyników i zajmuje 96,9 ms. Pełna odpowiedź
+  i praca są zgodne. Wyniki nie oznaczają liczby wewnętrznych wizyt SQLite.
+- [x] Wybrać proporcjonalnego właściciela dokładnego, zależnego od snapshota
+  znacznika nierozwiązanego producenta. Zachować niezmienną bazę kanoniczną,
+  obsługiwane zapisane importy i shortest/diverse bez przygotowanego sidecara.
+  Bez nowego magazynu, ukrytej ścieżki zgodności i filtrowania itemów tym faktem.
+  Wybrano lokalne zapytania skorelowane EXISTS dla znanych ID, bez zapisu
+  znaczników i cache. Prywatna próba zachowuje wszystkie dane i redukuje
+  sprawdzenia casingu 2179 do pięciu. Jeden pomiar czasu 0,473 do 0,404 s
+  przechodzi zadeklarowany próg. Root wdrożył ten sam predykat w Dataset.
+  Akwizycja i zakres wszystkich deklaracji, także fake/disabled, są zachowane.
+- [x] Sprawdzić natywne dane konkretnego recyklingu maszyny do płynu.
+  ItemData reaktora ma dodatnią podstawę Plastic i dodatkowe materiały,
+  bez prefiksu. Wyjście ma jednoznaczną fazę molten i tę samą podstawę.
+  Dwa przykłady przetwarzania pyłu do płynu nie spełniają takiej reguły.
+  Ten objazd był tylko w odrzuconej próbie, nie w bazowych wynikach.
+  Nie wdrażamy nowej kary na podstawie niezaobserwowanej bieżącej regresji.
+- [x] Ocenić istniejący wynik pilota Cuttera jako jawną preferencję ciągłości
+  itemu przy mechanicznym przetwarzaniu. Oddzielić priorytet rankingu od
+  twierdzenia o roli chłodziwa. Zachować legalne gałęzie płynów i pełne receptury.
+  Bez powtarzania wcześniejszej próby, nowej listy rodzin i strojenia wag.
+  Wdrożono uporządkowanie wyłącznie zatrzymanych porównywalnych końcowych
+  receptur Cuttera w material. Route, indeksy gałęzi i path_details są spójne.
+  Descriptor podaje permutację i wizyty klasyfikacji. GUI pokazuje objaśnienie
+  tylko po rzeczywistej zmianie kolejności. Fluid-only i wymagane płyny działają.
+  Publiczny RED odtwarza kolejność fluid-first, potem GREEN potwierdza item-first.
+  Przechodzi pełne 202 testy Pythona, 71 GUI, typecheck i build kandydata.
+- [x] Sprawdzić wspólnie uporządkowanie Cuttera i zbiorcze granice producentów.
+  Dziewięć par zachowuje całe odpowiedzi po dokładnym odwróceniu permutacji
+  wafla [1,2,3,4,0,5,6,7]. Główny wynik pokazuje już istniejący chemiczny
+  chain do boule. Wszystkie płynowe ścieżki, rekordy i liczniki pozostają.
+  Pozostałe osiem przypadków ma identyczną kolejność. Wykorzystano poprzedni
+  dowód 205 natywnych kroków, bez powtarzania matchera. Jedna seria trwa
+  5,436 do 4,993 s, bez instrumentacji w oknie czasu. Brak rebuild i aktywacji.
+- [x] Sprawdzić nowy wynik wafla przez prawdziwy HTTP ASGI i świeży stdio MCP
+  na kopii v6. Po jednym żądaniu, bez zmiany działających usług i konfiguracji.
+  Potwierdzić descriptor, główną trasę, indeksy i dokumentację MCP.
+  HTTP zwraca 200, świeży MCP negocjuje protokół 2025-11-25 i zwraca pełny
+  poprawny wynik. Oba payloady są identyczne z zaakceptowanym wynikiem wafla
+  poza czasem odległości. Przewodnik podaje wersję 6 i nową preferencję.
+  Wszystkie 17 chronionych hashy jest zgodnych. Zamknięto wyłącznie proces QA.
+  Nie jest to dowód przeładowania działającego MCP ani aktywnej strony.
+- [ ] Zmierzyć wielkość już zapisanej odpowiedzi MCP i jej pól. Sprawdzić
+  istniejące receipt/projekcje przed proponowaniem nowego formatu. Zachować
+  pełne dane natywne. Bez nowego zapytania i bez wnioskowania o tokenach
+  wyłącznie z rozmiaru HTTP.
 - [x] Sprawdzić literaturę o landmarkach i planach zrelaksowanych pod kątem
   kierowania przez gałęzie składników celu. Odróżnić osiągalność pojedynczej
   ścieżki od spełnienia wszystkich wejść receptury i policzyć przygotowanie.

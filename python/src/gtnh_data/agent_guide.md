@@ -92,6 +92,21 @@ Reload the MCP process after
 upgrading, then explicitly rebuild if status is incompatible.
 Rebuilding derived data does not reload running code.
 
+Material presentation lists retained paths through the consumed item first
+within comparable final Cutter transformations. Inspect optional `path_ordering`
+for the applied policy, classification visits and permutation from new path
+positions to original positions. Route, branch indices and path details already
+follow that order. Other families and selectors retain their order.
+This is a declared mechanical continuity preference. Fluids can contribute
+material, including recipes that consume UU-Matter, and remain required inputs.
+All returned fluid paths stay available. Use required intermediates when you
+want a particular fluid route. Ordering does not recover an undiscovered path
+or establish best yield, atom contribution or a coolant role.
+
+The presentation pass and batched unresolved-producer checks use the existing
+imported data and keep analysis version 6. Reload running code after upgrading.
+Rebuild only if `flow_index_status` reports missing or incompatible data.
+
 Material search uses partial successor expansion. Each admitted cursor entry
 is one concrete child path and counts against `queued_states`. Its next sibling
 is admitted when that entry is processed. Deferred descriptors are not already
