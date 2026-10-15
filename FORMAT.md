@@ -852,12 +852,16 @@ new snapshot or prepared-index format and makes no token or CPU guarantee.
 The restrictive policy uses captured item class/interface ancestry to recognize
 Tinkers ToolCore tools and ammunition, IToolPart implementations including
 TGregworks, and GT MetaGeneratedTool descendants including turbine metatools.
+GGFab single-use tools are recognized independently by their exact registered
+item and tool metadata from native `SingleUseTool` declarations. Their molds
+use different metadata and remain outside this tool category. This does not
+depend on display names or treat the whole GGFab namespace as tools.
 A selected consumed edge from a recognized tool or part is allowed only when
 its output is also recognized. This preserves material → part → tool targets
 and blocks tool → ordinary product carriers. No process is removed globally.
 Full cofeeds, direct recipe lookup and native accounting remain intact.
 Recycling explicitly requests `allow`. Other audits retain their own accounting.
-There is no extra rule for ordinary component rotors, GGfab, shaping aids or armor.
+There is no extra rule for ordinary component rotors, shaping aids or armor.
 
 `search.terminal_artifacts` reports the applied policy, recognition basis,
 checked and blocked edges, cached resource lookups, terminal/unknown/not-applicable
@@ -870,7 +874,7 @@ policy. An `incompatible` preflight skips recipe discovery and distance work,
 while charging actual endpoint classification. It adds no fictional recipe edge.
 Missing, failed or malformed item hierarchy
 is unknown. Fluids are not applicable. A partial recognition status cannot
-establish complete category enforcement. Prepared analysis version 6 stores
+establish complete category enforcement. Prepared analysis version 7 stores
 these facts and the exact captured process family in the existing flow sidecar.
 An incompatible version requires an explicit rebuild. Captured resource
 identities remain unchanged.

@@ -1373,6 +1373,11 @@ class Dataset:
     def _terminal_artifact_category(record):
         if record.get('kind') == 'fluid':
             return 'not_applicable'
+        # GT .221 SingleUseTool and GigaGramFab.initDumbItem1 register these exact tool
+        # subtypes. The same item also registers molds under separate metadata.
+        if (record.get('kind') == 'item' and record.get('registry_name') == 'ggfab:gt.ggfab.d1'
+                and type(record.get('metadata')) is int and record['metadata'] in (0, 1, 2, 3, 4, 6, 7, 5)):
+            return 'single_use_tool'
         facts = record.get('item_type')
         if (record.get('kind') != 'item' or not isinstance(facts, dict) or facts.get('status') != 'captured'
                 or facts.get('basis') != 'runtime_item_class_hierarchy'
@@ -1392,7 +1397,7 @@ class Dataset:
 
     @staticmethod
     def _terminal_artifact_search(policy):
-        return {'policy': policy, 'basis': 'runtime_item_class_hierarchy', 'scope': 'selected_consumed_spine_edges',
+        return {'policy': policy, 'basis': 'runtime_item_class_hierarchy_or_native_registered_subtype', 'scope': 'selected_consumed_spine_edges',
                 'recognition_status': 'not_requested' if policy == 'allow' else 'not_checked',
                 'endpoint_compatibility': 'not_requested' if policy == 'allow' else 'not_checked', 'endpoint_checks': 0,
                 'checked_edges': 0, 'blocked_edges': 0, 'resource_lookups': 0,
@@ -1417,14 +1422,16 @@ class Dataset:
         if prepared:
             category = connection.execute('SELECT terminal_category FROM resources WHERE id=?', (rid,)).fetchone()[0]
         else:
-            kind, fact_type, raw = connection.execute("SELECT json_extract(payload,'$.kind'),json_type(payload,'$.item_type'),json_extract(payload,'$.item_type') "
+            kind, registry, metadata, fact_type, raw = connection.execute("SELECT json_extract(payload,'$.kind'),json_extract(payload,'$.registry_name'),"
+                "json_extract(payload,'$.metadata'),json_type(payload,'$.item_type'),json_extract(payload,'$.item_type') "
                 "FROM records WHERE collection='resources' AND id=?", (rid,)).fetchone()
             facts = json.loads(raw) if fact_type == 'object' else None
             visits = 1 + sum(len(facts[key]) for key in ('superclasses', 'interfaces')
                 if isinstance(facts, dict) and isinstance(facts.get(key), list))
             if not self._terminal_artifact_charge(search, reasons, visits):
                 return None
-            category = self._terminal_artifact_category({'kind': kind, 'item_type': facts})
+            category = self._terminal_artifact_category({'kind': kind, 'registry_name': registry,
+                'metadata': metadata, 'item_type': facts})
         if not self._terminal_artifact_charge(search, reasons, 1):
             return None
         categories[rid] = category

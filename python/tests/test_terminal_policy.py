@@ -15,6 +15,57 @@ def typed_item(id, class_name='net.minecraft.item.Item', *, superclasses=(), int
 
 
 class TerminalPolicyTests(unittest.TestCase):
+    def test_native_single_use_subtypes_are_terminal_without_item_hierarchy(self):
+        # GT .221 SingleUseTool declares these tool IDs separately from its molds.
+        for metadata in (0, 1, 2, 3, 4, 6, 7, 5):
+            with self.subTest(metadata=metadata), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                tool = resource('tool', registry_name='ggfab:gt.ggfab.d1', metadata=metadata,
+                    nbt={'type': 'compound', 'value': {'custom': {'type': 'int', 'value': 1}}})
+                tool['display_name'] = 'Unrelated label'
+                recipes = [process('make', [slot(choice('start'))], ['tool']),
+                    process('use', [slot(choice('tool'))], ['target'])]
+                dataset = Dataset.import_snapshot(snapshot(root / 'capture', resources=[resource('start'), tool,
+                    resource('target')], processes=recipes), root / 'index.sqlite')
+                for selection in ('shortest', 'diverse', 'material'):
+                    args = {'path_selection': selection, 'terminal_artifact_policy': 'direct_targets_only'}
+                    restricted = dataset.trace_processes(start_id='start', target_id='target', **args)
+                    self.assertEqual(restricted['paths'], [])
+                    direct = dataset.trace_processes(start_id='start', target_id='tool', **args)
+                    self.assertEqual(direct['paths'], [{'resource_ids': ['start', 'tool'], 'process_ids': ['make']}])
+                    self.assertEqual(next(row for row in direct['resources'] if row['id'] == 'tool'), tool)
+                    self.assertEqual(dataset.trace_processes(start_id='tool', target_id='target', **args)['paths'], [])
+                    allowed = dataset.trace_processes(start_id='start', target_id='target', path_selection=selection)
+                    self.assertEqual(allowed['paths'][0]['process_ids'], ['make', 'use'])
+                self.assertEqual(dataset.get_process('use')['item'], recipes[1])
+
+    def test_single_use_molds_and_native_tool_cofeeds_keep_their_roles(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            rows = [resource('start'), resource('target'),
+                resource('tool', registry_name='ggfab:gt.ggfab.d1', metadata=4)]
+            molds = [resource(f'mold-{metadata}', registry_name='ggfab:gt.ggfab.d1', metadata=metadata)
+                for metadata in (30, 31, 32, 33, 34, 36, 37, 35)]
+            # Neither a matching label nor the shared namespace establishes a tool subtype.
+            molds += [resource('other-subtype', registry_name='ggfab:gt.ggfab.d1', metadata=8),
+                resource('other-registry', registry_name='ggfab:other', metadata=4)]
+            for row in molds:
+                row['display_name'] = 'Single Use Hard Hammer'
+            recipes = [process(f'make-{row["id"]}', [slot(choice('start'))], [row['id']]) for row in molds]
+            recipes += [process(f'use-{row["id"]}', [slot(choice(row['id'])), slot(choice('tool', amount=3)),
+                slot(choice('tool'), role='presence')], ['target']) for row in molds]
+            dataset = Dataset.import_snapshot(snapshot(root / 'capture', resources=rows + molds, processes=recipes), root / 'index.sqlite')
+            for selection in ('shortest', 'diverse', 'material'):
+                chain = dataset.trace_processes(start_id='start', target_id='target', path_selection=selection,
+                    required_resource_ids=['mold-34'], terminal_artifact_policy='direct_targets_only')
+                self.assertEqual(chain['paths'][0]['process_ids'], ['make-mold-34', 'use-mold-34'])
+                for row in molds:
+                    result = dataset.trace_processes(start_id=row['id'], target_id='target', path_selection=selection,
+                        terminal_artifact_policy='direct_targets_only')
+                    self.assertEqual(result['paths'][0]['process_ids'], [f'use-{row["id"]}'])
+                    self.assertEqual(result['processes'], [next(p for p in recipes if p['id'] == f'use-{row["id"]}')])
+                    self.assertEqual(next(r for r in result['resources'] if r['id'] == 'tool'), rows[2])
+
     def test_incompatible_terminal_endpoints_stop_before_recipe_graph_discovery(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

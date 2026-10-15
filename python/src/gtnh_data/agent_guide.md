@@ -276,8 +276,10 @@ Request `terminal_artifact_policy="direct_targets_only"` when tools and parts
 should be direct targets rather than bridges to ordinary products. Recognized
 families are Tinkers ToolCore tools and ammunition, IToolPart implementations
 including TGregworks parts, and GT MetaGeneratedTool descendants including
-turbine metatools. Ordinary component rotors, casts, shapes, GGfab implements
-and armor receive no extra rule.
+turbine metatools, plus GGFab single-use tools identified by their native
+registry and tool metadata. GGFab molds use separate metadata and aren't
+classified as tools. Ordinary component rotors, casts, shapes and armor
+receive no extra rule.
 
 A recognized tool or part can feed another recognized tool or part. It cannot
 feed an ordinary or unclassified output on the selected spine. This keeps

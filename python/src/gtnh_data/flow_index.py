@@ -21,7 +21,7 @@ from heapq import heappop, heappush
 
 from .balance import quantity
 
-ANALYSIS_VERSION = 6
+ANALYSIS_VERSION = 7
 
 _RECOVERY_FAMILIES = frozenset(('gregtech:gt.recipe.macerator', 'gregtech:gt.recipe.arcfurnace',
                                 'gregtech:gt.recipe.alloysmelter'))
