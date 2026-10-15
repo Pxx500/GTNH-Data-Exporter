@@ -1,13 +1,18 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, expect, test, vi } from 'vitest'
 import App from './App'
+import {traceFixture} from './trace-fixture'
 import type { Process, Resource, Trace } from './api'
 
 afterEach(() => {cleanup(); vi.unstubAllGlobals()})
 const resource: Resource = {id:'resource/opaque:1',kind:'item',registry_name:'test:mold',display_name:'Test mold',metadata:0,nbt:null,provenance:{}}
 const process: Process = {id:'process/opaque:1',family:'test',display_name:'Mold cast',inputs:[{role:'presence',choices:[{resource_id:resource.id,amount:1,match:{mode:'exact'}}]}],outputs:[{resource_id:resource.id,amount:1,chance:{numerator:1,denominator:1}}],duration_ticks:20,eu_per_tick:4,amperage:1,executable:true,conditions:{},provenance:{}}
 const status = {snapshot_id:'test-snapshot',manifest:{created_at:'2026-10-11',capture:{kind:'synthetic'},pack:{name:'Synthetic contract fixture'}},counts:{resources:1,groups:0,processes:1,sources:0,environments:0,coverage:1},coverage:[{id:'coverage',domain:'test',status:'partial',records:1,reason:'Fixture only',provenance:{}}]}
-function response(value: unknown, code=200) { return new Response(JSON.stringify(value), {status:code,headers:{'Content-Type':'application/json'}}) }
+function response(value: unknown, code=200) {
+  const body=value as {paths?:unknown;result?:Trace}
+  if(Array.isArray(body?.paths))value=traceFixture(value as Trace)
+  else if(body?.result)value={...body,result:traceFixture(body.result)}
+  return new Response(JSON.stringify(value), {status:code,headers:{'Content-Type':'application/json'}}) }
 function page(items: unknown[]) {return {snapshot_id:'test-snapshot',items,total:items.length,limit:30,offset:0}}
 function finishedJob(result:unknown,state='finished') {return response({job_id:'fixture-job',snapshot_id:status.snapshot_id,revision:state==='closed'?2:1,status:state,phase:state,elapsed_seconds:1,progress:{},result_revision:1,request:{path_selection:'material'},result})}
 function traceSection(name:string) {return screen.getByText(name).closest('summary')!}
@@ -42,7 +47,7 @@ test('trace starts with optional controls collapsed and keeps source, target and
 test('pause can deliver the first result and replacing a running job waits for cooperative closure',async()=>{
   const target={...resource,id:'cooperative-target',display_name:'Cooperative target'}
   const next={...process,id:'replacement',display_name:'Replacement recipe'}
-  const result:Trace={path_selection:'material',snapshot_id:status.snapshot_id,start_id:resource.id,target_id:target.id,resources:[resource,target],processes:[process],edges:[],leaves:[],cycles:[],truncated:false,coverage:[],route:{status:'found',strategy:'shortest_known_dependency_path',resource_ids:[resource.id,target.id],process_ids:[process.id]},paths:[{resource_ids:[resource.id,target.id],process_ids:[process.id]}],branch_coverage:[],search:{examined_processes:1,limit:1000,truncated:false},limit_reasons:[]}
+  const result:Trace=traceFixture({path_selection:'material',snapshot_id:status.snapshot_id,start_id:resource.id,target_id:target.id,resources:[resource,target],processes:[process],edges:[],leaves:[],cycles:[],truncated:false,coverage:[],route:{status:'found',strategy:'shortest_known_dependency_path',resource_ids:[resource.id,target.id],process_ids:[process.id]},paths:[{resource_ids:[resource.id,target.id],process_ids:[process.id]}],branch_coverage:[],search:{examined_processes:1,limit:1000,truncated:false},limit_reasons:[]})
   let creations=0
   let closing=false
   let oldRead:((value:Response)=>void)|undefined
@@ -96,7 +101,7 @@ test('pause can deliver the first result and replacing a running job waits for c
 test('material jobs show retained results, stop and continue the same search without moving the board',async()=>{
   const target={...resource,id:'job-target',display_name:'Job target'}
   const second={...process,id:'job-second',display_name:'Second job recipe'}
-  const result:Trace={path_selection:'material',snapshot_id:status.snapshot_id,start_id:resource.id,target_id:target.id,resources:[resource,target],processes:[process],edges:[],leaves:[],cycles:[],truncated:false,coverage:[],route:{status:'found',strategy:'shortest_known_dependency_path',resource_ids:[resource.id,target.id],process_ids:[process.id]},paths:[{resource_ids:[resource.id,target.id],process_ids:[process.id]}],branch_coverage:[],search:{examined_processes:1,limit:1000,truncated:false},limit_reasons:[]}
+  const result:Trace=traceFixture({path_selection:'material',snapshot_id:status.snapshot_id,start_id:resource.id,target_id:target.id,resources:[resource,target],processes:[process],edges:[],leaves:[],cycles:[],truncated:false,coverage:[],route:{status:'found',strategy:'shortest_known_dependency_path',resource_ids:[resource.id,target.id],process_ids:[process.id]},paths:[{resource_ids:[resource.id,target.id],process_ids:[process.id]}],branch_coverage:[],search:{examined_processes:1,limit:1000,truncated:false},limit_reasons:[]})
   const requests:{path:string;method:string;body:Record<string,unknown>}[]=[]
   let late:((value:Response)=>void)|undefined
   let polls=0
@@ -152,7 +157,7 @@ test('material jobs show retained results, stop and continue the same search wit
   fireEvent.click(tile);tile.focus();fireEvent.keyDown(tile,{key:'ArrowRight'})
   await waitFor(()=>expect(tile.style.transform).not.toBe(before))
   const position=tile.style.transform
-  fireEvent.change(screen.getByLabelText('Highlight path'),{target:{value:'0'}})
+  fireEvent.change(screen.getByLabelText('Highlight route'),{target:{value:'0'}})
   const viewport=tile.closest('.react-flow__viewport') as HTMLElement
   const originalCamera=viewport.style.transform
   fireEvent.wheel(tile,{deltaY:-80,ctrlKey:true,clientX:100,clientY:100})
@@ -174,7 +179,7 @@ test('material jobs show retained results, stop and continue the same search wit
   expect(requests.filter(r=>r.path==='/api/trace-jobs')).toHaveLength(1)
   expect(tile.style.transform).toBe(position)
   expect(viewport.style.transform).toBe(camera)
-  expect(screen.getByLabelText('Highlight path')).toHaveValue('1')
+  expect(screen.getByLabelText('Highlight route')).toHaveValue('1')
   expect(screen.getByRole('article',{name:'Recipe Second job recipe'})).toHaveClass('path-muted')
   expect(screen.getByRole('button',{name:'Continue search'})).toBeDisabled()
   expect(screen.getByText(/Search finished.*new search/)).toBeVisible()
@@ -348,7 +353,7 @@ test.each([
   const acquisitionText='Space Mining acquisition paths are shown after alternatives already found in this search.'
   if(kind==='acquisition' && changed && acquisitionChanged)expect(screen.getByText(acquisitionText)).toBeVisible()
   else expect(screen.queryByText(acquisitionText)).not.toBeInTheDocument()
-  expect(screen.getByRole('option',{name:'Path 2 · 2 steps'})).toBeInTheDocument()
+  expect(screen.getByRole('option',{name:'Route 2 · 2 steps'})).toBeInTheDocument()
 })
 
 test('terminal endpoint policy rejection explains the constraint and preserves selections across filter changes',async()=>{
@@ -456,13 +461,13 @@ test('trace excludes selected captured groups by exact namespace while retaining
   expect(screen.getByText(/Tool and part recognition is incomplete for this search/)).toHaveTextContent('2 inspected resources')
   fireEvent.click(screen.getByRole('button',{name:'Process Mold cast'}))
   expect(within(screen.getByRole('complementary')).getByText('Required presence')).toBeInTheDocument()
-  fireEvent.change(screen.getByLabelText('Highlight path'),{target:{value:'0'}})
+  fireEvent.change(screen.getByLabelText('Highlight route'),{target:{value:'0'}})
   const tile=screen.getByRole('article',{name:'Recipe Mold cast'})
   fireEvent.click(screen.getByRole('button',{name:'Library'}))
   fireEvent.click(screen.getByRole('button',{name:'Trace'}))
   expect(ore).toBeChecked()
   expect(unified).toBeChecked()
-  expect(screen.getByLabelText('Highlight path')).toHaveValue('0')
+  expect(screen.getByLabelText('Highlight route')).toHaveValue('0')
   expect(screen.getByLabelText('Tools and parts in paths')).toHaveValue('direct_targets_only')
   expect(screen.getByRole('article',{name:'Recipe Mold cast'})).toBe(tile)
   expect(within(screen.getByRole('complementary')).getByText('Required presence')).toBeInTheDocument()
@@ -580,7 +585,7 @@ test('labels synthetic data and forwards trace controls to Dataset while retaini
   fireEvent.click(screen.getByRole('button',{name:'Process Mold cast'}))
   expect(within(screen.getByRole('complementary')).getByText('Required presence')).toBeInTheDocument()
   expect(within(screen.getByRole('complementary')).queryByText(/Chance 100%/)).not.toBeInTheDocument()
-  fireEvent.change(screen.getByLabelText('Highlight path'),{target:{value:'0'}})
+  fireEvent.change(screen.getByLabelText('Highlight route'),{target:{value:'0'}})
   const tile=screen.getByRole('article',{name:'Recipe Mold cast'}).closest('.react-flow__node')!
   const viewport=tile.closest('.react-flow__viewport') as HTMLElement
   const originalPosition=(tile as HTMLElement).style.transform
@@ -599,7 +604,7 @@ test('labels synthetic data and forwards trace controls to Dataset while retaini
   expect(screen.getByLabelText('Maximum depth')).toHaveValue(7)
   expect(strategy.closest('details')).not.toHaveAttribute('open')
   expect(voltage.closest('details')).not.toHaveAttribute('open')
-  expect(screen.getByLabelText('Highlight path')).toHaveValue('0')
+  expect(screen.getByLabelText('Highlight route')).toHaveValue('0')
   expect(screen.getByRole('article',{name:'Recipe Mold cast'}).closest('.react-flow__node')).toBe(tile)
   expect(tile.closest('.react-flow__viewport')).toBe(viewport)
   expect((tile as HTMLElement).style.transform).toBe(position)
@@ -609,7 +614,7 @@ test('labels synthetic data and forwards trace controls to Dataset while retaini
   fireEvent.click(screen.getByRole('button',{name:'Refresh'}))
   await screen.findByText('next-snapshot')
   expect(screen.getByLabelText('Maximum depth')).toHaveValue(12)
-  expect(screen.queryByLabelText('Highlight path')).not.toBeInTheDocument()
+  expect(screen.queryByLabelText('Highlight route')).not.toBeInTheDocument()
 })
 
 test('concrete intermediate tags forward repeated IDs and changed filters label the retained result', async () => {

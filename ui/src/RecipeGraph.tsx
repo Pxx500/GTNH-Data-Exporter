@@ -3,22 +3,32 @@ import { Background, Controls, Handle, MiniMap, Position, ReactFlow, ReactFlowPr
 import type { Edge, Node, NodeProps } from '@xyflow/react'
 import dagre from '@dagrejs/dagre'
 import type { Process, Resource, Trace } from './api'
-import { Badge, ProcessDetail } from './Details'
+import { Badge, ConditionFacts, ProcessDetail, ProcessExecutionFacts, ProcessInputs, ProcessMaterialIO } from './Details'
 import { quantity } from './AccountingDetails'
 import type { Rational } from './AccountingDetails'
 import {renderRecipeBoard} from './RecipeBoardImage'
 import type {BoardImageFormat} from './RecipeBoardImage'
 import '@xyflow/react/dist/style.css'
 
-export interface RecipeGraphData {recipes:{id:string;process:Process;paths?:number[];runs?:Rational}[];resources:Resource[];connections:{id:string;source:string;target:string;resourceId:string;paths?:number[];label?:string}[]}
+export interface RecipeGraphData {recipes:{id:string;inspectId:string;process:Process;variants?:{process:Process;auxiliaryInputIndices:number[]}[];paths?:number[];runs?:Rational}[];resources:Resource[];connections:{id:string;source:string;target:string;resourceId:string;paths?:number[];label?:string}[]}
 type RecipeNodeData = RecipeGraphData['recipes'][number] & {resources: ReadonlyMap<string, Resource>; paths:number[];muted: boolean; inspect: (id: string) => void; inspectResource: (id: string) => void;recycle?:(processId:string,resourceId:string)=>void}
 type RecipeNode = Node<RecipeNodeData, 'recipe'>
 export interface AttachedConnection {source:string;target:string;resourceId:string;label:string}
-function RecipeTile({id,data}: NodeProps<RecipeNode>) {
-  return <article aria-label={`Recipe ${data.process.display_name || data.process.id}`} className={`recipe-tile ${data.muted ? 'path-muted' : ''}`}>
+function RecipeTile({data}: NodeProps<RecipeNode>) {
+  const title=data.variants?data.process.outputs.map(output=>data.resources.get(output.resource_id)?.display_name || output.resource_id).join(' + '):data.process.display_name || data.process.id
+  return <article aria-label={`Recipe ${title}`} className={`recipe-tile ${data.muted ? 'path-muted' : ''}`}>
     <Handle type="target" position={Position.Top}/>
-    <div className="recipe-tile-toolbar"><Badge tone="good">{data.paths.length > 1 ? `Shared by ${data.paths.length} paths` : data.paths.length ? `Path ${data.paths[0] + 1}` : 'Network recipe'}</Badge>{data.runs && <Badge>Runs {quantity(data.runs)}</Badge>}<button className="nodrag" aria-label={`Process ${data.process.display_name || data.process.id}`} onClick={() => data.inspect(id)}>Inspect details</button></div>
-    <div className="nodrag" onClick={event=>event.stopPropagation()}><ProcessDetail process={data.process} resources={data.resources} onSelect={data.inspectResource} onRecycle={data.recycle ? id=>data.recycle!(data.process.id,id) : undefined}/></div>
+    <div className="recipe-tile-toolbar"><Badge tone="good">{data.paths.length > 1 ? `Shared by ${data.paths.length} paths` : data.paths.length ? `Path ${data.paths[0] + 1}` : 'Network recipe'}</Badge>{data.runs && <Badge>Runs {quantity(data.runs)}</Badge>}{!data.variants && <button className="nodrag" aria-label={`Process ${data.process.display_name || data.process.id}`} onClick={() => data.inspect(data.inspectId)}>Inspect details</button>}</div>
+    <div className="nodrag" onClick={event=>event.stopPropagation()}>{data.variants?<section className="process-detail">
+      <div className="detail-title"><div><p className="eyebrow">Material transformation</p><h3>{title}</h3></div></div>
+      <ProcessMaterialIO process={data.process} inputIndices={data.process.inputs.map((_,index)=>index).filter(index=>!data.variants![0].auxiliaryInputIndices.includes(index))} resources={data.resources} onSelect={data.inspectResource}/>
+      <details className="machine-variants"><summary>Machine variants ({data.variants.length})</summary><p className="help">Retained variants in this search. Choose an exact recipe to inspect or recycle.</p>{data.variants.map(variant=><section key={variant.process.id} aria-label={`Variant ${variant.process.display_name || variant.process.id}`} className="machine-variant">
+        <div className="detail-title"><div><strong>{variant.process.display_name || variant.process.id}</strong><p>{variant.process.family}</p></div><button onClick={()=>data.inspect(variant.process.id)}>Inspect details</button></div>
+        <ProcessExecutionFacts process={variant.process} resources={data.resources} onSelect={data.inspectResource} showUnknownCosts/>
+        {variant.auxiliaryInputIndices.length>0 && <><h4>Auxiliary requirements</h4><ProcessInputs process={variant.process} inputIndices={variant.auxiliaryInputIndices} resources={data.resources} onSelect={data.inspectResource}/></>}
+        <ConditionFacts value={variant.process.conditions}/>
+      </section>)}</details>
+    </section>:<ProcessDetail process={data.process} resources={data.resources} onSelect={data.inspectResource} onRecycle={data.recycle ? id=>data.recycle!(data.process.id,id) : undefined}/>}</div>
     <Handle type="source" position={Position.Bottom}/>
   </article>
 }
@@ -39,8 +49,24 @@ export function pathConnections(trace: Trace) {
 export function recipeGraphForTrace(trace:Trace,attachments:AttachedConnection[]=[]):RecipeGraphData {
   const membership=new Map<string,number[]>()
   trace.paths.forEach((path,index)=>path.process_ids.forEach(id=>membership.set(id,[...(membership.get(id)??[]),index])))
-  return {resources:trace.resources,recipes:[...membership].map(([id,paths])=>({id,paths,process:trace.processes.find(process=>process.id===id)!})),
-    connections:[...pathConnections(trace),...attachments.map(link=>({...link,id:JSON.stringify(['attached',link.source,link.target,link.resourceId]),paths:[0,1]}))]}
+  const processes=new Map(trace.processes.map(process=>[process.id,process]))
+  const groupByProcess=new Map(trace.recipe_groups.flatMap(group=>group.process_ids.map(id=>[id,group.id] as const)))
+  const groups=new Map(trace.recipe_groups.map(group=>[group.id,group]))
+  const connections=new Map<string,RecipeGraphData['connections'][number]>()
+  for(const link of [...pathConnections(trace),...attachments.map(link=>({...link,id:JSON.stringify(['attached',link.source,link.target,link.resourceId]),paths:[0,1]}))]){
+    const source=groupByProcess.get(link.source)!,target=groupByProcess.get(link.target)!
+    const id=JSON.stringify([source,target,link.resourceId,'label' in link?link.label:''])
+    const current=connections.get(id)
+    if(current)current.paths=[...new Set([...current.paths!,...link.paths])]
+    else connections.set(id,{...link,id,source,target})
+  }
+  const recipes=[...new Set([...membership.keys()].map(id=>groupByProcess.get(id)!))].flatMap(groupId=>{
+    const group=groups.get(groupId)!
+    const variants=group.process_ids.filter(id=>membership.has(id)).map(id=>({process:processes.get(id)!,auxiliaryInputIndices:group.auxiliary_input_indices[id]}))
+    if(variants.length===0)return []
+    return [{id:group.id,inspectId:variants[0].process.id,process:variants[0].process,paths:[...new Set(variants.flatMap(variant=>membership.get(variant.process.id)!))],...(variants.length>1?{variants}:{})}]
+  })
+  return {resources:trace.resources,recipes,connections:[...connections.values()]}
 }
 interface RecipeGraphProps {graph:RecipeGraphData;highlight:number|null;inspect:(id:string)=>void;inspectResource:(id:string)=>void;recycle?:(processId:string,resourceId:string)=>void;recycleProcesses?:string[]}
 export function RecipeGraph(props:RecipeGraphProps) {
@@ -101,7 +127,7 @@ function Flow({graph:recipeGraph,highlight,inspect,inspectResource,recycle,recyc
     return true
   },[getNodes,setNodes,connections,fitView,initialNodes])
   useEffect(()=>{if(initialized && arrangedTrace.current!==recipeGraph && arrange(true)) arrangedTrace.current=recipeGraph},[initialized,dimensions,arrange,recipeGraph])
-  useEffect(()=>{setNodes(current=>current.map(node=>({...node,data:{...node.data,muted:highlight!==null && !node.data.paths.includes(highlight)}})))},[highlight,setNodes])
+  useEffect(()=>{setNodes(current=>current.map(node=>({...node,data:{...node.data,inspect,inspectResource,recycle:recycleProcesses && !recycleProcesses.includes(node.data.process.id)?undefined:recycle,muted:highlight!==null && !node.data.paths.includes(highlight)}})))},[highlight,setNodes,inspect,inspectResource,recycle,recycleProcesses])
   const exportReady=initialized && nodes.length>0 && nodes.length===initialNodes.length
   async function exportBoard(format:BoardImageFormat){
     if(exportLock.current || !graphRoot.current || !exportReady)return
@@ -122,7 +148,7 @@ function Flow({graph:recipeGraph,highlight,inspect,inspectResource,recycle,recyc
       setExporting(null)
     }
   }
-  return <div className="recipe-board">    <section aria-label="Recipe board actions" className="recipe-board-actions"><div className="recipe-board-buttons"><button onClick={()=>arrange()}>Arrange recipes</button><button disabled={!exportReady || !!exporting} onClick={()=>void exportBoard('png')}>Export whole board PNG</button><button disabled={!exportReady || !!exporting} onClick={()=>void exportBoard('svg')}>Export whole board SVG</button></div><p>Scroll the page normally. Ctrl+scroll or pinch zooms the graph. Drag the canvas to pan and a tile header to move it.</p><p>Export, then use the Download link to save. PNG uses 2× tile size. SVG suits larger boards and browser viewing.</p>{!exportReady && <p role="status">Wait for recipe tiles to finish loading before exporting.</p>}{exportNotice && <p role="status">{exportNotice}</p>}{exportImage && <div className="recipe-board-download"><a href={exportImage.image.dataUrl} download={`recipe-board.${exportImage.format}`}>Download {exportImage.format.toUpperCase()}</a><span>recipe-board.{exportImage.format}</span></div>}{exportError && <p className="warning-text" role="alert">{exportError}</p>}</section><div className="recipe-board-canvas"><ReactFlow ref={graphRoot} nodes={nodes} edges={edges} onNodesChange={onNodesChange} nodeTypes={nodeTypes} minZoom={.1} maxZoom={2} nodesConnectable={false} zoomOnScroll={false} panOnScroll={false} preventScrolling={false} zoomOnPinch zoomActivationKeyCode="Control" onNodeClick={(_,node)=>inspect(node.id)} fitView ariaLabelConfig={{'controls.fitView.ariaLabel':'Fit all recipes','controls.zoomIn.ariaLabel':'Zoom in','controls.zoomOut.ariaLabel':'Zoom out'}}>
+  return <div className="recipe-board">    <section aria-label="Recipe board actions" className="recipe-board-actions"><div className="recipe-board-buttons"><button onClick={()=>arrange()}>Arrange recipes</button><button disabled={!exportReady || !!exporting} onClick={()=>void exportBoard('png')}>Export whole board PNG</button><button disabled={!exportReady || !!exporting} onClick={()=>void exportBoard('svg')}>Export whole board SVG</button></div><p>Scroll the page normally. Ctrl+scroll or pinch zooms the graph. Drag the canvas to pan and a tile header to move it.</p><p>Export, then use the Download link to save. PNG uses 2× tile size. SVG suits larger boards and browser viewing.</p>{!exportReady && <p role="status">Wait for recipe tiles to finish loading before exporting.</p>}{exportNotice && <p role="status">{exportNotice}</p>}{exportImage && <div className="recipe-board-download"><a href={exportImage.image.dataUrl} download={`recipe-board.${exportImage.format}`}>Download {exportImage.format.toUpperCase()}</a><span>recipe-board.{exportImage.format}</span></div>}{exportError && <p className="warning-text" role="alert">{exportError}</p>}</section><div className="recipe-board-canvas"><ReactFlow ref={graphRoot} nodes={nodes} edges={edges} onNodesChange={onNodesChange} nodeTypes={nodeTypes} minZoom={.1} maxZoom={2} nodesConnectable={false} zoomOnScroll={false} panOnScroll={false} preventScrolling={false} zoomOnPinch zoomActivationKeyCode="Control" onNodeClick={(_,node)=>inspect(node.data.inspectId)} fitView ariaLabelConfig={{'controls.fitView.ariaLabel':'Fit all recipes','controls.zoomIn.ariaLabel':'Zoom in','controls.zoomOut.ariaLabel':'Zoom out'}}>
     <Background gap={20}/><Controls/><MiniMap pannable={false} zoomable={false} style={{pointerEvents:'none'}} nodeColor="#c0dfd3"/>
 
   </ReactFlow></div></div>

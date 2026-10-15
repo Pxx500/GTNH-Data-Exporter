@@ -20,9 +20,9 @@ export interface RecyclingPlan {
   main_plan:{status:string;ledger:Ledger|null;startup:Startup|null;byproduct_available:Rational|null;return_consumed:Rational|null;unsupported:unknown[];selected_inputs?:InputSelectionMap}
   alternatives:RecycleAlternative[];secondary_trace:Trace;limitations:unknown[]
 }
-export function RecyclePanel({trace,ownerId,byproductId,tierOptions,onSelect,onOverlay}: {trace:Trace;ownerId:string;byproductId:string;tierOptions?:TierOptions;onSelect:(id:string)=>void;onOverlay:(plan:RecyclingPlan,index:number)=>void}) {
+export function RecyclePanel({trace,ownerId,byproductId,initialPathIndex,tierOptions,onSelect,onOverlay}: {trace:Trace;ownerId:string;byproductId:string;initialPathIndex?:number;tierOptions?:TierOptions;onSelect:(id:string)=>void;onOverlay:(plan:RecyclingPlan,index:number)=>void}) {
   const owner=trace.processes.find(process=>process.id===ownerId)!
-  const firstPath=Math.max(0,trace.paths.findIndex(path=>path.process_ids.includes(ownerId)))
+  const firstPath=initialPathIndex!==undefined && trace.paths[initialPathIndex].process_ids.includes(ownerId)?initialPathIndex:Math.max(0,trace.paths.findIndex(path=>path.process_ids.includes(ownerId)))
   const [pathIndex,setPathIndex]=useState(firstPath)
   const defaultReturn=owner.inputs.filter(slot=>slot.role==='consume').flatMap(slot=>slot.choices).find(choice=>choice.resource_id!==null)?.resource_id ?? trace.start_id
   const [returnId,setReturnId]=useState(defaultReturn)

@@ -22,7 +22,7 @@ function NetworkWitness({report,onSelect}:{report:NetworkWitnessReport;onSelect:
     for(const producer of executions)for(const consumer of executions)for(const [resourceId,amount] of Object.entries(producer.ledger.produced)){
       if(amount.numerator>0 && (consumer.ledger.consumed[resourceId]?.numerator??0)>0)connections.push({id:JSON.stringify([producer.variant_id,consumer.variant_id,resourceId]),source:producer.variant_id,target:consumer.variant_id,resourceId})
     }
-    return {resources:report.discovery.resources,recipes:executions.map(execution=>({id:execution.variant_id,process:report.discovery.processes[execution.process_id],runs:execution.runs})),connections}
+    return {resources:report.discovery.resources,recipes:executions.map(execution=>({id:execution.variant_id,inspectId:execution.variant_id,process:report.discovery.processes[execution.process_id],runs:execution.runs})),connections}
   },[solution,report.discovery])
   const inspect=useCallback((id:string)=>{setInspected(id);setResourceId(null)},[])
   const inspectResource=useCallback((id:string)=>{setResourceId(id);setInspected(null)},[])

@@ -114,6 +114,11 @@ can contribute to a target. Inspect side inputs before treating it as a full
 production plan. Network planning uses an explicit profile of permitted
 external resources and reports its actual imports and startup requirements.
 
+Trace groups matching material transformations into one tile and equivalent
+retained paths into one route family. Expand machine variants to compare their
+costs, tools and other requirements, or inspect an exact recipe. Different
+material amounts and outputs remain separate.
+
 ## Query from the command line
 
 The CLI returns JSON. Start with a small name search, then use the exact IDs

@@ -236,6 +236,22 @@ work includes candidate admission and replacement bookkeeping. Requirement
 class work is reported separately. A retained witness can coexist with search
 truncation. It does not prove optimality or supply the other recipe inputs.
 
+## Compare recipe machine variants
+
+Trace `recipe_groups` describe equivalent declared material transformations
+among returned recipes. `process_ids` retain every native variant, while
+`auxiliary_input_indices` identifies variant-specific tool and presence slots.
+Some native crafting-tool declarations still have unresolved consumption or
+wear. Grouping does not make those requirements free or establish equivalent
+execution costs. Read the original processes for machine conditions and costs.
+
+`path_groups` refer to indices of complete original `paths` with the same
+material route. Use them to avoid repeating machine alternatives in a summary.
+For accounting or recycling, select one original whole path. Do not combine
+step variants into a path absent from those witnesses. The groups cover retained
+results, not all machine alternatives in the snapshot. Existing search limits
+still count native witnesses and recipes.
+
 ## Keep tools and parts out of ordinary dependency spines
 
 Request `terminal_artifact_policy="direct_targets_only"` when tools and parts

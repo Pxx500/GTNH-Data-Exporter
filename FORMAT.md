@@ -764,7 +764,38 @@ database model or matcher.
 
 `{snapshot_id, start_id, target_id, resources, processes, edges, leaves,
 cycles, truncated, coverage, route, paths, search, limit_reasons,
-duplicate_process_records, path_selection, branch_coverage}`
+duplicate_process_records, path_selection, branch_coverage,
+recipe_groups, path_groups}`
+
+`recipe_groups` groups returned processes by their declared material
+transformation. Each entry is `{id, basis, process_ids,
+auxiliary_input_indices}`. The last field maps every member process ID to its
+zero-based auxiliary input-slot indices. Shared material requirements include
+all consumed materials, accepted alternatives, quantities and output chances.
+Repeated deterministic singleton ingredients can match an equivalent combined
+quantity. Independent alternative slots retain their original multiplicity.
+
+Explicit tool and presence requirements may differ between variants. A verified
+GT shaped crafting slot can also be auxiliary when its complete declared
+alternatives match a captured native crafting-tool category. This projection
+does not establish that the tool is unconsumed. Original slot roles and unresolved
+tool damage or returns remain on the native process record. Costs, voltage,
+auxiliary requirements and machine conditions always belong to each variant.
+
+The basis is `declared_material_transformation` when supported declarations
+establish equivalence, or `native_process` for a process kept separate. Unknown
+material effects cannot establish equivalence. Group IDs remain stable as new
+variants enter a progressive result. Groups describe returned recipes, not an
+exhaustive list of equivalent machines in the snapshot.
+
+`path_groups` entries are `{id, representative_path_index, path_indices}`.
+Each groups complete original paths with the same ordered resource spine and
+recipe-group sequence. The existing `paths` records remain unchanged. Selecting
+one variant at each step does not establish a new witnessed path. Accounting
+and recycling still require one original whole path and native process IDs.
+Search limits count native witnesses and recipes, so the number of displayed
+route families can be smaller than `max_paths`. Quantified network executions
+keep their separate execution identities.
 
 `trace_processes` also accepts optional `excluded_group_ids`. Dataset validates
 the snapshot's groups, resolves each group's literal captured members once and

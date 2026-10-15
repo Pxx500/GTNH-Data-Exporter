@@ -2229,7 +2229,7 @@ class Dataset:
         _, _, group_exclusions, tier_filter = deepcopy(context)
         route, paths, search, limit_reasons, duplicates, branches = snapshot
         resources = {id: self._record(connection, 'resources', id) for id in (start_id, target_id)}
-        processes, edges, input_slots = {}, {}, {}
+        processes, edges, input_slots, matching_candidates = {}, {}, {}, {}
         unresolved = set()
 
         def admit(id):
@@ -2245,7 +2245,10 @@ class Dataset:
             for slot_index, slot in enumerate(record["inputs"]):
                 candidates = set()
                 for choice_index, choice in enumerate(slot["choices"]):
-                    for resource_id in self._choice_resources(connection, choice):
+                    key = _json({'resource_id': choice.get('resource_id'), 'match': choice['match']})
+                    if key not in matching_candidates:
+                        matching_candidates[key] = tuple(self._choice_resources(connection, choice))
+                    for resource_id in matching_candidates[key]:
                         if resource_id not in resources:
                             resources[resource_id] = self._record(connection, "resources", resource_id)
                         candidates.add(resource_id)
@@ -2361,7 +2364,141 @@ class Dataset:
                   'group_exclusions': group_exclusions}
         if ordering is not None:
             result['path_ordering'] = ordering
+        result.update(self._trace_groups(connection, processes, paths, matching_candidates))
         return self._compact_trace(result, connection, view=view) if view != 'full' else result
+
+    def _trace_groups(self, connection, processes, paths, matching_candidates):
+        """Project retained native witnesses onto declared material transformations."""
+        tool_cache = {}
+        groups, process_groups = {}, {}
+        for id, record in sorted(processes.items()):
+            auxiliary = self._auxiliary_input_indices(connection, record, tool_cache)
+            signature = self._material_signature(record, auxiliary, matching_candidates)
+            basis = 'declared_material_transformation' if signature is not None else 'native_process'
+            key = _json([basis, signature if signature is not None else id])
+            group_id = 'recipe:' + hashlib.sha256(key.encode('utf-8')).hexdigest()
+            group = groups.setdefault(group_id, {'id': group_id, 'basis': basis, 'process_ids': [],
+                'auxiliary_input_indices': {}})
+            group['process_ids'].append(id)
+            group['auxiliary_input_indices'][id] = auxiliary
+            process_groups[id] = group_id
+        families = {}
+        for index, path in enumerate(paths):
+            key = _json([path['resource_ids'], [process_groups[id] for id in path['process_ids']]])
+            group_id = 'path:' + hashlib.sha256(key.encode('utf-8')).hexdigest()
+            group = families.setdefault(group_id, {'id': group_id, 'representative_path_index': index, 'path_indices': []})
+            group['path_indices'].append(index)
+        return {'recipe_groups': list(groups.values()), 'path_groups': list(families.values())}
+
+    def _auxiliary_input_indices(self, connection, record, cache):
+        auxiliary = []
+        conditions = record['conditions']
+        native_tools = (record['family'] == 'minecraft:crafting'
+            and record['provenance'].get('owner') == 'CraftingManager'
+            and conditions.get('native_class') == 'gregtech.api.util.GTShapedRecipe'
+            and conditions.get('declared_inputs') == 'captured'
+            and conditions.get('tool_accounting') == 'container_damage_and_breakage_unresolved')
+        for index, slot in enumerate(record['inputs']):
+            if slot['role'] in ('presence', 'tool'):
+                auxiliary.append(index)
+            elif native_tools and not (set(slot) - {'role', 'choices', 'native_slot'}) and all(
+                    not (set(c) - {'resource_id', 'amount', 'match', 'native_amount', 'declared_stack_size'})
+                    and c.get('amount') == 1 and c.get('declared_stack_size') == 1
+                    and c.get('native_amount') == 1 and c['match'] == {'mode': 'exact', 'nbt_sensitive': False}
+                    for c in slot['choices']):
+                # This projection concerns declared tool categories, not native wear or returns.
+                ids = frozenset(c['resource_id'] for c in slot['choices'])
+                if ids not in cache:
+                    candidates = connection.execute("""SELECT DISTINCT records.payload FROM members
+                        JOIN records ON records.collection='groups' AND records.id=members.group_id
+                        WHERE members.resource_id=? AND records.id GLOB 'ore:craftingTool*'""", (min(ids),))
+                    cache[ids] = any(group.get('kind') == 'ore_dict'
+                        and group.get('name', '').startswith('craftingTool')
+                        and group.get('id') == 'ore:' + group['name']
+                        and group.get('provenance', {}).get('owner') == 'Forge OreDictionary'
+                        and frozenset(group['members']) == ids
+                        for group in (json.loads(row[0]) for row in candidates))
+                if cache[ids]:
+                    auxiliary.append(index)
+        return auxiliary
+
+    @staticmethod
+    def _declared_material_effects(record):
+        """Unknown extensions cannot certify a complete fixed material transaction."""
+        if record['executable'] is not True or set(record) - {'id', 'family', 'display_name', 'inputs', 'outputs', 'duration_ticks',
+                'eu_per_tick', 'amperage', 'executable', 'conditions', 'provenance'}:
+            return False
+        conditions = record['conditions']
+        neutral = {'enabled', 'fake', 'hidden', 'machine_behavior', 'native_description',
+            'nbt_sensitive', 'recipe_voltage_tier', 'recipe_voltage_tier_name',
+            'recipe_voltage_tier_semantics', 'recipe_voltage_tier_source', 'requires_empty_outputs',
+            'native_class', 'container_returns', 'tool_accounting', 'input_accounting',
+            'recipe_voltage_applicability', 'removable_by_gt', 'dimension', 'dimension_id',
+            'biome', 'temperature', 'pressure', 'cleanroom', 'low_gravity', 'research', 'total_rf'}
+        checked = {'declared_inputs', 'dynamic_inputs', 'dynamic_output', 'keeping_nbt',
+            'output_transformations', 'native_metadata', 'native_special_value', 'special_items'}
+        if set(conditions) - neutral - checked:
+            return False
+        for field in ('dynamic_inputs', 'dynamic_output'):
+            if field in conditions and conditions[field] != 'resolved_static':
+                return False
+        if 'declared_inputs' in conditions and conditions['declared_inputs'] != 'captured':
+            return False
+        if conditions.get('keeping_nbt', False) is not False:
+            return False
+        if conditions.get('native_metadata') or conditions.get('native_special_value') or conditions.get('special_items'):
+            return False
+        if 'output_transformations' in conditions and conditions['output_transformations'] != {
+                'status': 'static', 'configured_enchantments': 'none',
+                'electric_charge_transfer': 'not_applicable', 'native_item_update': 'verified_no_op'}:
+            return False
+        return True
+
+    def _material_signature(self, record, auxiliary, matching_candidates):
+        if not self._declared_material_effects(record):
+            return None
+
+        def amount(value):
+            return str(Fraction(str(value)))
+
+        def certain(value):
+            return isinstance(value, dict) and value.get('numerator') == value.get('denominator')
+
+        singleton_inputs, requirements = {}, []
+        for index, slot in enumerate(record['inputs']):
+            if index in auxiliary:
+                continue
+            if (set(slot) - {'role', 'choices', 'consumption_chance', 'native_slot'}
+                    or ('consumption_chance' in slot and not certain(slot['consumption_chance']))):
+                return None
+            alternatives = set()
+            for choice in slot['choices']:
+                match = choice['match']
+                if (set(choice) - {'resource_id', 'amount', 'match', 'consumption_chance', 'native_amount', 'declared_stack_size'}
+                        or set(match) - {'mode', 'group_id', 'nbt_sensitive'}
+                        or match['mode'] == 'native_unknown'
+                        or (match['mode'] in ('ore_dict', 'unified') and not match.get('group_id'))
+                        or ('consumption_chance' in choice and not certain(choice['consumption_chance']))):
+                    return None
+                key = _json({'resource_id': choice.get('resource_id'), 'match': match})
+                if not matching_candidates[key]:
+                    return None
+                alternatives.update((id, amount(choice['amount'])) for id in matching_candidates[key])
+            if len(alternatives) == 1:
+                id, quantity = next(iter(alternatives))
+                singleton_inputs[id] = singleton_inputs.get(id, Fraction()) + Fraction(quantity)
+            else:
+                requirements.append(sorted(alternatives))
+        outputs = {}
+        for output in record['outputs']:
+            # Cross-machine joint-roll semantics are not declared for stochastic outputs.
+            if set(output) - {'resource_id', 'amount', 'chance'} or not certain(output['chance']):
+                return None
+            id = output['resource_id']
+            outputs[id] = outputs.get(id, Fraction()) + Fraction(str(output['amount']))
+        return {'singleton_inputs': sorted((id, str(quantity)) for id, quantity in singleton_inputs.items()),
+            'alternative_inputs': sorted(requirements),
+            'outputs': sorted((id, str(quantity)) for id, quantity in outputs.items())}
 
 
     def start_trace_search(self, *, time_budget_seconds=5, budget_multiplier=1, **arguments):

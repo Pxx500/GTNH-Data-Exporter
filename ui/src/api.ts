@@ -56,7 +56,11 @@ interface CutterPathPreference {
   classification_visits:{paths:number;recipes:number;slots:number;choices:number;outputs:number}
 }
 interface AcquisitionClassificationVisits {paths:number;process_references:number;processes:number;manifest_mods:number}
+export interface RecipeGroup {id:string;basis:'declared_material_transformation'|'native_process';process_ids:string[];auxiliary_input_indices:Record<string,number[]>}
+export interface PathGroup {id:string;representative_path_index:number;path_indices:number[]}
 export interface Trace {
+  recipe_groups:RecipeGroup[]
+  path_groups:PathGroup[]
   path_selection: 'diverse' | 'shortest' | 'material'
   group_exclusions?: {group_id:string;name:string;kind:string;member_count:number}[]
   path_ordering?: (CutterPathPreference & {

@@ -137,9 +137,15 @@ function CapturedInputs({declared,onSelect,resources}:{declared:NonNullable<Retu
     {declared.hasController && <section><h4>Separate controller input</h4><DeclaredSlot slot={declared.controller} index={0} onSelect={onSelect} resources={resources}/></section>}
   </>
 }
-export function ProcessDetail({process, projectionIssue, onSelect, resources, onRecycle}: {process: Process; projectionIssue?:ProcessInspection['projection_issue']; onSelect?: (id: string) => void; resources?: ReadonlyMap<string, Resource>;onRecycle?:(id:string)=>void}) {
-  const roles: Record<string, string> = {presence: 'Required presence', tool: 'Tool'}
-  const declared=process.inputs.length===0 ? declaredInputs(process.conditions) : undefined
+export function ProcessInputs({process,inputIndices,onSelect,resources}:{process:Process;inputIndices?:number[];onSelect?:(id:string)=>void;resources?:ReadonlyMap<string,Resource>}) {
+  const roles:Record<string,string>={presence:'Required presence',tool:'Tool'}
+  const declared=inputIndices===undefined && process.inputs.length===0?declaredInputs(process.conditions):undefined
+  return declared?<CapturedInputs declared={declared} onSelect={onSelect} resources={resources}/>:<>
+    {process.inputs.length===0 && <p className="empty-inline">No input slots captured.</p>}
+    <div className="slot-list">{process.inputs.map((slot, index) => inputIndices && !inputIndices.includes(index) ? null : <section className="slot" key={index}><div className="slot-heading"><strong>Slot {index + 1}</strong>{slot.role !== 'consume' && <Badge tone="presence">{roles[slot.role] || slot.role}</Badge>}{slot.consumption_chance !== undefined && <Chance value={slot.consumption_chance} label="Consumption chance"/>} {slot.choices.length > 1 && <small>{slot.choices.length} alternatives</small>}</div>{slot.choices.map((choice, choiceIndex) => <div className="choice" key={choiceIndex}>{choiceIndex > 0 && <span className="choice-or">OR</span>}{choice.resource_id !== null && <ResourceRef id={choice.resource_id} onSelect={onSelect} resources={resources} amount={choice.amount}/>}<div className="choice-meta">{choice.resource_id===null && <Amount value={choice.amount}/>}{!['exact','unified','ore_dict'].includes(choice.match.mode) && <Badge>{choice.match.mode}</Badge>}{choice.match.nbt_sensitive === true && <Badge>NBT-sensitive</Badge>}{choice.consumption_chance !== undefined && <Chance value={choice.consumption_chance} label="Consumption chance"/>}</div>{choice.match.group_id && <GroupRef id={choice.match.group_id} onSelect={onSelect} resources={resources}/>}</div>)}</section>)}</div>
+  </>
+}
+export function ProcessExecutionFacts({process,onSelect,resources,showUnknownCosts=false}:{process:Process;onSelect?:(id:string)=>void;resources?:ReadonlyMap<string,Resource>;showUnknownCosts?:boolean}) {
   const conditions = process.conditions
   const native = conditions !== null && typeof conditions === 'object' ? conditions as Record<string, unknown> : undefined
   const noMachineVoltage=native?.recipe_voltage_applicability==='not_applicable_crafting_grid'
@@ -157,12 +163,10 @@ export function ProcessDetail({process, projectionIssue, onSelect, resources, on
       const block = candidate !== null && typeof candidate === 'object' ? candidate as Record<string, unknown> : undefined
       return {kind, block}
     })
-  const outputTemplates = conditions !== null && typeof conditions === 'object' && 'dynamic_output' in conditions
-    && conditions.dynamic_output === 'unresolved' && process.outputs.length > 0
-  return <section className="process-detail">
-    <div className="detail-title"><div><p className="eyebrow">{process.family}</p><h3>{process.display_name || process.id}</h3><code>{process.id}</code></div>{process.executable !== true && <Badge tone={process.executable === false ? 'warning' : 'muted'}>{process.executable === false ? 'Informational / fake' : 'Execution unknown'}</Badge>}</div>
+  return <>
     {noMachineVoltage && <Badge>No machine voltage requirement</Badge>}
-    {(mana !== undefined || process.duration_ticks != null || process.eu_per_tick != null || (process.amperage != null && process.amperage !== 1)) && <dl className="metrics">{mana !== undefined && <div><dt>Mana cost</dt><dd>{mana.toLocaleString(undefined, {maximumFractionDigits: 20})} mana</dd></div>}{process.duration_ticks != null && <div><dt>Duration</dt><dd>{process.duration_ticks.toLocaleString()} ticks</dd></div>}{process.eu_per_tick != null && <div><dt>Energy</dt><dd>{process.eu_per_tick.toLocaleString()} EU/t</dd></div>}{process.amperage != null && process.amperage !== 1 && <div><dt>Amperage</dt><dd>{process.amperage}</dd></div>}</dl>}
+    {typeof native?.recipe_voltage_tier_name==='string' && <Badge>{native.recipe_voltage_tier_name} recipe voltage</Badge>}
+    {(showUnknownCosts || mana !== undefined || process.duration_ticks != null || process.eu_per_tick != null || (process.amperage != null && process.amperage !== 1)) && <dl className="metrics">{showUnknownCosts && process.duration_ticks===null && <div><dt>Duration</dt><dd>Unknown ticks</dd></div>}{showUnknownCosts && process.eu_per_tick===null && <div><dt>Energy</dt><dd>Unknown EU/t</dd></div>}{showUnknownCosts && process.amperage===null && <div><dt>Amperage</dt><dd>Unknown</dd></div>}{mana !== undefined && <div><dt>Mana cost</dt><dd>{mana.toLocaleString(undefined, {maximumFractionDigits: 20})} mana</dd></div>}{process.duration_ticks != null && <div><dt>Duration</dt><dd>{process.duration_ticks.toLocaleString()} ticks</dd></div>}{process.eu_per_tick != null && <div><dt>Energy</dt><dd>{process.eu_per_tick.toLocaleString()} EU/t</dd></div>}{process.amperage != null && (showUnknownCosts || process.amperage !== 1) && <div><dt>Amperage</dt><dd>{process.amperage}</dd></div>}</dl>}
     {requiredCatalysts.length > 0 && <section className="slot"><h4>Required catalysts</h4>
       {catalystBelow?.position === 'one_block_below_pool' && <p>Catalyst position: one block below the mana pool.</p>}
       {requiredCatalysts.map(({kind, block}) => <div className="choice" key={kind}>
@@ -171,11 +175,21 @@ export function ProcessDetail({process, projectionIssue, onSelect, resources, on
         {block?.consumed === false && <Badge tone="presence">Not consumed</Badge>}
       </div>)}
     </section>}
+  </>
+}
+export function ProcessMaterialIO({process,inputIndices,onSelect,resources,onRecycle,projectionIssue}:{process:Process;inputIndices?:number[];onSelect?:(id:string)=>void;resources?:ReadonlyMap<string,Resource>;onRecycle?:(id:string)=>void;projectionIssue?:ProcessInspection['projection_issue']}) {
+  const outputTemplates=fields(process.conditions)?.dynamic_output==='unresolved' && process.outputs.length>0
+  return <>
     {outputTemplates && <p className="notice warning">Runtime result is unresolved. Shown outputs are native display templates.</p>}
-    <div className="recipe-io"><div className="recipe-inputs">{declared ? <CapturedInputs declared={declared} onSelect={onSelect} resources={resources}/> : <><h4 title="All slots are required. Choose one alternative within each slot.">Inputs</h4>
-    {process.inputs.length === 0 && <p className="empty-inline">No input slots captured.</p>}
-    <div className="slot-list">{process.inputs.map((slot, index) => <section className="slot" key={index}><div className="slot-heading"><strong>Slot {index + 1}</strong>{slot.role !== 'consume' && <Badge tone="presence">{roles[slot.role] || slot.role}</Badge>}{slot.consumption_chance !== undefined && <Chance value={slot.consumption_chance} label="Consumption chance"/>} {slot.choices.length > 1 && <small>{slot.choices.length} alternatives</small>}</div>{slot.choices.map((choice, choiceIndex) => <div className="choice" key={choiceIndex}>{choiceIndex > 0 && <span className="choice-or">OR</span>}{choice.resource_id !== null && <ResourceRef id={choice.resource_id} onSelect={onSelect} resources={resources} amount={choice.amount}/>}<div className="choice-meta">{choice.resource_id===null && <Amount value={choice.amount}/>}{!['exact','unified','ore_dict'].includes(choice.match.mode) && <Badge>{choice.match.mode}</Badge>}{choice.match.nbt_sensitive === true && <Badge>NBT-sensitive</Badge>}{choice.consumption_chance !== undefined && <Chance value={choice.consumption_chance} label="Consumption chance"/>}</div>{choice.match.group_id && <GroupRef id={choice.match.group_id} onSelect={onSelect} resources={resources}/>}</div>)}</section>)}</div>
-    </>}</div><div className="recipe-outputs"><h4>{outputTemplates ? 'Output templates' : 'Outputs'}</h4>{projectionIssue?.status==='unsupported_accounting' && <section className="notice warning"><h4>Operation accounting unavailable</h4><p>{projectionIssue.reason}</p></section>}<OutputRows outputs={process.outputs} onSelect={onSelect} resources={resources} onRecycle={onRecycle}/></div></div>
+    <div className="recipe-io"><div className="recipe-inputs">{(inputIndices!==undefined || process.inputs.length>0 || !declaredInputs(process.conditions)) && <h4 title="All slots are required. Choose one alternative within each slot.">{inputIndices?'Shared materials':'Inputs'}</h4>}<ProcessInputs process={process} inputIndices={inputIndices} resources={resources} onSelect={onSelect}/></div>
+      <div className="recipe-outputs"><h4>{outputTemplates?'Output templates':'Outputs'}</h4>{projectionIssue?.status==='unsupported_accounting' && <section className="notice warning"><h4>Operation accounting unavailable</h4><p>{projectionIssue.reason}</p></section>}<OutputRows outputs={process.outputs} onSelect={onSelect} resources={resources} onRecycle={onRecycle}/></div></div>
+  </>
+}
+export function ProcessDetail({process, projectionIssue, onSelect, resources, onRecycle}: {process: Process; projectionIssue?:ProcessInspection['projection_issue']; onSelect?: (id: string) => void; resources?: ReadonlyMap<string, Resource>;onRecycle?:(id:string)=>void}) {
+  return <section className="process-detail">
+    <div className="detail-title"><div><p className="eyebrow">{process.family}</p><h3>{process.display_name || process.id}</h3><code>{process.id}</code></div>{process.executable !== true && <Badge tone={process.executable === false ? 'warning' : 'muted'}>{process.executable === false ? 'Informational / fake' : 'Execution unknown'}</Badge>}</div>
+    <ProcessExecutionFacts process={process} resources={resources} onSelect={onSelect}/>
+    <ProcessMaterialIO process={process} projectionIssue={projectionIssue} resources={resources} onSelect={onSelect} onRecycle={onRecycle}/>
     <ConditionFacts value={process.conditions}/><JsonData label="Technical data: full process record" value={process}/>
   </section>
 }

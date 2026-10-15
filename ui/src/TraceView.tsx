@@ -26,15 +26,22 @@ export function TraceView({trace,onSelect,onUseStart,onUseTarget,tierOptions,boa
   const highlightedIndex=highlightPath && trace.paths[highlightPath.index] && pathKey(trace.paths[highlightPath.index])===highlightPath.key ? highlightPath.index : trace.paths.findIndex(path=>pathKey(path)===highlightPath?.key)
   const highlight=highlightedIndex<0?null:highlightedIndex
   const setHighlight=(index:number|null)=>setHighlightPath(index===null?null:{key:pathKey(trace.paths[index]),index})
+  const highlightedGroup=highlight===null?undefined:trace.path_groups.find(group=>group.path_indices.includes(highlight))
   const [auditOpen,setAuditOpen]=useState(false)
-  const [recycle,setRecycle]=useState<{ownerId:string;byproductId:string}|null>(null)
+  const [recycle,setRecycle]=useState<{ownerId:string;byproductId:string;initialPathIndex?:number}|null>(null)
   const [overlay,setOverlay]=useState<{plan:RecyclingPlan;index:number;ownerId:string}|null>(null)
   useEffect(()=>{setOverlay(null);setRecycle(null)},[resultRevision])
   useEffect(()=>{if(selection?.startsWith('process:') && !trace.processes.some(process=>process.id===selection.slice(8)))setSelection(null)},[trace.processes,selection])
   const graphTrace=useMemo(()=>{
     if(!overlay)return trace
     const secondary=overlay.plan.secondary_trace
+    const groups=new Map(trace.recipe_groups.map(group=>[group.id,group]))
+    for(const group of secondary.recipe_groups){
+      const previous=groups.get(group.id)
+      groups.set(group.id,previous?{...group,process_ids:[...new Set([...previous.process_ids,...group.process_ids])],auxiliary_input_indices:{...previous.auxiliary_input_indices,...group.auxiliary_input_indices}}:group)
+    }
     return {...trace,paths:[overlay.plan.main_path,overlay.plan.alternatives[overlay.index].path],
+      recipe_groups:[...groups.values()],
       resources:[...new Map([...trace.resources,...secondary.resources].map(item=>[item.id,item])).values()],
       processes:[...new Map([...trace.processes,...secondary.processes].map(item=>[item.id,item])).values()],
       recipe_tiers:[...new Map([...(trace.recipe_tiers??[]),...(secondary.recipe_tiers??[])].map(item=>[item.process_id,item])).values()]}
@@ -63,7 +70,7 @@ export function TraceView({trace,onSelect,onUseStart,onUseTarget,tierOptions,boa
   const selectedTier=graphTrace.recipe_tiers?.find(item=>item.process_id===selectedProcess?.id)
   const selectedResource=selection?.startsWith('resource:') ? resourceById.get(selection.slice(9)) : undefined
   const inspect=useCallback((id:string)=>setSelection(`process:${id}`),[])
-  const beginRecycle=useCallback((ownerId:string,byproductId:string)=>{setRecycle({ownerId,byproductId});setSelection(`process:${ownerId}`);setOverlay(null)},[])
+  const beginRecycle=useCallback((ownerId:string,byproductId:string)=>{setRecycle({ownerId,byproductId,initialPathIndex:highlight??undefined});setSelection(`process:${ownerId}`);setOverlay(null)},[highlight])
   const selectResource=useCallback((id:string)=>setSelection(`resource:${id}`),[])
   const recipeName=(id:string)=>processById.get(id)?.display_name || id
   const resourceName=(id:string)=>resourceById.get(id)?.display_name || resourceById.get(id)?.registry_name || id
@@ -90,18 +97,20 @@ export function TraceView({trace,onSelect,onUseStart,onUseTarget,tierOptions,boa
       <ul className="trace-limit-reasons">{trace.limit_reasons.map(reason => <li key={reason}><code>{reason}</code><span>{limitDescriptions[reason]}</span></li>)}</ul>
       {trace.search.truncated && <p>Route search stopped at its server bound. More search work remains unexamined.</p>}
     </div>}
-      <div className="trace-summary"><Badge>{trace.paths.length} complete paths</Badge><Badge>{route.process_ids.length} primary path steps</Badge>{trace.branch_coverage.length>0 && <Badge>{trace.branch_coverage.filter(branch=>branch.status==='represented').length}/{trace.branch_coverage.length} target ingredient branches</Badge>}<Badge>{trace.processes.length} included processes</Badge><Badge>{trace.resources.length} included resources</Badge><Badge tone={trace.cycles.length ? 'warning' : ''}>{trace.cycles.length} cycle groups</Badge><code>Snapshot {trace.snapshot_id}</code></div>
+      <div className="trace-summary"><Badge>{trace.path_groups.length} material routes</Badge><Badge>{graph.recipes.length} recipe tiles</Badge><details className="trace-native-counts"><summary>Retained records</summary><Badge>{trace.paths.length} complete paths</Badge><Badge>{route.process_ids.length} primary path steps</Badge>{trace.branch_coverage.length>0 && <Badge>{trace.branch_coverage.filter(branch=>branch.status==='represented').length}/{trace.branch_coverage.length} target ingredient branches</Badge>}<Badge>{trace.processes.length} included processes</Badge><Badge>{trace.resources.length} included resources</Badge><Badge tone={trace.cycles.length ? 'warning' : ''}>{trace.cycles.length} cycle groups</Badge><code>Snapshot {trace.snapshot_id}</code></details></div>
       {trace.tier_filter?.active && <div className="notice"><strong>Recipe voltage filter</strong><p>Minimum {trace.tier_filter.min_tier ?? 'any'} · Maximum {trace.tier_filter.max_tier ?? 'any'} · Unknown tiers {trace.tier_filter.unknown_tier_policy} · {trace.tier_filter.excluded_unknown} unknown and {trace.tier_filter.excluded_out_of_range} outside-range recipes excluded.</p></div>}
       {selectedProcess && graphTrace.recipe_tiers && <p className="help">Selected recipe voltage: {selectedTier?.status==='not_applicable'?'No machine voltage requirement':selectedTier?.name??'Unknown'} · This is not a machine capability estimate.</p>}
 
 
-    <div className="graph-toolbar"><label>Highlight path<select value={highlight===null ? 'all' : highlight} onChange={event=>setHighlight(event.target.value==='all' ? null : Number(event.target.value))}><option value="all">All paths</option>{trace.paths.map((path,index)=><option value={index} key={index}>Path {index+1} · {path.process_ids.length} steps</option>)}</select></label></div>
+    <div className="graph-toolbar"><label>Highlight route<select value={highlightedGroup?.representative_path_index??'all'} onChange={event=>setHighlight(event.target.value==='all'?null:Number(event.target.value))}><option value="all">All routes</option>{trace.path_groups.map((group,index)=><option value={group.representative_path_index} key={group.id}>Route {index+1} · {trace.paths[group.representative_path_index].process_ids.length} steps</option>)}</select></label>
+      {highlightedGroup && highlightedGroup.path_indices.length>1 && <label>Execution path<select value={highlight!} onChange={event=>setHighlight(Number(event.target.value))}>{highlightedGroup.path_indices.map((index,variant)=><option value={index} key={index}>Variant {variant+1} · {trace.paths[index].process_ids.map(recipeName).join(' → ')}</option>)}</select></label>}
+    </div>
     <div className={`trace-layout ${selection ? 'has-inspector' : ''}`}>
-        <div className="free-recipe-graph" role="region" aria-label="Recipe path graph">{hasRecipes ? <RecipeGraph key={boardId??JSON.stringify([graphTrace.snapshot_id,graphTrace.paths])} graph={graph} highlight={highlight} inspect={inspect} inspectResource={selectResource} recycle={beginRecycle} recycleProcesses={overlay?.plan.main_path.process_ids}/> : <div className="empty-state"><h3>No production recipe tiles</h3><p>{route.status==='same_resource' ? 'The endpoints identify the same resource.' : pending?'No complete recipe path has been retained yet.':'No complete recipe path was emitted within this search.'}</p></div>}</div>
+        <div className="free-recipe-graph" role="region" aria-label="Recipe path graph">{hasRecipes ? <RecipeGraph key={boardId??graphTrace.snapshot_id} graph={graph} highlight={highlight} inspect={inspect} inspectResource={selectResource} recycle={beginRecycle} recycleProcesses={overlay?.plan.main_path.process_ids}/> : <div className="empty-state"><h3>No production recipe tiles</h3><p>{route.status==='same_resource' ? 'The endpoints identify the same resource.' : pending?'No complete recipe path has been retained yet.':'No complete recipe path was emitted within this search.'}</p></div>}</div>
       {selection && <RecordInspector onClose={()=>setSelection(null)}>{selectedProcess ? <ProcessInspector process={selectedProcess} resources={resourceById} onSelect={selectResource} onRecycle={trace.paths.some(path=>path.process_ids.includes(selectedProcess.id)) ? id=>beginRecycle(selectedProcess.id,id) : undefined}/> : selection.startsWith('resource:') && <ResourceInspector key={selection} id={selection.slice(9)} resources={resourceById} onInspect={selectResource} onOpenLibrary={onSelect} onUseStart={onUseStart} onUseTarget={onUseTarget}/>}</RecordInspector>}
     </div>
       {overlay && <div className="notice"><strong>Main path and secondary return path</strong><p>The graph now shows the chosen main plan and one return path. Output and return links are presentation connections, not simultaneous execution proof.</p><ul>{attachments.map((link,index)=><li key={index}>{link.label}: {recipeName(link.source)} → {recipeName(link.target)} · {resourceName(link.resourceId)}</li>)}</ul><button onClick={()=>setOverlay(null)}>Show all main paths</button></div>}
-      {recycle && <RecyclePanel key={`${trace.snapshot_id}:${recycle.ownerId}:${recycle.byproductId}`} trace={trace} {...recycle} tierOptions={tierOptions} onSelect={selectResource} onOverlay={(plan,index)=>{setHighlight(null);setOverlay({plan,index,ownerId:recycle.ownerId})}}/>}
+      {recycle && <RecyclePanel key={`${trace.snapshot_id}:${recycle.ownerId}:${recycle.byproductId}:${recycle.initialPathIndex??'default'}`} trace={trace} {...recycle} tierOptions={tierOptions} onSelect={selectResource} onOverlay={(plan,index)=>{setHighlight(null);setOverlay({plan,index,ownerId:recycle.ownerId})}}/>}
       <details className="path-list"><summary>Ordered paths and explanations ({trace.paths.length})</summary>{trace.paths.map((path,index)=>{
         const explanation=trace.path_details?.find(item=>item.path_index===index)
         const branch=explanation?.target_process_id!=null && explanation.target_slot_index!=null && processById.has(explanation.target_process_id) ? {processId:explanation.target_process_id,slotIndex:explanation.target_slot_index}:null
