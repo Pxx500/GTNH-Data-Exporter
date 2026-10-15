@@ -94,6 +94,21 @@ OPERATIONS = {
                             "required_resource_ids": {"type": "array", "items": STRING}, "excluded_resource_ids": {"type": "array", "items": STRING}, "excluded_group_ids": IDS, **TIERS}, ("start_id", "target_id"))),
 }
 
+TRACE_BUDGET = {"type": "number", "minimum": .05, "maximum": 60, "default": 5}
+TRACE_JOB = {"job_id": STRING}
+_trace_properties = dict(OPERATIONS['trace_processes'][1]['properties'])
+_trace_properties.update(path_selection={"enum": ["material"], "default": "material"},
+                         time_budget_seconds=TRACE_BUDGET,
+                         budget_multiplier={"type": "integer", "minimum": 1, "maximum": 10, "default": 1})
+OPERATIONS.update({
+    'start_trace_search': ('Start a process-local material trace job. Poll with get_trace_search. Results are validated trace snapshots. Time budgets pause resumable work, logical guards finish it. Reuse the same job to continue', _schema(_trace_properties, ('start_id', 'target_id'))),
+    'get_trace_search': ('Poll a process-local trace job. after_revision omits unchanged results. Keep the last result when result is absent. Progress is search work, not a completion percentage', _schema({**TRACE_JOB, 'after_revision': {"type": ["integer", "null"], "minimum": 0}}, ('job_id',))),
+    'pause_trace_search': ('Request a cooperative pause. A running job becomes paused at its next search checkpoint and retains its frontier and results', _schema(TRACE_JOB, ('job_id',))),
+    'continue_trace_search': ('Continue the same paused material trace job with another active time budget. Finished and closed jobs cannot continue', _schema({**TRACE_JOB, 'time_budget_seconds': TRACE_BUDGET}, ('job_id',))),
+    'close_trace_search': ('Close a trace job and release its search state at a cooperative checkpoint. Closed jobs cannot continue', _schema(TRACE_JOB, ('job_id',))),
+})
+
+
 
 def create_server(dataset: Dataset) -> Server:
     async def list_resources(context, params):
@@ -111,7 +126,7 @@ def create_server(dataset: Dataset) -> Server:
     async def list_tools(context, params):
         return types.ListToolsResult(tools=[
             types.Tool(name=name, description=description, input_schema=schema,
-                       annotations=types.ToolAnnotations(read_only_hint=name not in ('save_boundary_profile', 'delete_boundary_profile', 'rebuild_flow_index'), destructive_hint=name == 'delete_boundary_profile', open_world_hint=False))
+                       annotations=types.ToolAnnotations(read_only_hint=name not in ('save_boundary_profile', 'delete_boundary_profile', 'rebuild_flow_index', 'start_trace_search', 'pause_trace_search', 'continue_trace_search', 'close_trace_search'), destructive_hint=name == 'delete_boundary_profile', open_world_hint=False))
             for name, (description, schema) in OPERATIONS.items()
         ])
 
@@ -119,7 +134,7 @@ def create_server(dataset: Dataset) -> Server:
         if params.name not in OPERATIONS:
             return types.CallToolResult(is_error=True, content=[types.TextContent(type="text", text="Unknown dataset operation")])
         arguments = dict(params.arguments or {})
-        if params.name == 'trace_processes':
+        if params.name in ('trace_processes', 'start_trace_search'):
             arguments.setdefault('view', 'compact')
         try:
             result = await anyio.to_thread.run_sync(partial(getattr(dataset, params.name), **arguments))
@@ -136,5 +151,8 @@ def create_server(dataset: Dataset) -> Server:
 
 async def run_stdio(dataset: Dataset):
     server = create_server(dataset)
-    async with stdio_server() as (read_stream, write_stream):
-        await server.run(read_stream, write_stream, server.create_initialization_options())
+    try:
+        async with stdio_server() as (read_stream, write_stream):
+            await server.run(read_stream, write_stream, server.create_initialization_options())
+    finally:
+        await anyio.to_thread.run_sync(dataset.shutdown_trace_searches)

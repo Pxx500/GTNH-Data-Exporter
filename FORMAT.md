@@ -618,6 +618,33 @@ Initial operations are `status`, `find_resources`, `get_resource`,
 `find_processes`, `get_process`, `get_group`, `find_sources`,
 `get_source`, `find_environments` and `trace_processes`.
 
+Progressive material queries use `start_trace_search`, `get_trace_search`,
+`pause_trace_search`, `continue_trace_search` and `close_trace_search`.
+Their job envelope is `{job_id, snapshot_id, revision, status, phase,
+elapsed_seconds, progress, result_revision, request}` with optional `result`,
+`first_result_seconds` and `error`. A result is the existing trace payload.
+Missing `result` means no new rendered snapshot for the supplied
+`after_revision`, not an empty graph. Lifecycle and result revisions share a
+monotonic sequence. Pause/continue acknowledgements include a retained result
+when one exists. Published snapshots do not mutate the retained frontier.
+
+States are running, paused, finished, failed and closed. A time allowance is
+cooperative and pauses unfinished work. Logical limits are terminal and remain
+in the trace's `limit_reasons`. Continue adds active time to the same paused
+operation and keeps cumulative work. Close disposes its state at a checkpoint.
+The default allowance is 5 seconds, permitted range 0.05..60. Active elapsed
+time includes rendering and excludes paused intervals. First-result timing
+starts at job creation and ends at the first rendered nonempty publication.
+An explicit integer budget multiplier 1..10 scales process, admission and
+expansion guards, with unchanged default 1 and independent output/depth limits.
+
+Job lifetime is process-local to Dataset. HTTP and stdio MCP don't share live
+handles. One job runs, at most four are retained, and idle jobs expire after
+15 minutes. One worker owns each retained SQLite connection through creation,
+advancement, snapshot rendering and cleanup. No job state is written to the
+canonical database or prepared sidecar. Existing synchronous trace operations
+retain their response contracts and material search uses the same engine.
+
 List results are `{snapshot_id, items, total, limit, offset}`. Use explicit
 pagination, default 50 and maximum 500. Exact-resource lookup includes
 supported ingredient predicates, not only literal reference equality.

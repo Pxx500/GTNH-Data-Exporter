@@ -42,7 +42,7 @@ class MCPGuideTests(unittest.TestCase):
                             await session.read_resource('gtnh-data://guide/not-a-file')
                         self.assertEqual(error.exception.code, -32602)
                         tools = {tool.name: tool for tool in (await session.list_tools()).tools}
-                        self.assertEqual(len(tools), 25)
+                        self.assertEqual(len(tools), 30)
                         examples = re.findall(r'```json\n(.*?)\n```', guide.contents[0].text, flags=re.DOTALL)
                         self.assertGreaterEqual(len(examples), 6)
                         for example in examples:
@@ -53,8 +53,9 @@ class MCPGuideTests(unittest.TestCase):
                         self.assertIn('nominal EU', tools['audit_energy'].description)
                         self.assertFalse(tools['save_boundary_profile'].annotations.read_only_hint)
                         self.assertTrue(tools['delete_boundary_profile'].annotations.destructive_hint)
-                        self.assertTrue(all(tool.annotations.read_only_hint for name, tool in tools.items()
-                            if name not in ('save_boundary_profile', 'delete_boundary_profile', 'rebuild_flow_index')))
+                        self.assertEqual({name for name, tool in tools.items() if not tool.annotations.read_only_hint},
+                            {'save_boundary_profile', 'delete_boundary_profile', 'rebuild_flow_index',
+                             'start_trace_search', 'pause_trace_search', 'continue_trace_search', 'close_trace_search'})
                         answer = await session.call_tool('get_resource', {'id': 'a'})
                         self.assertEqual(answer.structured_content, dataset.get_resource('a'))
                         self.assertEqual(len(answer.content), 1)

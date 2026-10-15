@@ -1,5 +1,6 @@
 """Local read-only HTTP adapter. All domain work belongs to Dataset."""
 
+from contextlib import asynccontextmanager
 from pathlib import Path
 import json
 
@@ -10,7 +11,14 @@ from .dataset import Dataset, DatasetError
 
 
 def create_app(dataset: Dataset, ui_dist: str | Path | None = None) -> FastAPI:
-    app = FastAPI(title="GTNH Data", version="0.1.0")
+    @asynccontextmanager
+    async def lifespan(app):
+        try:
+            yield
+        finally:
+            dataset.shutdown_trace_searches()
+
+    app = FastAPI(title="GTNH Data", version="0.1.0", lifespan=lifespan)
 
     def structured(operation, arguments):
         try:
@@ -123,6 +131,26 @@ def create_app(dataset: Dataset, ui_dist: str | Path | None = None) -> FastAPI:
                                        excluded_group_ids=excluded_group_id,
                                        min_tier=min_tier, max_tier=max_tier, unknown_tier_policy=unknown_tier_policy, view=view,
                                        terminal_artifact_policy=terminal_artifact_policy)
+
+    @app.post('/api/trace-jobs')
+    def start_trace_search(arguments: dict = Body(...)):
+        return structured('start_trace_search', arguments)
+
+    @app.get('/api/trace-jobs/{job_id}')
+    def get_trace_search(job_id: str, after_revision: int | None = None):
+        return dataset.get_trace_search(job_id, after_revision)
+
+    @app.post('/api/trace-jobs/{job_id}/pause')
+    def pause_trace_search(job_id: str):
+        return dataset.pause_trace_search(job_id)
+
+    @app.post('/api/trace-jobs/{job_id}/continue')
+    def continue_trace_search(job_id: str, arguments: dict = Body(default={})):
+        return structured('continue_trace_search', dict(arguments, job_id=job_id))
+
+    @app.delete('/api/trace-jobs/{job_id}')
+    def close_trace_search(job_id: str):
+        return dataset.close_trace_search(job_id)
 
     @app.post('/api/recycling-plan')
     def recycling_plan(arguments: dict = Body(...)):

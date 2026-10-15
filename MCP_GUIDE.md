@@ -5,7 +5,7 @@ choose tools, keep queries small and interpret bounded GTNH results. It is the
 single maintained guide and is included in the Python package.
 
 Connected MCP clients can discover and read the same Markdown resource at
-`gtnh-data://guide/query-workflows`. The server advertises 25 tools, concise
+`gtnh-data://guide/query-workflows`. The server advertises 30 tools, concise
 tool descriptions and startup instructions. Resource reads accept that exact
 URI. Other resource URIs are rejected instead of opening arbitrary files.
 

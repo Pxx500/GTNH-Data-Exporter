@@ -66,6 +66,7 @@ class Dataset:
         self._search_vocabulary = None
         self._unification_preferences = None
         self._search_lock = threading.Lock()
+        self._trace_jobs = None
         self._acquisition_cache = OrderedDict()
         self._acquisition_lock = threading.Lock()
         if not self.path.is_file():
@@ -2153,7 +2154,7 @@ class Dataset:
                 'changed': changed, 'eligible_paths': len(kinds), 'classification_visits': visits,
                 'acquisition_classification_visits': acquisition_visits, 'original_path_indices': order}
 
-    def trace_processes(self, *, start_id, target_id, max_depth=12, max_processes=300, max_paths=8,
+    def _trace_request(self, *, start_id, target_id, max_depth=12, max_processes=300, max_paths=8,
                         required_resource_ids=None, excluded_resource_ids=None, excluded_group_ids=None, max_extra_steps=6,
                         min_tier=None, max_tier=None, unknown_tier_policy='exclude', path_selection='diverse', view='full',
                         terminal_artifact_policy='allow'):
@@ -2179,154 +2180,230 @@ class Dataset:
                 raise DatasetError(f"{name} must be an array of {kind} IDs")
         if any(not isinstance(id, str) or not id for id in (start_id, target_id)):
             raise DatasetError("start_id and target_id must be resource IDs")
+        return dict(start_id=start_id, target_id=target_id, max_depth=max_depth, max_processes=max_processes,
+                    max_paths=max_paths, max_extra_steps=max_extra_steps, path_selection=path_selection, view=view,
+                    required_resource_ids=sorted(set(required_resource_ids or [])),
+                    excluded_resource_ids=sorted(set(excluded_resource_ids or [])),
+                    excluded_group_ids=sorted(set(excluded_group_ids or [])), min_tier=min_tier, max_tier=max_tier,
+                    unknown_tier_policy=unknown_tier_policy, terminal_artifact_policy=terminal_artifact_policy)
+
+    def _trace_context(self, connection, request):
+        required_resource_ids = request['required_resource_ids']
+        excluded_resource_ids = request['excluded_resource_ids']
+        excluded_group_ids = request['excluded_group_ids']
+        required, excluded = set(required_resource_ids or []), set(excluded_resource_ids or [])
+        for id in sorted(required | excluded):
+            self._record(connection, "resources", id)
+        group_exclusions = []
+        for group_id in sorted(set(excluded_group_ids or [])):
+            group = self._record(connection, "groups", group_id)
+            members = {row[0] for row in connection.execute("SELECT resource_id FROM members WHERE group_id=?", (group_id,))}
+            excluded.update(members)
+            group_exclusions.append({'group_id': group_id, 'name': group['name'], 'kind': group['kind'],
+                                     'member_count': len(members)})
+        for id in (request['start_id'], request['target_id']):
+            self._record(connection, 'resources', id)
+        return required, excluded, group_exclusions, self._tier_filter(
+            request['min_tier'], request['max_tier'], request['unknown_tier_policy'])
+
+    def trace_processes(self, *, start_id, target_id, max_depth=12, max_processes=300, max_paths=8,
+                        required_resource_ids=None, excluded_resource_ids=None, excluded_group_ids=None, max_extra_steps=6,
+                        min_tier=None, max_tier=None, unknown_tier_policy='exclude', path_selection='diverse', view='full',
+                        terminal_artifact_policy='allow'):
+        request = self._trace_request(start_id=start_id, target_id=target_id, max_depth=max_depth,
+            max_processes=max_processes, max_paths=max_paths, required_resource_ids=required_resource_ids,
+            excluded_resource_ids=excluded_resource_ids, excluded_group_ids=excluded_group_ids,
+            max_extra_steps=max_extra_steps, min_tier=min_tier, max_tier=max_tier,
+            unknown_tier_policy=unknown_tier_policy, path_selection=path_selection, view=view,
+            terminal_artifact_policy=terminal_artifact_policy)
         with self._connect() as connection:
-            required, excluded = set(required_resource_ids or []), set(excluded_resource_ids or [])
-            for id in sorted(required | excluded):
-                self._record(connection, "resources", id)
-            group_exclusions = []
-            for group_id in sorted(set(excluded_group_ids or [])):
-                group = self._record(connection, "groups", group_id)
-                members = {row[0] for row in connection.execute("SELECT resource_id FROM members WHERE group_id=?", (group_id,))}
-                excluded.update(members)
-                group_exclusions.append({'group_id': group_id, 'name': group['name'], 'kind': group['kind'],
-                                         'member_count': len(members)})
-            resources = {id: self._record(connection, "resources", id) for id in (start_id, target_id)}
-            processes = {}
-            edges = {}
-            input_slots = {}
-            route, paths, search, limit_reasons, duplicates, branches = self._find_paths(connection, start_id, target_id, max_depth, max_processes, max_paths, required, excluded, max_extra_steps, tier_filter, path_selection, terminal_artifact_policy)
-            unresolved = set()
+            context = self._trace_context(connection, request)
+            required, excluded, _, tier_filter = context
+            snapshot = self._find_paths(connection, start_id, target_id, max_depth, max_processes, max_paths,
+                                        required, excluded, max_extra_steps, tier_filter, path_selection, terminal_artifact_policy)
+            return self._render_trace(connection, request, context, snapshot)
 
-            def admit(id):
-                if id in processes:
-                    return False
-                record = self._record(connection, "processes", id)
-                if record["executable"] is False:
-                    return False
-                processes[id] = record
-                if connection.execute("SELECT 1 FROM records WHERE collection='processes' AND id=? AND " + self._unresolved_input_clause(), (id,)).fetchone():
-                    unresolved.add(id)
-                slots = []
-                for slot_index, slot in enumerate(record["inputs"]):
-                    candidates = set()
-                    for choice_index, choice in enumerate(slot["choices"]):
-                        for resource_id in self._choice_resources(connection, choice):
-                            if resource_id not in resources:
-                                resources[resource_id] = self._record(connection, "resources", resource_id)
-                            candidates.add(resource_id)
-                            edge = {"source": f"resource:{resource_id}", "target": f"process:{id}",
-                                    "role": slot["role"], "slot_index": slot_index, "choice_index": choice_index}
-                            edges[_json(edge)] = edge
-                    slots.append(candidates)
-                input_slots[id] = slots
-                for output in record["outputs"]:
-                    resource_id = output["resource_id"]
-                    if resource_id not in resources:
-                        resources[resource_id] = self._record(connection, "resources", resource_id)
-                    edge = {"source": f"process:{id}", "target": f"resource:{resource_id}", "role": "output"}
-                    edges[_json(edge)] = edge
-                return True
+    def _render_trace(self, connection, request, context, snapshot):
+        start_id, target_id = request['start_id'], request['target_id']
+        path_selection, view = request['path_selection'], request['view']
+        _, _, group_exclusions, tier_filter = deepcopy(context)
+        route, paths, search, limit_reasons, duplicates, branches = snapshot
+        resources = {id: self._record(connection, 'resources', id) for id in (start_id, target_id)}
+        processes, edges, input_slots = {}, {}, {}
+        unresolved = set()
 
-            for id in sorted({id for path in paths for id in path["process_ids"]}):
-                admit(id)
+        def admit(id):
+            if id in processes:
+                return False
+            record = self._record(connection, "processes", id)
+            if record["executable"] is False:
+                return False
+            processes[id] = record
+            if connection.execute("SELECT 1 FROM records WHERE collection='processes' AND id=? AND " + self._unresolved_input_clause(), (id,)).fetchone():
+                unresolved.add(id)
+            slots = []
+            for slot_index, slot in enumerate(record["inputs"]):
+                candidates = set()
+                for choice_index, choice in enumerate(slot["choices"]):
+                    for resource_id in self._choice_resources(connection, choice):
+                        if resource_id not in resources:
+                            resources[resource_id] = self._record(connection, "resources", resource_id)
+                        candidates.add(resource_id)
+                        edge = {"source": f"resource:{resource_id}", "target": f"process:{id}",
+                                "role": slot["role"], "slot_index": slot_index, "choice_index": choice_index}
+                        edges[_json(edge)] = edge
+                slots.append(candidates)
+            input_slots[id] = slots
+            for output in record["outputs"]:
+                resource_id = output["resource_id"]
+                if resource_id not in resources:
+                    resources[resource_id] = self._record(connection, "resources", resource_id)
+                edge = {"source": f"process:{id}", "target": f"resource:{resource_id}", "role": "output"}
+                edges[_json(edge)] = edge
+            return True
 
-            coverage = [json.loads(row[0]) for row in connection.execute("SELECT payload FROM records WHERE collection='coverage' ORDER BY id")]
-            prepared_counts = search.get('prepared_index', {}).get('counts')
-            unsupported_count = prepared_counts['unresolved_inputs'] if prepared_counts is not None else connection.execute("SELECT COUNT(*) FROM records WHERE collection='processes' AND " + self._unresolved_input_clause()).fetchone()[0]
-            if unsupported_count:
-                coverage.append({"id": "dataset:unresolved-matching", "domain": "trace.matching", "status": "partial",
-                                 "records": unsupported_count, "reason": "Unsupported ingredient predicates can leave undiscovered routes in this snapshot",
-                                 "provenance": {"owner": "Dataset"}})
-            unresolved_output_count = prepared_counts['unresolved_outputs'] if prepared_counts is not None else connection.execute("SELECT COUNT(*) FROM records WHERE collection='processes' AND "
-                                                        "json_extract(payload,'$.conditions.dynamic_output')='unresolved'").fetchone()[0]
-            if unresolved_output_count:
-                coverage.append({"id": "dataset:unresolved-outputs", "domain": "trace.outputs", "status": "partial",
-                                 "records": unresolved_output_count, "reason": "Unresolved dynamic outputs cannot establish material paths",
-                                 "provenance": {"owner": "Dataset"}})
-            edges_list = sorted(edges.values(), key=lambda edge: (edge["source"], edge["target"], edge["role"], edge.get("slot_index", -1), edge.get("choice_index", -1)))
-            cycles = self._cycles(edges_list)
-            cyclic_resources = {node.removeprefix("resource:") for component in cycles for node in component if node.startswith("resource:")}
-            unresolved_outputs = {output["resource_id"] for id in unresolved for output in processes[id]["outputs"]}
-            for component in cycles:
-                members = {node.removeprefix("resource:") for node in component if node.startswith("resource:")}
-                if members & unresolved_outputs:
-                    unresolved_outputs.update(members)
-            source_coverage = [record for record in coverage if any(term in record["domain"].lower() for term in ("acquisition", "source", "worldgen", "drop", "trade"))]
-            incomplete_sources = not source_coverage or any(record["status"] != "complete" for record in source_coverage)
-            source_states = {}
-            source_ids = {}
-            generation_only = set()
-            rule_only = set()
-            unresolved_boundaries = self._unresolved_producer_ids(connection, resources)
-            for resource_id in resources:
-                rows = connection.execute("SELECT DISTINCT payload FROM records JOIN source_outputs ON source_outputs.source_id=records.id WHERE collection='sources' AND resource_id=? ORDER BY records.id", (resource_id,))
-                sources = [json.loads(row[0]) for row in rows]
-                source_ids[resource_id] = [source["id"] for source in sources]
-                inventory_sources = [source for source in sources if any(
-                    output['resource_id'] == resource_id
-                    and self._inventory_source_output(output)
-                    for output in source['outputs'])]
-                if sources and not inventory_sources:
-                    if any(output['resource_id'] == resource_id and output.get('resource_semantics') == 'generated_ore_block_not_mining_drop'
-                           for source in sources for output in source['outputs']):
-                        generation_only.add(resource_id)
-                    if any(output['resource_id'] == resource_id and output.get('resource_semantics') == 'mined_item_rule_candidate'
-                           for source in sources for output in source['outputs']):
-                        rule_only.add(resource_id)
-                if resource_id == start_id:
-                    source_states[resource_id] = "assumed"
-                elif any(source["status"] == "active" and not source["conditions"] for source in inventory_sources):
-                    source_states[resource_id] = "available"
-                elif any(source["status"] in ("active", "conditional") for source in inventory_sources):
-                    source_states[resource_id] = "conditional"
-                elif (any(source["status"] == "unknown" for source in inventory_sources) or incomplete_sources
-                      or resource_id in generation_only or resource_id in rule_only or resource_id in unresolved_outputs or resource_id in unresolved_boundaries):
-                    source_states[resource_id] = "unresolved"
-                else:
-                    source_states[resource_id] = "no_known_source"
+        for id in sorted({id for path in paths for id in path["process_ids"]}):
+            admit(id)
 
-            grounded = {id for id, status in source_states.items() if status in ("assumed", "available", "conditional")}
-            changed = True
-            while changed:
-                changed = False
-                for process_id, record in processes.items():
-                    if process_id in unresolved or not all(choices & grounded for choices in input_slots[process_id]):
-                        continue
-                    for output in record["outputs"]:
-                        if self._positive_output(output) and output["resource_id"] not in grounded:
-                            grounded.add(output["resource_id"])
-                            changed = True
-            produced = {output["resource_id"] for process_id, record in processes.items() if process_id not in unresolved
-                        for output in record["outputs"] if self._positive_output(output)}
-            needed = {id for slots in input_slots.values() for choices in slots for id in choices} | {start_id, target_id}
-            leaves = []
-            path_resources = {id for path in paths for id in path["resource_ids"]}
-            for resource_id in sorted(needed):
-                if resource_id != start_id and resource_id in path_resources and resource_id in produced and (resource_id not in cyclic_resources or resource_id in grounded):
+        coverage = [json.loads(row[0]) for row in connection.execute("SELECT payload FROM records WHERE collection='coverage' ORDER BY id")]
+        prepared_counts = search.get('prepared_index', {}).get('counts')
+        unsupported_count = prepared_counts['unresolved_inputs'] if prepared_counts is not None else connection.execute("SELECT COUNT(*) FROM records WHERE collection='processes' AND " + self._unresolved_input_clause()).fetchone()[0]
+        if unsupported_count:
+            coverage.append({"id": "dataset:unresolved-matching", "domain": "trace.matching", "status": "partial",
+                             "records": unsupported_count, "reason": "Unsupported ingredient predicates can leave undiscovered routes in this snapshot",
+                             "provenance": {"owner": "Dataset"}})
+        unresolved_output_count = prepared_counts['unresolved_outputs'] if prepared_counts is not None else connection.execute("SELECT COUNT(*) FROM records WHERE collection='processes' AND "
+                                                    "json_extract(payload,'$.conditions.dynamic_output')='unresolved'").fetchone()[0]
+        if unresolved_output_count:
+            coverage.append({"id": "dataset:unresolved-outputs", "domain": "trace.outputs", "status": "partial",
+                             "records": unresolved_output_count, "reason": "Unresolved dynamic outputs cannot establish material paths",
+                             "provenance": {"owner": "Dataset"}})
+        edges_list = sorted(edges.values(), key=lambda edge: (edge["source"], edge["target"], edge["role"], edge.get("slot_index", -1), edge.get("choice_index", -1)))
+        cycles = self._cycles(edges_list)
+        cyclic_resources = {node.removeprefix("resource:") for component in cycles for node in component if node.startswith("resource:")}
+        unresolved_outputs = {output["resource_id"] for id in unresolved for output in processes[id]["outputs"]}
+        for component in cycles:
+            members = {node.removeprefix("resource:") for node in component if node.startswith("resource:")}
+            if members & unresolved_outputs:
+                unresolved_outputs.update(members)
+        source_coverage = [record for record in coverage if any(term in record["domain"].lower() for term in ("acquisition", "source", "worldgen", "drop", "trade"))]
+        incomplete_sources = not source_coverage or any(record["status"] != "complete" for record in source_coverage)
+        source_states = {}
+        source_ids = {}
+        generation_only = set()
+        rule_only = set()
+        unresolved_boundaries = self._unresolved_producer_ids(connection, resources)
+        for resource_id in resources:
+            rows = connection.execute("SELECT DISTINCT payload FROM records JOIN source_outputs ON source_outputs.source_id=records.id WHERE collection='sources' AND resource_id=? ORDER BY records.id", (resource_id,))
+            sources = [json.loads(row[0]) for row in rows]
+            source_ids[resource_id] = [source["id"] for source in sources]
+            inventory_sources = [source for source in sources if any(
+                output['resource_id'] == resource_id
+                and self._inventory_source_output(output)
+                for output in source['outputs'])]
+            if sources and not inventory_sources:
+                if any(output['resource_id'] == resource_id and output.get('resource_semantics') == 'generated_ore_block_not_mining_drop'
+                       for source in sources for output in source['outputs']):
+                    generation_only.add(resource_id)
+                if any(output['resource_id'] == resource_id and output.get('resource_semantics') == 'mined_item_rule_candidate'
+                       for source in sources for output in source['outputs']):
+                    rule_only.add(resource_id)
+            if resource_id == start_id:
+                source_states[resource_id] = "assumed"
+            elif any(source["status"] == "active" and not source["conditions"] for source in inventory_sources):
+                source_states[resource_id] = "available"
+            elif any(source["status"] in ("active", "conditional") for source in inventory_sources):
+                source_states[resource_id] = "conditional"
+            elif (any(source["status"] == "unknown" for source in inventory_sources) or incomplete_sources
+                  or resource_id in generation_only or resource_id in rule_only or resource_id in unresolved_outputs or resource_id in unresolved_boundaries):
+                source_states[resource_id] = "unresolved"
+            else:
+                source_states[resource_id] = "no_known_source"
+
+        grounded = {id for id, status in source_states.items() if status in ("assumed", "available", "conditional")}
+        changed = True
+        while changed:
+            changed = False
+            for process_id, record in processes.items():
+                if process_id in unresolved or not all(choices & grounded for choices in input_slots[process_id]):
                     continue
-                leaf = {"resource_id": resource_id, "status": source_states[resource_id], "sources": source_ids[resource_id]}
-                if resource_id in rule_only and leaf['status'] == 'unresolved':
-                    leaf['reason'] = 'A stochastic per-harvest rule describes potential products, not a jointly available inventory or a cycle seed'
-                elif resource_id in cyclic_resources and resource_id not in grounded:
-                    leaf["reason"] = "A cycle needs an external acquisition source or an explicit supplied seed"
-                elif resource_id in generation_only and leaf['status'] == 'unresolved':
-                    leaf['reason'] = 'Configured generation describes a world block, not a captured inventory acquisition or mining drop'
-                elif resource_id in unresolved_outputs | unresolved_boundaries and leaf["status"] == "unresolved":
-                    leaf["reason"] = "Producer inputs, matching or outputs are unresolved"
-                leaves.append(leaf)
-            from .flow_index import path_details
-            ordering = self._order_material_paths(paths, resources, processes, route, branches) if path_selection == 'material' else None
-            details = path_details(self, paths, resources, processes, branches) if path_selection == 'material' else []
-            result = {"snapshot_id": self.snapshot_id, "start_id": start_id, "target_id": target_id,
-                    "resources": [resources[id] for id in sorted(resources)], "processes": [processes[id] for id in sorted(processes)],
-                      "edges": edges_list, "leaves": leaves, "cycles": cycles, "truncated": bool(limit_reasons), "coverage": coverage,
-                      "route": route, "paths": paths, "search": search, "limit_reasons": sorted(limit_reasons), "duplicate_process_records": duplicates,
-                      'tier_filter': tier_filter, 'recipe_tiers': [self._recipe_tier(processes[id]) for id in sorted(processes)],
-                      'path_selection': path_selection, 'branch_coverage': branches, 'path_details': details,
-                      'group_exclusions': group_exclusions}
-            if ordering is not None:
-                result['path_ordering'] = ordering
-            return self._compact_trace(result, connection, view=view) if view != 'full' else result
+                for output in record["outputs"]:
+                    if self._positive_output(output) and output["resource_id"] not in grounded:
+                        grounded.add(output["resource_id"])
+                        changed = True
+        produced = {output["resource_id"] for process_id, record in processes.items() if process_id not in unresolved
+                    for output in record["outputs"] if self._positive_output(output)}
+        needed = {id for slots in input_slots.values() for choices in slots for id in choices} | {start_id, target_id}
+        leaves = []
+        path_resources = {id for path in paths for id in path["resource_ids"]}
+        for resource_id in sorted(needed):
+            if resource_id != start_id and resource_id in path_resources and resource_id in produced and (resource_id not in cyclic_resources or resource_id in grounded):
+                continue
+            leaf = {"resource_id": resource_id, "status": source_states[resource_id], "sources": source_ids[resource_id]}
+            if resource_id in rule_only and leaf['status'] == 'unresolved':
+                leaf['reason'] = 'A stochastic per-harvest rule describes potential products, not a jointly available inventory or a cycle seed'
+            elif resource_id in cyclic_resources and resource_id not in grounded:
+                leaf["reason"] = "A cycle needs an external acquisition source or an explicit supplied seed"
+            elif resource_id in generation_only and leaf['status'] == 'unresolved':
+                leaf['reason'] = 'Configured generation describes a world block, not a captured inventory acquisition or mining drop'
+            elif resource_id in unresolved_outputs | unresolved_boundaries and leaf["status"] == "unresolved":
+                leaf["reason"] = "Producer inputs, matching or outputs are unresolved"
+            leaves.append(leaf)
+        from .flow_index import path_details
+        ordering = self._order_material_paths(paths, resources, processes, route, branches) if path_selection == 'material' else None
+        details = path_details(self, paths, resources, processes, branches) if path_selection == 'material' else []
+        result = {"snapshot_id": self.snapshot_id, "start_id": start_id, "target_id": target_id,
+                "resources": [resources[id] for id in sorted(resources)], "processes": [processes[id] for id in sorted(processes)],
+                  "edges": edges_list, "leaves": leaves, "cycles": cycles, "truncated": bool(limit_reasons), "coverage": coverage,
+                  "route": route, "paths": paths, "search": search, "limit_reasons": sorted(limit_reasons), "duplicate_process_records": duplicates,
+                  'tier_filter': tier_filter, 'recipe_tiers': [self._recipe_tier(processes[id]) for id in sorted(processes)],
+                  'path_selection': path_selection, 'branch_coverage': branches, 'path_details': details,
+                  'group_exclusions': group_exclusions}
+        if ordering is not None:
+            result['path_ordering'] = ordering
+        return self._compact_trace(result, connection, view=view) if view != 'full' else result
+
+
+    def start_trace_search(self, *, time_budget_seconds=5, budget_multiplier=1, **arguments):
+        from .trace_jobs import TraceJobs, validate_time_budget
+        validate_time_budget(time_budget_seconds)
+        if type(budget_multiplier) is not int or not 1 <= budget_multiplier <= 10:
+            raise DatasetError('budget_multiplier must be an integer between 1 and 10')
+        arguments.setdefault('path_selection', 'material')
+        try:
+            request = self._trace_request(**arguments)
+        except TypeError as error:
+            raise DatasetError(str(error)) from error
+        if request['path_selection'] != 'material':
+            raise DatasetError('Progressive trace searches require path_selection=material')
+        with self._connect() as connection:
+            self._trace_context(connection, request)
+        with self._search_lock:
+            if self._trace_jobs is None:
+                self._trace_jobs = TraceJobs(self)
+            jobs = self._trace_jobs
+        return jobs.start(request, time_budget_seconds, budget_multiplier)
+
+    def get_trace_search(self, job_id, after_revision=None):
+        return self._trace_job_owner().get(job_id, after_revision)
+
+    def pause_trace_search(self, job_id):
+        return self._trace_job_owner().pause(job_id)
+
+    def continue_trace_search(self, job_id, time_budget_seconds=5):
+        return self._trace_job_owner().resume(job_id, time_budget_seconds)
+
+    def close_trace_search(self, job_id):
+        return self._trace_job_owner().close(job_id)
+
+    def _trace_job_owner(self):
+        if self._trace_jobs is None:
+            raise DatasetError('Unknown trace search job')
+        return self._trace_jobs
+
+    def shutdown_trace_searches(self):
+        if self._trace_jobs is not None:
+            self._trace_jobs.shutdown()
 
     def _compact_trace(self, result, connection, *, view='compact'):
         """Summarize expanded candidate records while keeping recipe authority intact."""

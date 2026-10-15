@@ -2,7 +2,7 @@
 
 Use the connected snapshot to answer a specific question. Start with a small
 lookup, select exact identities, then choose the analysis that proves what the
-user asked. This server has 25 tools. It shares one Dataset owner with the GUI
+user asked. This server has 30 tools. It shares one Dataset owner with the GUI
 and CLI. Tool schemas are the authority for current arguments and bounds.
 
 Read this guide once through the MCP resource
@@ -19,6 +19,7 @@ Read this guide once through the MCP resource
 | What does a group accept? | `get_group` | Captured group membership. Exact matching still depends on the choice's mode, wildcard metadata and NBT sensitivity |
 | How can the item enter the system? | `inspect_acquisition`, `find_sources`, `get_source`, `find_environments` | Bounded structural evidence and configured sources, including generator links and dimension context. Missing evidence is not absolute unobtainability |
 | Can A contribute to B through known recipes? | `trace_processes` | Bounded consume dependency paths with complete selected recipes. A path does not supply all its side inputs or prove quantities |
+| Can I inspect results while material search is running? | `start_trace_search`, `get_trace_search`, `pause_trace_search`, `continue_trace_search`, `close_trace_search` | A process-local continuation of the same frontier, with validated candidate snapshots and explicit lifecycle |
 | Is material-flow search prepared for this snapshot? | `flow_index_status`, optionally `rebuild_flow_index` | Read derived-index readiness or explicitly rebuild its sidecar offline. Preparation changes search data, not captured recipe facts |
 | What returns a chosen main-path byproduct? | `plan_recycling` | Bounded C-to-D alternatives, exact net recovery and external inputs, tied to a chosen main path |
 | What are all required external inputs for a target? | `plan_to_bases` | Whole-recipe balanced plans under an explicit saved base-resource profile, with net imports and separate startup requirements |
@@ -31,6 +32,56 @@ Read this guide once through the MCP resource
 There is no exposed generic SQL tool or separate `plan_network` MCP tool.
 Use `plan_to_bases` or `audit_energy` for balanced network analysis. Do not
 build another client-side solver by stitching trace spines together.
+
+## Inspect a material search while it runs
+
+Use `start_trace_search` for a material query whose results may improve during
+further exploration. It takes the usual trace settings, defaults to
+`path_selection="material"`, and accepts `time_budget_seconds` from 0.05 to 60
+(default 5) and integer `budget_multiplier` from 1 to 10 (default 1).
+Other selectors remain available through the synchronous `trace_processes`.
+An unavailable prepared index is an explicit failure, not an automatic rebuild.
+
+Start with exact IDs resolved in this snapshot:
+
+```json
+{"name":"start_trace_search","arguments":{"start_id":"RESOLVED_START_ID","target_id":"RESOLVED_TARGET_ID","view":"concise","max_paths":8,"time_budget_seconds":1,"budget_multiplier":1}}
+```
+
+Retain the returned `job_id` and call `get_trace_search`. The envelope has a
+monotonic `revision`, lifecycle `status`, `phase`, active `elapsed_seconds`,
+`progress` counters and a `result_revision`. A newly rendered `result` is the
+ordinary trace response with full selected recipes and declared cofeeds.
+Pass the last accepted `revision` as `after_revision` to omit an unchanged
+result. Keep the previous board when `result` is absent. Avoid tight polling.
+Progress is measured work, not a completion percentage.
+
+`running` means the worker is searching or rendering. `paused` retains its
+frontier. `continue_trace_search` gives that same paused job another active
+time budget. `pause_trace_search` requests a pause at the next cooperative
+checkpoint and retains candidates. Its acknowledgement may still be running.
+Poll until paused before continuing. A paused empty result is not a completed
+negative search. `first_result_seconds`, when present, measures job creation
+to the first rendered nonempty result, including initialization and rendering.
+Active elapsed time excludes the intervals spent paused.
+
+`finished` means exhaustion or a terminal search/path/depth guard. Inspect the
+result's `limit_reasons`. More time cannot continue a finished job. A new job
+can use different bounds or a larger budget multiplier. The multiplier scales
+the process, admission and expansion-work guards, not maximum depth or returned
+path/process limits. A gain from more work is not an algorithmic speedup.
+Time budgets are cooperative and may overrun a single SQL operation or sort.
+
+Close unused jobs with `close_trace_search`. Closing releases retained state,
+so a closed job cannot continue. Wait for a running job to close before starting
+its replacement. Only one job runs per Dataset, at most four are retained, and
+idle jobs expire after 15 minutes. Handle `failed` and its `error` explicitly.
+
+Job IDs belong to this Dataset process and snapshot. HTTP and stdio MCP use
+the same implementation but have separate processes and job handles. Restarting
+the server loses jobs. No captured dataset or recipe is changed by these tools.
+All results remain conditional dependency witnesses, not complete stock plans
+or proof of material yield, chemical provenance or machine execution.
 
 ## Prefer a material route when the question is about a construction chain
 

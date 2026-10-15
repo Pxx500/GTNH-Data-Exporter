@@ -4,6 +4,7 @@ import os
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
 from io import StringIO
@@ -82,6 +83,64 @@ class TransportTests(unittest.TestCase):
                                                                   process('detour-first', [slot(choice('a'))], ['middle']),
                                                                   process('detour-finish', [slot(choice('middle'))], ['b'])],
                                                        sources=[self.generation_source, self.mining_source]), self.database)
+
+    def test_http_trace_jobs_share_trace_body_validation_and_revision_polling(self):
+        args = dict(start_id='a', target_id='b', path_selection='material', view='concise',
+                    required_resource_ids=['a'], excluded_resource_ids=['excluded'], excluded_group_ids=[])
+        expected = self.dataset.trace_processes(**args)
+        with TestClient(create_app(self.dataset)) as client:
+            response = client.post('/api/trace-jobs', json=args)
+            self.assertEqual(response.status_code, 200, response.text)
+            job = response.json()
+            deadline = time.monotonic() + 5
+            while job['status'] == 'running' and time.monotonic() < deadline:
+                time.sleep(.01)
+                job = client.get('/api/trace-jobs/' + job['job_id']).json()
+            self.assertEqual(job['status'], 'finished', job)
+            for field in ('paths', 'resources', 'processes', 'edges', 'leaves', 'path_details', 'presentation'):
+                self.assertEqual(job['result'][field], expected[field], field)
+            route = '/api/trace-jobs/' + job['job_id']
+            self.assertNotIn('result', client.get(route, params={'after_revision': job['revision']}).json())
+            self.assertEqual(client.post(route + '/continue', json={}).status_code, 400)
+            self.assertEqual(client.post(route + '/pause').json()['status'], 'finished')
+            self.assertEqual(client.delete(route).json()['status'], 'closed')
+            self.assertEqual(client.delete(route).json()['status'], 'closed')
+            for change in ({'max_depth': 0}, {'required_resource_ids': 'a'}, {'view': 'bad'},
+                           {'budget_multiplier': 11}, {'time_budget_seconds': 0}, {'path_selection': 'shortest'}):
+                self.assertEqual(client.post('/api/trace-jobs', json=dict(args, **change)).status_code, 400)
+            self.assertEqual(client.get('/api/trace-jobs/missing').status_code, 404)
+
+    def test_official_mcp_trace_jobs_share_domain_results_and_process_local_handles(self):
+        async def exercise():
+            parameters = StdioServerParameters(command=sys.executable,
+                args=['-m', 'gtnh_data', 'mcp', '--database', str(self.database)])
+            async with stdio_client(parameters) as (read_stream, write_stream):
+                async with ClientSession(read_stream, write_stream, read_timeout_seconds=15) as session:
+                    await session.initialize()
+                    tools = {tool.name: tool for tool in (await session.list_tools()).tools}
+                    self.assertEqual(tools['start_trace_search'].input_schema['properties']['path_selection']['enum'], ['material'])
+                    started = await session.call_tool('start_trace_search', {'start_id': 'a', 'target_id': 'b'})
+                    self.assertFalse(started.is_error, started.content)
+                    job = started.structured_content
+                    deadline = time.monotonic() + 5
+                    while job['status'] == 'running' and time.monotonic() < deadline:
+                        await asyncio.sleep(.01)
+                        polled = await session.call_tool('get_trace_search', {'job_id': job['job_id']})
+                        self.assertFalse(polled.is_error, polled.content)
+                        job = polled.structured_content
+                    self.assertEqual(job['status'], 'finished', job)
+                    expected = self.dataset.trace_processes(start_id='a', target_id='b', path_selection='material', view='compact')
+                    for field in ('paths', 'resources', 'processes', 'edges', 'leaves', 'path_details', 'presentation'):
+                        self.assertEqual(job['result'][field], expected[field], field)
+                    unchanged = await session.call_tool('get_trace_search', {'job_id': job['job_id'], 'after_revision': job['revision']})
+                    self.assertNotIn('result', unchanged.structured_content)
+                    invalid = await session.call_tool('start_trace_search', {'start_id': 'a', 'target_id': 'b', 'path_selection': 'shortest'})
+                    self.assertTrue(invalid.is_error)
+                    closed = await session.call_tool('close_trace_search', {'job_id': job['job_id']})
+                    self.assertEqual(closed.structured_content['status'], 'closed')
+                    invalid = await session.call_tool('continue_trace_search', {'job_id': job['job_id']})
+                    self.assertTrue(invalid.is_error)
+        asyncio.run(exercise())
 
     def test_prepared_flow_index_is_inspectable_and_rebuildable_without_changing_capture(self):
         captured_before = self.database.read_bytes()
