@@ -679,7 +679,7 @@ etap. Bieżące pomiary i decyzje są w SEARCH_EXPERIMENTS.md.
   oddzielone od prawdziwych krawędzi. GUI wyjaśnia powód pustego wyniku.
   Przechodzi 84 testy skupione na kontrakcie oraz pełny zestaw GUI 68 testów.
   Nie powtarzano wcześniejszych dziewięciu zapytań natywnych.
-- [ ] Sprawdzić opcjonalną natywną historię rejestracji receptur jako dowód
+- [x] Sprawdzić opcjonalną natywną historię rejestracji receptur jako dowód
   roli wejść Cuttera. GT udostępnia `GTRecipe.stackTraces`, ale historia może
   zniknąć przy kopiowaniu i jej zbieranie obejmuje całą paczkę. Oddzielny
   eksperyment ma zmierzyć koszt inicjalizacji i pamięci. Nie włączamy tej
@@ -692,6 +692,27 @@ etap. Bieżące pomiary i decyzje są w SEARCH_EXPERIMENTS.md.
   Snapshot pozostaje badawczy. Pomiar pokazuje 8340537344 bajtów szczytowego
   working set gry, bez pomiaru bazowego do obliczenia narzutu.
   Kolejna hipoteza offline dotyczy współdzielenia powtarzanych śladów.
+  Próba kompresji zachowuje dokładnie 40939 pełnych rekordów. Słownik ramek
+  daje 87,1% oszczędności surowego pola i 79,8% gzip, razem ze słownikiem.
+  Nie odzyskuje pominiętych danych ani pamięci natywnego kolektora.
+  Projekt osobnego słownika pozostaje odłożony, bez zmiany formatu i limitu.
+  Flaga przechwytywania włącza również historię właścicieli receptury.
+  Dziewięć sprawdzonych plików GT ma identyczną treść w `.221` i `.225`.
+  Ich konsumenci nie wyjaśniają zmiany parametrów operacyjnych. Trzy zapisane
+  pozycje pokazują dwie różne deklaracje i jedną zmianę tekstu obiektu.
+  Nie dowodzi to mutacji tej samej receptury ani przyczyny różnic.
+  Nie powtarzamy capture i nie promujemy badawczego snapshota.
+- [ ] Wskazać jedną nową heurystykę wyboru gałęzi materiałowej na podstawie
+  zapisanych świadków wafla, Volcanusa i LV hull. Oprzeć ją na istniejących
+  danych natywnych lub dokładnym kontekście wymagań celu. Podać przeciwny
+  przykład i granice stosowania. Bez zgadywania nazw, większej puli ścieżek
+  ani powtarzania zakończonych negatywnych prób. Najpierw krótki projekt
+  jednej próby z niezmienionym budżetem, bez nowego zapytania w tym badaniu.
+- [ ] Wskazać konkretny zbędny koszt obecnego silnika ścieżek, korzystając
+  z kodu i zapisanych liczników. Zachować kolejność kandydatów, pełne rekordy
+  i uczciwe rozliczenie pracy. Bez ponownej próby cache oceny, skanowania
+  kubełków historii i regionów. Najpierw dowód osiągalnej powtarzanej pracy
+  oraz mały plan weryfikacji, bez szerokiego benchmarku.
 - [x] Sprawdzić literaturę o landmarkach i planach zrelaksowanych pod kątem
   kierowania przez gałęzie składników celu. Odróżnić osiągalność pojedynczej
   ścieżki od spełnienia wszystkich wejść receptury i policzyć przygotowanie.

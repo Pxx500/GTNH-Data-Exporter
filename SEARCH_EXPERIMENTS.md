@@ -1420,3 +1420,34 @@ The next fixed-corpus study measures exact string and ordered-trace repetition
 among retained data. Lossless sharing may fit more information in a byte budget.
 It cannot reconstruct omitted Cutter origins, establish all-corpus compression
 or remove native collection RAM. No new capture is part of that offline study.
+
+### Fixed-prefix callsite compression
+
+All 40939 fully captured records contain 2050410 frame occurrences but only
+7221 exact strings. Whole ordered trace objects have 6912 unique values.
+Both frame and whole-trace pools round-trip every studied record exactly,
+including order, counts and metadata, in memory and from persisted gzip files.
+The dictionaries are included in every comparison.
+
+Flat callsite JSONL uses 152695269 raw bytes and 1185869 gzip-6 bytes.
+Frame pooling uses 19692892 and 239215. Whole-trace pooling uses 34479653 and
+399903. Frame pooling is better once the 23375203-byte whole-trace dictionary
+is included. The complete native subset's gzip size falls from 2637624 to
+1462511 with the frame dictionary included. The pilot takes 57.79 seconds,
+with 113.74 MB Python traced peak and 225.34 MB process peak. Declared scan,
+time and memory bounds are not reached. No query, mutation or new capture runs.
+
+These are prefix-corpus measurements, not a claim about the missing tail.
+All 9329 Cutter origins remain unavailable. The current occurrence-byte budget
+is not changed or silently reinterpreted by the prototype. Native collection
+RAM is unaffected. A format design must choose dictionary ownership and an
+explicit encoded/unique-byte budget before any production change. Root checked
+dictionary artifact sizes, and the private helper verified all eight files.
+Evidence stays local under `callsite-compression-pilot/`.
+
+The follow-up format design chooses a separate checksum-verified frame
+dictionary owned by SnapshotWriter. An inline manifest dictionary would
+inflate ordinary Dataset status responses. This remains a deferred design,
+without a schema change, budget reinterpretation or additional game capture.
+The next core studies return to material-route choice and observed runtime
+costs, using saved witnesses and unchanged search limits.
