@@ -3,6 +3,7 @@
 build/
 run/
 exports/
+/Docs/
 worktrees/
 *.iml
 *.ipr
