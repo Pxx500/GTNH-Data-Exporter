@@ -52,3 +52,88 @@ test('unavailable browser canvas or unmeasured links fail explicitly instead of 
   await expect(renderRecipeBoard(root,nodes,['cycle'],'png')).rejects.toThrow('Use SVG')
   await expect(renderRecipeBoard(root,nodes,['not-rendered'],'svg')).rejects.toThrow('still loading')
 })
+
+test('SVG export shares computed styles without changing declarations, content, geometry, or the live board',async()=>{
+  const {root,viewport}=board('translate(300px, 200px) scale(0.3)')
+  const source=document.createElementNS('http://www.w3.org/2000/svg','svg')
+  source.setAttribute('viewBox','0 0 1200 1400')
+  const foreign=document.createElementNS(source.namespaceURI,'foreignObject')
+  foreign.setAttribute('width','100%')
+  foreign.setAttribute('height','100%')
+  source.append(foreign)
+  for(let index=0;index<12;index++){
+    const tile=document.createElement('div')
+    tile.className='recipe-node'
+    tile.textContent=`Recipe ${index}`
+    tile.style.cssText=`--board-token: "semi;colon}"; --flow-theme: rgb(10, 20, 30); margin: 1px 2px; margin-left: 7px; border: 2px solid red; border-left-width: 5px; font: italic 12px serif; color: ${index%2?'red':'blue'} !important; background-image: url("data:image/svg+xml,%3Csvg%3E;%3C/svg%3E");`
+    foreign.append(tile)
+  }
+  const sourceText=new XMLSerializer().serializeToString(source)
+  vi.mocked(toSvg).mockResolvedValue(`data:image/svg+xml;charset=utf-8,${encodeURIComponent(sourceText)}`)
+  const before=viewport.outerHTML
+  const image=await renderRecipeBoard(root,nodes,['cycle'],'svg')
+  const output=new DOMParser().parseFromString(decodeURIComponent(image.dataUrl.slice(image.dataUrl.indexOf(',')+1)),'image/svg+xml')
+  expect(output.querySelector('style')).not.toBeNull()
+  const expanded=(element:Element)=>{
+    const style=document.createElement('div').style
+    const sheet=document.createElement('style')
+    sheet.textContent=output.querySelector('style')!.textContent
+    document.head.append(sheet)
+    for(const rule of Array.from(sheet.sheet!.cssRules)){
+      if(rule instanceof CSSStyleRule && element.matches(rule.selectorText)){
+        for(const property of Array.from(rule.style))style.setProperty(property,rule.style.getPropertyValue(property),rule.style.getPropertyPriority(property))
+      }
+    }
+    sheet.remove()
+    return style.cssText
+  }
+  const original=Array.from(foreign.children)
+  const exported=Array.from(output.querySelector('foreignObject')!.children)
+  expect(exported).toHaveLength(original.length)
+  for(let index=0;index<original.length;index++){
+    expect(exported[index].textContent).toBe(original[index].textContent)
+    expect(exported[index].getAttribute('class')).toBe(original[index].getAttribute('class'))
+    const normalized=document.createElement('div').style
+    normalized.cssText=expanded(exported[index])
+    const expected=(original[index] as HTMLElement).style
+    expect(Array.from(normalized).sort()).toEqual(Array.from(expected).sort())
+    for(const property of Array.from(expected)){
+      expect(normalized.getPropertyValue(property),property).toBe(expected.getPropertyValue(property))
+      expect(normalized.getPropertyPriority(property),property).toBe(expected.getPropertyPriority(property))
+    }
+  }
+  expect(output.documentElement.getAttribute('viewBox')).toBe('0 0 1200 1400')
+  expect(output.querySelector('foreignObject')!.getAttribute('height')).toBe('100%')
+  expect(decodeURIComponent(image.dataUrl.slice(image.dataUrl.indexOf(',')+1)).length).toBeLessThan(sourceText.length/2)
+  expect(viewport.outerHTML).toBe(before)
+})
+
+test('SVG export retains unknown CSS and declarations that CSSOM cannot replay exactly',async()=>{
+  const {root}=board('scale(0.3)')
+  const source=document.createElementNS('http://www.w3.org/2000/svg','svg')
+  const foreign=document.createElementNS(source.namespaceURI,'foreignObject')
+  source.append(foreign)
+  const styles=['future-board-layout: exact-unknown; color: red;',
+    'font: italic 12px serif; font-size: 14px;', '--priority: one !important; color: blue;']
+  for(const text of styles){
+    const tile=document.createElement('div')
+    tile.setAttribute('style',text)
+    foreign.append(tile)
+  }
+  vi.mocked(toSvg).mockResolvedValue(`data:image/svg+xml;charset=utf-8,${encodeURIComponent(new XMLSerializer().serializeToString(source))}`)
+  const image=await renderRecipeBoard(root,nodes,['cycle'],'svg')
+  const output=new DOMParser().parseFromString(decodeURIComponent(image.dataUrl.slice(image.dataUrl.indexOf(',')+1)),'image/svg+xml')
+  const elements=Array.from(output.querySelector('foreignObject')!.children)
+  for(let index=0;index<styles.length;index++)expect(elements[index].getAttribute('style')).toBe(styles[index])
+})
+
+test('SVG export keeps inline cascade priority when the capture contains its own stylesheet',async()=>{
+  const {root}=board('scale(0.3)')
+  const source='<svg xmlns="http://www.w3.org/2000/svg"><style>.existing {color: blue !important}</style><foreignObject><div xmlns="http://www.w3.org/1999/xhtml" class="existing" style="color: red !important;">Recipe</div></foreignObject></svg>'
+  vi.mocked(toSvg).mockResolvedValue(`data:image/svg+xml;charset=utf-8,${encodeURIComponent(source)}`)
+  const image=await renderRecipeBoard(root,nodes,['cycle'],'svg')
+  const output=new DOMParser().parseFromString(decodeURIComponent(image.dataUrl.slice(image.dataUrl.indexOf(',')+1)),'image/svg+xml')
+  expect(output.querySelectorAll('style')).toHaveLength(1)
+  expect(output.querySelector('div')!.getAttribute('style')).toBe('color: red !important;')
+  expect(output.querySelector('style')!.textContent).toBe('.existing {color: blue !important}')
+})

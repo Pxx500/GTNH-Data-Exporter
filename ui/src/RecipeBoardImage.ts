@@ -1,6 +1,7 @@
 import {getNodesBounds,getViewportForBounds} from '@xyflow/react'
 import type {Node} from '@xyflow/react'
 import {toPng,toSvg} from 'html-to-image'
+import {shareSvgStyles} from './SvgStyles'
 
 export type BoardImageFormat='png'|'svg'
 export async function renderRecipeBoard(root:HTMLElement,nodes:Node[],edgeIds:string[],format:BoardImageFormat) {
@@ -44,6 +45,7 @@ export async function renderRecipeBoard(root:HTMLElement,nodes:Node[],edgeIds:st
     background.setAttribute('height','100%')
     background.setAttribute('fill','#ffffff')
     svg.insertBefore(background,svg.firstChild)
+    shareSvgStyles(svg as unknown as SVGElement)
     dataUrl=`data:image/svg+xml;charset=utf-8,${encodeURIComponent(new XMLSerializer().serializeToString(svg))}`
   }
   return {dataUrl,width:width*options.pixelRatio,height:height*options.pixelRatio}
