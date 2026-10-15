@@ -1205,10 +1205,28 @@ class Dataset:
     @staticmethod
     def _unresolved_input_clause():
         return """(
-            json_extract(payload,'$.conditions.dynamic_inputs')='unresolved' OR
+            (json_type(payload,'$.conditions.dynamic_inputs')='text'
+             AND length(trim(json_extract(payload,'$.conditions.dynamic_inputs')))>0) OR
             EXISTS (SELECT 1 FROM inputs WHERE inputs.process_id=records.id
                     AND (mode='native_unknown' OR (mode='unified' AND group_id IS NULL)))
         )"""
+
+    def _declared_input_clause(self, connection, resource_id):
+        self._record(connection, "resources", resource_id)
+        return """(
+            id IN (SELECT process_id FROM inputs WHERE resource_id=?) OR
+            EXISTS (
+                SELECT 1 FROM json_each(CASE
+                    WHEN json_type(records.payload,'$.conditions.native_inputs')='array'
+                    THEN json_extract(records.payload,'$.conditions.native_inputs') ELSE '[]' END) native_slot
+                JOIN json_each(CASE WHEN native_slot.type='object' THEN CASE
+                    WHEN json_type(native_slot.value,'$.choices')='array'
+                    THEN json_extract(native_slot.value,'$.choices') ELSE '[]' END ELSE '[]' END) native_choice
+                WHERE CASE WHEN native_choice.type='object' THEN CASE
+                    WHEN json_type(native_choice.value,'$.resource_id')='text'
+                    THEN json_extract(native_choice.value,'$.resource_id') END END = ?
+            )
+        )""", (resource_id, resource_id)
 
     def _unresolved_producer_ids(self, connection, resource_ids):
         ids = tuple(resource_ids)
@@ -1228,11 +1246,16 @@ class Dataset:
             found.update(row[0] for row in rows)
         return found
 
-    def find_processes(self, *, input_id=None, output_id=None, family=None, offset=0, limit=50):
+    def find_processes(self, *, input_id=None, output_id=None, family=None, input_mode="matched", offset=0, limit=50):
+        if input_mode not in ("matched", "declared"):
+            raise DatasetError("input_mode must be matched or declared")
+        if input_mode == "declared" and input_id is None:
+            raise DatasetError("declared input_mode requires input_id")
         clauses, parameters = ["1"], ()
         with self._connect() as connection:
             if input_id is not None:
-                clause, values = self._using_clause(connection, input_id)
+                clause, values = (self._declared_input_clause(connection, input_id) if input_mode == "declared"
+                                  else self._using_clause(connection, input_id))
                 clauses.append(clause)
                 parameters += values
             if output_id is not None:
@@ -1243,6 +1266,10 @@ class Dataset:
                 clauses.append("json_extract(payload,'$.family')=?")
                 parameters += (family,)
             result = self._page(connection, "processes", " AND ".join(clauses), parameters, offset=offset, limit=limit)
+            if input_mode == "declared":
+                result['input_lookup'] = {'mode': 'declared', 'scope': 'literal_captured_resource_references',
+                                          'matching_evaluated': False}
+                return result
             unresolved = 0
             if input_id is not None:
                 extra_clauses = [self._unresolved_input_clause()]

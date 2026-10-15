@@ -66,6 +66,8 @@ def parser():
             command.add_argument("--scope-file", type=Path)
         if name == "processes":
             command.add_argument("--input-id")
+            command.add_argument("--input-mode", choices=("matched", "declared"), default="matched",
+                                 help="Match captured input predicates, or find literal captured resource references without evaluating matching")
             command.add_argument("--output-id")
             command.add_argument("--family")
         if name == "sources":

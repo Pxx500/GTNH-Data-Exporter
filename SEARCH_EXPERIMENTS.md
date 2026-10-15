@@ -2158,3 +2158,55 @@ Source contracts, audit and runtime evidence are in forestry-squeezer-coverage/,
 botania-runic-altar-coverage/, native-catalog-adapters-audit/ and
 native-catalog-adapters-acceptance/. There is no independent live catalog
 observer, controller execution proof or live GUI/MCP acceptance in this phase.
+
+### Further catalogs expose a declaration-query gap
+
+Source-only gates verify passive Carpenter and Petal Apothecary catalogs in the
+same actual Forestry 4.11.39 and Botania 1.13.39-GTNH JARs. Neither collector is
+implemented in this phase. Carpenter exposes its pattern, box, fluid, work time
+and full main output, but consumes the selected phantom-grid stock with ore
+equivalence and container callbacks. Petal consumes its ingredients, including
+runes, plus a seed selected by the native unlocalized-name predicate. Water is
+controller state with several refill paths. Neither transaction can honestly be
+replaced by one fixed generic container or seed group. Full execution models
+remain deferred. Source evidence is in forestry-carpenter-coverage/ and
+botania-petal-apothecary-coverage/.
+
+The existing input query excludes native_unknown anchors from known matches.
+This is correct for acceptance, but those concrete declarations are not
+discoverable by ingredient lookup. Native slots retained only in
+conditions.native_inputs are also outside its relationship index. The existing
+public unknown-matcher regression confirms the distinction without a native
+query. Family/output lookup and direct inspection still expose the records.
+
+The accepted design deepens find_processes with input_mode matched/declared,
+preserving the matched default. Declared mode finds exact literal resource-ID
+references in two supported slot locations, without group or predicate
+expansion. It preserves raw items and reports matching_evaluated false under
+input_lookup, omitting native-matching counters. Existing indexed anchors and
+fixed guarded SQLite JSON1 traversal suffice without a schema change or
+reimport. Count and page may each scan JSON-only declarations, so performance
+must be measured before a speed claim. The implementation passes 220 Python
+tests, 85 GUI tests, typecheck and a private build. Design and bounded acceptance
+evidence are in declared-input-lookup/.
+
+One related reachable diagnostic bug is included: named dynamic_inputs reasons
+with cleared top-level slots, as in the observed HeadRecipe, evade the old exact
+unresolved marker test. The fix corrects uncertainty counts without making
+those recipes executable or changing known match results.
+
+Exactly five read-only public requests on snapshot
+6af4b2b0-0c98-487e-94cd-4f8101c6bd1c preserve full stored item bodies and both
+protected database hashes. Squeezer input r46252 has zero known matches with
+280 unresolved processes in family scope. Declared mode finds its p259622 in
+1.203 seconds with the family filter and four references in 1.328 seconds
+without it. The latter count and page statements take 0.644 and 0.681 seconds.
+EXPLAIN confirms a collection scan with indexed top-level anchor membership
+and correlated JSON virtual-table walks. These are single instrumented reads,
+not a warmed benchmark or evidence of index-only lookup. Native-input-only
+references remain fixture-tested rather than observed mixed-rune records.
+
+The Runic family request reports one unresolved HeadRecipe. Adding a fixed
+output filter excludes that diagnostic record and correctly reports zero
+unresolved processes within the narrower scope. No extra public query, rebuild,
+capture, native matcher call or live UI/MCP activation occurred.

@@ -532,9 +532,28 @@ contains `status: unsupported_accounting`, `native_model`, `reason` and
 operation-accounting projection. Absence of this issue is not certification
 of native execution. Status returns
 `{snapshot_id, manifest, counts, coverage}`, with counts per record collection
-and coverage as an array of coverage records. Filtered process lists also
-report `matching_complete` and `unresolved_matches` where native predicates
-cannot be evaluated. These flags do not substitute for source coverage.
+and coverage as an array of coverage records. Process lists in the default
+`input_mode: matched` report `matching_complete` and `unresolved_matches`
+where native predicates cannot be evaluated. Unresolved counts describe the
+requested family/output scope, not established matches for the input ID.
+These flags do not substitute for source coverage.
+
+`find_processes` also accepts `input_mode: declared`, requiring `input_id`.
+It finds exact captured resource-ID references in `inputs[].choices[]` and
+`conditions.native_inputs[].choices[]`. It does not expand groups, wildcard
+metadata, NBT-insensitive identities, names or `declared_match` predicates.
+This is a separate relation query. It need not be a superset of known matches.
+Repeated references yield one process result while the full raw item retains
+all occurrences. Output/family filters and ordinary paging still apply.
+
+Declared pages add `input_lookup` with `mode: declared`,
+`scope: literal_captured_resource_references` and `matching_evaluated: false`.
+They omit `matching_complete` and `unresolved_matches` because native matching
+was not evaluated. A declared reference does not establish acceptance,
+executability, quantities or a valid trace transition. Ordinary item bodies
+remain unchanged. The HTTP parameter is `input_mode`, the CLI flag is
+`--input-mode`, and the existing MCP `find_processes` tool uses the same enum.
+Both modes read existing snapshot data without migration or reimport.
 
 `find_resources(q=...)` searches display names, registry identifiers and
 snapshot resource IDs. Words can be reordered or shortened to prefixes.

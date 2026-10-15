@@ -85,8 +85,10 @@ def create_app(dataset: Dataset, ui_dist: str | Path | None = None) -> FastAPI:
         return dataset.get_resource(id)
 
     @app.get("/api/processes")
-    def processes(input_id: str | None = None, output_id: str | None = None, family: str | None = None, offset: int = 0, limit: int = 50):
-        return dataset.find_processes(input_id=input_id, output_id=output_id, family=family, offset=offset, limit=limit)
+    def processes(input_id: str | None = None, output_id: str | None = None, family: str | None = None,
+                  input_mode: str = "matched", offset: int = 0, limit: int = 50):
+        return dataset.find_processes(input_id=input_id, output_id=output_id, family=family,
+                                      input_mode=input_mode, offset=offset, limit=limit)
 
     @app.get("/api/processes/{id:path}")
     def process(id: str):

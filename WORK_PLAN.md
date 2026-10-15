@@ -1127,3 +1127,57 @@ materialnego obiegu nie upoważnia do usuwania receptur z audytu loopów.
   konfiguracji różni się, a pozostałe niedopasowane wcześniejsze rekordy
   pozostają nieudowodnionym zakresem porównania. Brak niezależnego obserwatora
   katalogu, dowodu działania maszyn oraz testu działającego GUI/MCP.
+
+- [x] Sprawdzić źródłowo kolejne katalogi Carpenter i Petal Apothecary.
+  Oba mają dostępne deklaracje. Pełny bilans Carpentera zależy od wybranej
+  siatki wzorcowej maszyny i callbacków zwrotów pojemników. Petal zużywa
+  dodatkowe nasiono według natywnego predykatu nazwy i stan wody z różnymi
+  drogami uzupełnienia.
+  Nie wolno zastąpić tego dowolną grupą nasion ani jednym stałym wiadrem.
+  Oba pełne modele wykonania pozostają odłożone. Deklaracyjny capture jest
+  możliwy, ale najpierw poprawiamy możliwość przeszukiwania takich danych.
+
+### Wyszukiwanie jawnych deklaracji wejść
+
+- [x] Rozszerzyć istniejące wyszukiwanie o jawnie wybrane odwołania
+  zadeklarowane do zasobu. Obecne find_processes poprawnie wyklucza
+  native_unknown z potwierdzonych dopasowań. Zwraca tylko licznik
+  nierozwiązanych procesów w zakresie rodziny/wyjścia. conditions.native_inputs
+  nie jest indeksowane jako relacja wejścia. To potwierdzona luka dostępu
+  do danych deklaracyjnych, a nie dowód poprawności ich matcherów.
+  Najpierw porównać kształty interfejsu i wykorzystanie istniejących tabel
+  oraz SQLite JSON1. Zachować domyślne semantyki i surowe rekordy.
+  Jawnie oznaczać deklaracje bez potwierdzonego dopasowania. Bez zmian
+  solvera, ilości, starego dumpa, schematu trwałego, migracji i fallbacków.
+  Wybrano input_mode matched/declared w istniejącym interfejsie. Declared
+  sprawdza literalne ID i zwraca własny opis bez liczników dopasowania.
+  Osobno poprawić potwierdzony błąd licznika: HeadRecipe z pustymi wejściami
+  i nazwanym powodem dynamic_inputs nie jest obecnie liczone jako unknown.
+  Zachować wyniki znanych dopasowań, poprawić wyłącznie ich diagnostykę.
+  Przechodzi 220 testów Pythona, 85 GUI, typecheck i osobny build.
+  Pięć odczytów rzeczywistego dumpa potwierdza surowe rekordy i diagnostykę.
+  Squeezer zwraca zero znanych dopasowań z ostrzeżeniem o 280 unknown,
+  a tryb deklaracyjny znajduje p259622 po jego dokładnym wejściu r46252.
+  Odczyt deklaracji trwa 1,20 s z rodziną i 1,33 s bez rodziny w tej próbie.
+  COUNT i strona osobno skanują payloady. Nie przedstawiać tego jako
+  zapytania obsługiwanego wyłącznie indeksem. HeadRecipe poprawnie zwiększa
+  niepewność rodziny, ale nie zakresu wyjścia, którego nie deklaruje.
+  Baza i sidecar pozostają identyczne. Aplikacja i MCP bez przełączenia.
+
+### Kolejne deklaracje po domknięciu wyszukiwania
+
+- [ ] Dodać deklaracyjny katalog Carpenter do istniejącego ForestryCapture.
+  Zachować wzorzec, kolejność komórek, alternatywy, NBT, deklarowane ilości,
+  opakowanie, płyn, wynik i natywne jednostki pracy. Siatka wzorcowa oraz
+  zwroty pojemników zależą od kontekstu maszyny. Nie symulować ich ani nie
+  przedstawiać deklaracji jako kompletnego bilansu wykonania.
+- [ ] Dodać deklaracyjny katalog Petal Apothecary do BotaniaCapture.
+  Zachować składniki, alternatywy, wynik i natywny predykat nasiona.
+  Woda jest stanem kontrolera z kilkoma drogami uzupełnienia. Nie przypisywać
+  stałego wiadra ani grupy oreSeeds. Runy są tutaj zużywane. Nie przenosić
+  reguł zwrotu run z Runic Altar.
+- [ ] Przejrzeć obie implementacje razem, wykonać kontrolę Javy i jeden
+  ograniczony odbiór nowego dumpa. Sprawdzić zachowanie surowych deklaracji
+  oraz ich odczyt przez istniejący interfejs. Oddzielić wynik serializacji
+  od niezweryfikowanego działania kontrolerów. Nie przełączać działającej
+  aplikacji ani MCP w ramach odbioru.

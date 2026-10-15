@@ -10,6 +10,75 @@ const status = {snapshot_id:'test-snapshot',manifest:{created_at:'2026-10-11',ca
 function response(value: unknown, code=200) { return new Response(JSON.stringify(value), {status:code,headers:{'Content-Type':'application/json'}}) }
 function page(items: unknown[]) {return {snapshot_id:'test-snapshot',items,total:items.length,limit:30,offset:0}}
 
+test('Using switches between input matches and captured references with independent pagination and resource identity',async()=>{
+  const other={...resource,id:'other-variant',display_name:'Other variant',nbt:{type:'compound',value:{marker:{type:'string',value:'other'}}}}
+  const declared={...process,id:'declared-process',display_name:'Captured rune reference',executable:null,inputs:[],conditions:{dynamic_inputs:'choice_dependent_rune_return',native_inputs:[{choices:[{resource_id:resource.id,amount:null,match:{mode:'native_unknown'}}]}]}}
+  const matched={...process,id:'matched-process',display_name:'Matched recipe'}
+  const second={...matched,id:'matched-second',display_name:'Matched second page'}
+  const calls:URL[]=[]
+  let finishEarlier:((response:Response)=>void)|undefined
+  vi.stubGlobal('fetch',vi.fn(async(input:string)=>{
+    const url=new URL(input,'http://localhost')
+    if(url.pathname==='/api/status')return response(status)
+    if(url.pathname==='/api/environments')return response(page([]))
+    if(url.pathname==='/api/resources')return response(page([resource,other]))
+    if(url.pathname.startsWith('/api/resources/'))return response({snapshot_id:'test-snapshot',item:decodeURIComponent(url.pathname).endsWith(other.id)?other:resource})
+    if(url.pathname==='/api/processes'){
+      calls.push(url)
+      if(url.searchParams.has('output_id'))return response(page([]))
+      const offset=Number(url.searchParams.get('offset'))
+      if(url.searchParams.get('input_mode')==='declared'){
+        if(url.searchParams.get('input_id')===resource.id && offset===10)return new Promise<Response>(resolve=>{finishEarlier=resolve})
+        return response({snapshot_id:'test-snapshot',items:url.searchParams.get('input_id')===resource.id?[declared]:[],total:url.searchParams.get('input_id')===resource.id?11:0,offset,limit:10,input_lookup:{mode:'declared',scope:'literal_captured_resource_references',matching_evaluated:false}})
+      }
+      return response({snapshot_id:'test-snapshot',items:[offset===10?second:matched],total:21,offset,limit:10,matching_complete:false,unresolved_matches:2})
+    }
+    if(url.pathname==='/api/processes/declared-process')return response({snapshot_id:'test-snapshot',item:declared})
+    throw new Error(`Unexpected route ${url.pathname}`)
+  }))
+  render(<App/>)
+  fireEvent.click(await screen.findByRole('button',{name:/Test mold/}))
+  await screen.findByText(`Resource ID: ${resource.id}`)
+  expect(screen.queryByLabelText('Input lookup')).not.toBeInTheDocument()
+  expect(calls.at(-1)!.searchParams.has('input_mode')).toBe(false)
+  fireEvent.click(screen.getByRole('button',{name:'Using processes'}))
+  expect(await screen.findByText('Matched recipe')).toBeVisible()
+  expect(screen.getByLabelText('Input lookup')).toHaveValue('matched')
+  expect(calls.at(-1)!.searchParams.get('input_mode')).toBe('matched')
+  expect(screen.getByText('Matching is incomplete')).toBeVisible()
+  const detail=screen.getByRole('button',{name:'Using processes'}).closest('section')!
+  fireEvent.click(within(detail).getByRole('button',{name:'Next'}))
+  await screen.findByText('Matched second page')
+  expect(calls.at(-1)!.searchParams.get('offset')).toBe('10')
+  fireEvent.change(screen.getByLabelText('Input lookup'),{target:{value:'declared'}})
+  await screen.findByText('Captured rune reference')
+  expect(calls.at(-1)!.searchParams.get('offset')).toBe('0')
+  expect(calls.at(-1)!.searchParams.get('input_mode')).toBe('declared')
+  expect(screen.getByText('Captured ingredient references. Native acceptance is not evaluated.')).toBeVisible()
+  expect(screen.queryByText('Matching is incomplete')).not.toBeInTheDocument()
+  expect(within(detail).getByRole('button',{name:'Previous'})).toBeDisabled()
+  fireEvent.click(screen.getByRole('button',{name:/Captured rune reference/}))
+  const technical=await screen.findByText('Technical data: full process record')
+  await waitFor(()=>expect(JSON.parse(technical.closest('details')!.querySelector('pre')!.textContent!)).toEqual(declared))
+  fireEvent.click(within(detail).getByRole('button',{name:'Next'}))
+  await waitFor(()=>expect(finishEarlier).toBeDefined())
+  fireEvent.click(screen.getByRole('button',{name:/Other variant/}))
+  await screen.findByText(`Resource ID: ${other.id}`)
+  expect(screen.queryByLabelText('Input lookup')).not.toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button',{name:'Using processes'}))
+  await screen.findByText('No captured references to this exact resource ID were found.')
+  expect(calls.at(-1)!.searchParams.get('input_id')).toBe(other.id)
+  expect(calls.at(-1)!.searchParams.get('input_mode')).toBe('declared')
+  expect(calls.at(-1)!.searchParams.get('offset')).toBe('0')
+  await act(async()=>{finishEarlier!(response({snapshot_id:'test-snapshot',items:[declared],total:11,offset:10,limit:10,input_lookup:{mode:'declared',scope:'literal_captured_resource_references',matching_evaluated:false}}))})
+  expect(screen.queryByText('Captured rune reference')).not.toBeInTheDocument()
+  fireEvent.change(screen.getByLabelText('Input lookup'),{target:{value:'matched'}})
+  await screen.findByText('Matched recipe')
+  expect(calls.at(-1)!.searchParams.get('input_id')).toBe(other.id)
+  expect(calls.at(-1)!.searchParams.get('offset')).toBe('0')
+  expect(screen.queryByText('Captured ingredient references. Native acceptance is not evaluated.')).not.toBeInTheDocument()
+})
+
 test.each([
   {native_model:'gtnhintergalactic.recipe.SpaceMiningData',reason:'Space Mining operation quantities are unmodeled. Captured output amounts and weights are not a supported per-operation yield model.',voltage_unresolved:false},
   {native_model:'tectech.recipe.EyeOfHarmonyRecipe',reason:'Eye of Harmony operation quantities and voltage are unresolved in this fixture.',voltage_unresolved:true},

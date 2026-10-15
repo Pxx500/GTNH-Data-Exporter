@@ -265,6 +265,66 @@ class TransportTests(unittest.TestCase):
             self.assertEqual(client.get("/api/unknown").status_code, 404)
             self.assertIn("fixture SPA", client.get("/deep/link").text)
 
+    def declared_lookup_fixture(self):
+        recipe = process('informational', [], ['product'], executable=None,
+            conditions={'native_inputs': [slot(choice('feed', 'native_unknown'))],
+                        'dynamic_inputs': 'uninterpreted_native_subclass'})
+        database = self.root / 'declared.sqlite'
+        return Dataset.import_snapshot(snapshot(self.root / 'declared-capture',
+            resources=[resource('feed'), resource('product')], processes=[recipe]), database), database
+
+    def test_http_and_cli_expose_declared_input_references_without_changing_matched_default(self):
+        dataset, database = self.declared_lookup_fixture()
+        arguments = dict(input_id='feed', output_id='product', family='assembler', input_mode='declared', limit=1)
+        expected = dataset.find_processes(**arguments)
+        with TestClient(create_app(dataset)) as client:
+            response = client.get('/api/processes', params=arguments)
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(response.json(), expected)
+            self.assertEqual(client.get('/api/processes', params={'input_id': 'feed'}).json(),
+                             dataset.find_processes(input_id='feed'))
+            for params in ({'input_mode': 'declared'}, {'input_id': 'feed', 'input_mode': 'unknown'}):
+                self.assertEqual(client.get('/api/processes', params=params).status_code, 400)
+        output = StringIO()
+        with redirect_stdout(output):
+            code = main(['processes', '--database', str(database), '--input-id', 'feed', '--output-id', 'product',
+                         '--family', 'assembler', '--input-mode', 'declared', '--limit', '1'])
+        self.assertEqual(code, 0)
+        self.assertEqual(json.loads(output.getvalue()), expected)
+        output = StringIO()
+        with redirect_stdout(output):
+            self.assertEqual(main(['processes', '--database', str(database), '--input-id', 'feed']), 0)
+        self.assertEqual(json.loads(output.getvalue()), dataset.find_processes(input_id='feed'))
+        errors = StringIO()
+        with redirect_stderr(errors):
+            self.assertEqual(main(['processes', '--database', str(database), '--input-mode', 'declared']), 2)
+        self.assertIn('requires input_id', errors.getvalue())
+        with redirect_stderr(StringIO()), self.assertRaises(SystemExit) as invalid:
+            main(['processes', '--database', str(database), '--input-mode', 'unknown'])
+        self.assertEqual(invalid.exception.code, 2)
+
+    def test_official_mcp_declared_input_lookup_keeps_explicit_evidence_and_validation(self):
+        dataset, database = self.declared_lookup_fixture()
+        async def exercise():
+            parameters = StdioServerParameters(command=sys.executable,
+                args=['-m', 'gtnh_data', 'mcp', '--database', str(database)], env=dict(os.environ))
+            async with stdio_client(parameters) as (read_stream, write_stream):
+                async with ClientSession(read_stream, write_stream, read_timeout_seconds=15) as session:
+                    await session.initialize()
+                    tools = {tool.name: tool for tool in (await session.list_tools()).tools}
+                    option = tools['find_processes'].input_schema['properties']['input_mode']
+                    self.assertEqual(option['enum'], ['matched', 'declared'])
+                    self.assertEqual(option['default'], 'matched')
+                    for arguments in ({'input_id': 'feed'},
+                                      {'input_id': 'feed', 'input_mode': 'declared', 'output_id': 'product', 'limit': 1}):
+                        result = await session.call_tool('find_processes', arguments)
+                        self.assertFalse(result.is_error, result.content)
+                        self.assertEqual(result.structured_content, dataset.find_processes(**arguments))
+                    for arguments in ({'input_mode': 'declared'}, {'input_id': 'feed', 'input_mode': 'unknown'}):
+                        result = await session.call_tool('find_processes', arguments)
+                        self.assertTrue(result.is_error, result.content)
+        asyncio.run(exercise())
+
     def test_http_rejects_unknown_path_selection_instead_of_ignoring_it(self):
         with TestClient(create_app(self.dataset)) as client:
             response = client.get('/api/trace', params={'start_id': 'a', 'target_id': 'b', 'path_selection': 'unknown'})

@@ -640,6 +640,87 @@ class DatasetTests(unittest.TestCase):
         trace = dataset.trace_processes(start_id="concrete", target_id="product")
         self.assertTrue(any(entry["domain"] == "trace.matching" and entry["status"] == "partial" for entry in trace["coverage"]))
 
+    def test_declared_input_lookup_finds_anchors_without_claiming_native_matches(self):
+        declared = process('declared', [], ['product'], executable=None,
+            conditions={'native_inputs': [slot(choice('feed', 'native_unknown'))],
+                        'dynamic_inputs': 'uninterpreted_native_subclass'})
+        anchored = process('anchored', [slot(choice('feed', 'native_unknown'))], ['product'], executable=None)
+        dataset = Dataset.import_snapshot(snapshot(self.root / 'declared-capture',
+            resources=[resource('feed'), resource('product')], processes=[declared, anchored]),
+            self.root / 'declared.sqlite')
+        found = dataset.find_processes(input_id='feed', input_mode='declared')
+        self.assertEqual(found['items'], [anchored, declared])
+        self.assertEqual(found['input_lookup'], {'mode': 'declared',
+            'scope': 'literal_captured_resource_references', 'matching_evaluated': False})
+        self.assertNotIn('matching_complete', found)
+        self.assertNotIn('unresolved_matches', found)
+        self.assertEqual(dataset.find_processes(input_id='feed')['items'], [])
+        self.assertEqual(dataset.get_process('declared')['item'], declared)
+
+    def test_named_unresolved_input_reasons_remain_visible_without_interpreted_slots(self):
+        recipes = [process('head', [], ['product'], executable=None,
+            conditions={'dynamic_inputs': 'uninterpreted_native_subclass'})]
+        for index, marker in enumerate(('unresolved', '', ' ', False, 0, [], {})):
+            recipes.append(process('marker-' + str(index), [], ['product'], executable=None,
+                                   conditions={'dynamic_inputs': marker}))
+        dataset = Dataset.import_snapshot(snapshot(self.root / 'named-unresolved',
+            resources=[resource('feed'), resource('product')], processes=recipes),
+            self.root / 'named-unresolved.sqlite')
+        result = dataset.find_processes(input_id='feed', output_id='product')
+        self.assertEqual(result['items'], [])
+        self.assertFalse(result['matching_complete'])
+        self.assertEqual(result['unresolved_matches'], 2)
+
+    def test_declared_input_lookup_keeps_literal_id_scope_and_composes_filters_and_pages(self):
+        tag = lambda value: {'type': 'compound', 'value': {'serial': {'type': 'long', 'value': value}}}
+        rows = [resource('anchor', registry_name='test:component', nbt=tag('1')),
+                resource('variant', registry_name='test:component', nbt=tag('2')),
+                resource('member'), resource('product'), resource('other')]
+        native_inputs = [slot(choice('anchor', 'native_unknown', amount=None), role='presence'),
+                         slot(choice('anchor', amount=2)),
+                         'not a slot', {'choices': 'not an array'},
+                         {'choices': [None, 'not a choice', {'resource_id': {'nested': 'variant'}}]}]
+        recipes = [process('a-native', [], ['product'], family='native', executable=None,
+                           conditions={'native_inputs': native_inputs}),
+                   process('b-both', [slot(choice('anchor', 'native_unknown', amount=0), role='presence')],
+                           ['product'], family='native', executable=None, conditions={'native_inputs': native_inputs}),
+                   process('c-group', [slot(choice('anchor', 'ore_dict', group='ore:parts'))],
+                           ['product'], family='other'),
+                   process('d-output', [], ['other'], family='native', executable=None,
+                           conditions={'native_inputs': native_inputs}),
+                   process('decoy', [], ['product'], family='native', executable=None,
+                           conditions={'native_inputs': {'choices': [choice('anchor')]},
+                                       'elsewhere': {'resource_id': 'anchor'}})]
+        dataset = Dataset.import_snapshot(snapshot(self.root / 'declared-literal', resources=rows, processes=recipes,
+            groups=[{'id': 'ore:parts', 'name': 'parts', 'kind': 'ore_dict', 'members': ['anchor', 'member'],
+                     'provenance': {'owner': 'fixture'}}]),
+            self.root / 'declared-literal.sqlite')
+        query = dict(input_id='anchor', input_mode='declared', output_id='product', family='native', limit=1)
+        first = dataset.find_processes(**query)
+        second = dataset.find_processes(**query, offset=1)
+        self.assertEqual(first['total'], 2)
+        self.assertEqual(first['items'], [recipes[0]])
+        self.assertEqual(second['items'], [recipes[1]])
+        self.assertEqual(dataset.find_processes(input_id='anchor', input_mode='declared')['total'], 4)
+        for id in ('variant', 'member'):
+            self.assertEqual(dataset.find_processes(input_id=id, input_mode='declared')['items'], [])
+            self.assertIn(recipes[2], dataset.find_processes(input_id=id)['items'])
+        for index, malformed in enumerate((None, 'anchor', 1, ['anchor', 1, None],
+                                          [{'choices': [1, True, None, 'anchor']}])):
+            recipe = process('malformed', [], ['product'], executable=None,
+                             conditions={'native_inputs': malformed})
+            other = Dataset.import_snapshot(snapshot(self.root / ('malformed-' + str(index)), resources=rows,
+                processes=[recipe]), self.root / ('malformed-' + str(index) + '.sqlite'))
+            self.assertEqual(other.find_processes(input_id='anchor', input_mode='declared')['items'], [])
+        with self.assertRaisesRegex(DatasetError, 'input_mode must be matched or declared'):
+            dataset.find_processes(input_id='anchor', input_mode='unknown')
+        with self.assertRaisesRegex(DatasetError, 'requires input_id'):
+            dataset.find_processes(input_mode='declared')
+        with self.assertRaisesRegex(DatasetError, 'Unknown resources ID'):
+            dataset.find_processes(input_id='missing', input_mode='declared')
+        self.assertEqual(dataset.find_processes(input_id='anchor'),
+                         dataset.find_processes(input_id='anchor', input_mode='matched'))
+
     def test_dependency_cycle_cannot_ground_its_own_seed(self):
         rows = [resource(id) for id in ("start", "locked", "loop", "product")]
         processes = [process("finish", [slot(choice("start")), slot(choice("locked"))], ["product", "locked"]),

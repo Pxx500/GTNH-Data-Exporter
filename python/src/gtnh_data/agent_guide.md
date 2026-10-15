@@ -223,6 +223,25 @@ preference, not proof that every gameplay operation replaces its aliases.
 
 Use `find_processes` with an input or output ID and a small limit. Both filters
 together mean both must match. Follow selected records with `get_process`.
+Default `input_mode="matched"` uses captured known input predicates. Its
+unresolved count describes the requested family/output scope and does not mean
+those unknown processes accept the requested input.
+
+Use `input_mode="declared"` when looking for a literal captured ingredient
+reference, including native recipes with unresolved matching. This mode requires
+`input_id`. It checks exact resource IDs in ordinary input choices and the
+documented `conditions.native_inputs` declaration slots. It does not expand
+groups, wildcard metadata, NBT variants or names, so it can return fewer rows
+than matched mode for those predicates. Raw process items remain unchanged.
+Read `input_lookup.matching_evaluated: false` as declaration evidence. Matching
+counters are absent in this mode and must not be inferred as complete. Never
+use a reference alone as proof of native acceptance or a supported chain step.
+
+```json
+{"name":"find_processes","arguments":{"input_id":"r5090","input_mode":"declared","limit":5}}
+```
+
+No new dump, sidecar rebuild or database migration is needed for this lookup.
 Use `get_group` only when the matching group matters, since some groups are
 large. For sources, follow `parameters.generated_source_id` directly with
 `get_source`, rather than enumerating the source catalog.

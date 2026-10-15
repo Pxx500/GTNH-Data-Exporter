@@ -27,7 +27,10 @@ export interface Process {
 export interface Source { id: string; kind: string; display_name: string; outputs: Output[]; environment_ids: string[]; status: string; conditions: unknown; parameters: unknown; provenance: unknown; [key: string]: unknown }
 export interface Environment { id: string; name: string; dimension_id: number | null; provider: string | null; properties: unknown; provenance: unknown; [key: string]: unknown }
 export interface Coverage { id: string; domain: string; status: string; records: number; reason: string | null; provenance: unknown; [key: string]: unknown }
-export interface Page<T> { snapshot_id: string; items: T[]; total: number; limit: number; offset: number; matching_complete?: boolean; unresolved_matches?: number }
+export interface Page<T> {
+  snapshot_id:string;items:T[];total:number;limit:number;offset:number;matching_complete?:boolean;unresolved_matches?:number
+  input_lookup?:{mode:'declared';scope:'literal_captured_resource_references';matching_evaluated:false}
+}
 export interface Single<T> { snapshot_id: string; item: T }
 export interface ProcessInspection extends Single<Process> {
   projection_issue?: {status:'unsupported_accounting';native_model:string;reason:string;voltage_unresolved:boolean}
