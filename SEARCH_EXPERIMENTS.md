@@ -2210,3 +2210,63 @@ The Runic family request reports one unresolved HeadRecipe. Adding a fixed
 output filter excludes that diagnostic record and correctly reports zero
 unresolved processes within the narrower scope. No extra public query, rebuild,
 capture, native matcher call or live UI/MCP activation occurred.
+
+### Carpenter and Petal declarations become searchable
+
+The existing Forestry and Botania capture owners now preserve these passive
+catalogs under the exact source/JAR contracts described above. Carpenter keeps
+ordered pattern cells, alternatives, raw stack counts, packaging, fluid and fixed
+main output. Petal keeps ingredient occurrences, consumed runes, seed predicate
+and component-admission precedence, plus consumed water state and separate refill
+paths. Both retain native_inputs declarations with empty interpreted inputs,
+null executability and null canonical physics. No callback-dependent transaction
+or universal container debit is invented.
+
+Final Java compile and all 39 tests pass. A hostless FluidStack fixture initially
+failed on Forge registry initialization. The fixture-only correction removes
+that construction and its fluid assertions, leaving actual fluid serialization
+to runtime acceptance. A later source cross-check fixes the Carpenter catalog
+error status from invalid failed to valid error. Historical IntelliJ and PMD
+results remain separate from this literal correction's focused review and final
+Java gate. IntelliJ has 67 advisories. The combined PMD component is skipped by
+the nested-root check, while supplemental PMD has 78 advisories and zero
+processing/configuration errors. No metric-only refactor or suppression was added.
+
+One capture/import takes 185.501 seconds and produces snapshot
+8ece9e9c-0711-4658-b3d4-fe5a0137682f. It adds 434 Carpenter and 45 Petal records.
+The snapshot has 260633 processes and 118977 resources. Six compressed streams
+total 15994139 bytes. Eight public reads and eight ledger checks pass. Actual
+native_inputs-only references are discoverable through declared input mode,
+with unchanged raw items. Matched family queries return zero and report
+uncertainty for 434 and 45 records. Both guaranteed and expected accounting
+refuse these incomplete operations without crediting stock.
+
+The consumer harness first stopped before any public/ledger call because it
+incorrectly expected the fresh sidecar to be absent. The normal importer creates
+it. The corrected harness preserves both new hashes and uses only the original
+eight/eight calls once. No capture, import or accepted request was repeated.
+All 87 protected files, four absence gates, whole active UI and frozen inputs
+remain unchanged. Only the exporter mod differs, but nine config/script digests
+also differ. Prior family counts agree. Bounded Mana/Runic/Head bodies agree
+after explicit PID remapping. Same-index Centrifuge/Squeezer samples differ and
+do not establish cross-run identity or equality. There is no global pairing,
+independent live catalog observer, controller-execution proof or live UI/MCP
+activation. Evidence is in carpenter-petal-audit/ and carpenter-petal-acceptance/.
+
+### Further Forestry source gates
+
+Fermenter is deferred. Its output declaration supplies a fluid type without a
+fixed amount. Subcycle rounding, persistent fuel capacity, cached resource
+modifiers and full final-cycle fluid drain prevent a simple fixed operation.
+The current numeric-output format and output lookup cannot represent that type
+declaration usefully without a separate design. Do not fill the gap with an
+invented amount, a source record or a recipe/fuel Cartesian product.
+
+Still is a feasible declaration-only candidate. Its actual input/output
+FluidStack templates have numeric amounts and typed NBT. The controller scales
+them by cycles, buffers input and checks output space using only the unscaled
+template. It ignores the final accepted fill amount. Native templates can be
+preserved with explicit per-unit scope, unknown chance and null execution,
+without claiming a guaranteed batch or canonical energy. Neither family is
+implemented in this source-gate phase. Exact evidence is in
+forestry-fermenter-coverage/ and forestry-still-coverage/.

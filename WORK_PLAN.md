@@ -1166,18 +1166,43 @@ materialnego obiegu nie upoważnia do usuwania receptur z audytu loopów.
 
 ### Kolejne deklaracje po domknięciu wyszukiwania
 
-- [ ] Dodać deklaracyjny katalog Carpenter do istniejącego ForestryCapture.
+- [x] Dodać deklaracyjny katalog Carpenter do istniejącego ForestryCapture.
   Zachować wzorzec, kolejność komórek, alternatywy, NBT, deklarowane ilości,
   opakowanie, płyn, wynik i natywne jednostki pracy. Siatka wzorcowa oraz
   zwroty pojemników zależą od kontekstu maszyny. Nie symulować ich ani nie
   przedstawiać deklaracji jako kompletnego bilansu wykonania.
-- [ ] Dodać deklaracyjny katalog Petal Apothecary do BotaniaCapture.
+- [x] Dodać deklaracyjny katalog Petal Apothecary do BotaniaCapture.
   Zachować składniki, alternatywy, wynik i natywny predykat nasiona.
   Woda jest stanem kontrolera z kilkoma drogami uzupełnienia. Nie przypisywać
   stałego wiadra ani grupy oreSeeds. Runy są tutaj zużywane. Nie przenosić
   reguł zwrotu run z Runic Altar.
-- [ ] Przejrzeć obie implementacje razem, wykonać kontrolę Javy i jeden
+- [x] Przejrzeć obie implementacje razem, wykonać kontrolę Javy i jeden
   ograniczony odbiór nowego dumpa. Sprawdzić zachowanie surowych deklaracji
   oraz ich odczyt przez istniejący interfejs. Oddzielić wynik serializacji
   od niezweryfikowanego działania kontrolerów. Nie przełączać działającej
   aplikacji ani MCP w ramach odbioru.
+  Końcowe 39 testów Javy przechodzi. Pierwszy test płynu wymagał nieobecnego
+  w unit testach rejestru Forge, więc usunięto jego konstrukcję i zachowano
+  jawny limit testu. Odczyt płynu sprawdzono w rzeczywistym dumpie.
+  Poprawiono niezgodny status błędu katalogu failed na obsługiwane error.
+  IntelliJ i osobny PMD zakończyły analizę. Wspólny PMD ponownie pominięty
+  przez błędny katalog wrappera, z zachowanym osobnym wynikiem.
+  Jeden capture/import trwał 185,50 s. Snapshot
+  8ece9e9c-0711-4658-b3d4-fe5a0137682f ma 434 Carpenter i 45 Petal,
+  łącznie 260633 procesów oraz 118977 zasobów. Osiem odczytów i osiem odmów
+  ledger przechodzi, w tym rzeczywiste wyszukiwanie native_inputs-only.
+  Prywatny harness błędnie oczekiwał braku nowego sidecara. Zatrzymał się
+  przed zapytaniami. Po korekcie chroni oba nowe indeksy i wykonuje wyłącznie
+  pierwotny budżet, bez recapture. Wszystkie 87 chronionych plików, cztery
+  bramki nieobecności, UI i zamrożone wejścia pozostają zgodne.
+  Dziewięć digestów konfiguracji różni się. Zgodne liczby wcześniejszych
+  rodzin nie dowodzą zgodności ich rekordów. Ograniczone porównania Mana,
+  Runic i Head przechodzą z jawnym mapowaniem PID. Próbki Centrifuge
+  i Squeezer o tym samym indeksie nie dowodzą tożsamości między przebiegami.
+  Brak niezależnego obserwatora katalogu, wykonania kontrolera i aktywacji UI/MCP.
+
+- [ ] Poprawić widok deklarowanych wejść w istniejącym GUI. Puste wejścia
+  interpretowane nie powinny sugerować, że nie przechwycono składników.
+  Wspólna prezentacja w Details ma pokazać uporządkowane deklaracje,
+  alternatywy i nieznane ilości, z oddzielnym kontekstem kontrolera.
+  Zachować jawne ograniczenia dopasowania i bilansu oraz surowy rekord.

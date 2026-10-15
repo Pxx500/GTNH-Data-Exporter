@@ -140,6 +140,16 @@ Read unresolved native inputs and subclass reasons before using a declaration.
 Mana delivery, wand interaction and cooldown are separate runtime requirements.
 An unknown voltage tier is not evidence that the recipe requires no energy.
 
+`forestry:carpenter` and `botania:petal_apothecary`, when present in the selected
+capture, are declaration-only catalogs. Their interpreted inputs are empty.
+Use `input_mode="declared"` with an exact resource ID to inspect references in
+`conditions.native_inputs`, then read the complete process. Carpenter's
+`native_pattern` preserves the full grid. Phantom stock and container callbacks
+prevent a fixed inventory debit. Petal catalog ingredients exclude the seed
+trigger and water refill transaction. Runes are consumed in Petal recipes.
+Do not convert either declaration into an executable chain or ledger, substitute
+a generic seed group, or assume a bucket of water per craft.
+
 Material search uses partial successor expansion. Each admitted cursor entry
 is one concrete child path and counts against `queued_states`. Its next sibling
 is admitted when that entry is processed. Deferred descriptors are not already

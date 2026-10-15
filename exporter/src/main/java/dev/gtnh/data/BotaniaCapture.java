@@ -19,6 +19,7 @@ import net.minecraftforge.oredict.OreDictionary;
 import vazkii.botania.api.BotaniaAPI;
 import vazkii.botania.api.item.IManaDissolvable;
 import vazkii.botania.api.recipe.RecipeManaInfusion;
+import vazkii.botania.api.recipe.RecipePetals;
 import vazkii.botania.api.recipe.RecipeRuneAltar;
 import vazkii.botania.common.block.ModBlocks;
 import vazkii.botania.common.item.ModItems;
@@ -92,7 +93,9 @@ final class BotaniaCapture {
             object("native_recipe_classes", classes, "interpreted_records", interpreted, "unresolved_input_records", unresolvedInputs,
                 "unresolved_output_records", unresolvedOutputs, "capture_errors", errors));
         captureRunicAltar(version);
-        capture.coverage("botania.other_recipes", "unsupported", 0, "Only native Mana Infusion and bounded Runic Altar catalogs are captured");
+        capturePetalApothecary(version);
+        capture.coverage("botania.other_recipes", "unsupported", 0,
+            "Only native Mana Infusion, bounded Runic Altar and declaration-only Petal Apothecary catalogs are captured");
     }
 
     private JsonObject output(ItemStack output, boolean known, JsonObject conditions) throws IOException {
@@ -121,12 +124,12 @@ final class BotaniaCapture {
             JsonArray outputs = new JsonArray();
             Boolean executable = null;
             try {
-                RuneDeclaration declaration = runeDeclaration(recipe, version);
+                CatalogDeclaration declaration = runeDeclaration(recipe, version);
                 conditions = declaration.conditions;
                 if (declaration.known) {
                     JsonArray nativeInputs = new JsonArray();
                     for (Object input : declaration.inputs) {
-                        JsonObject slot = runeInput(input, nativeInputs.size(), conditions);
+                        JsonObject slot = catalogInput(input, nativeInputs.size(), conditions, true);
                         nativeInputs.add(slot);
                         if (slot.has("role") && slot.getAsJsonArray("choices").size() != 0) inputs.add(slot);
                     }
@@ -146,9 +149,10 @@ final class BotaniaCapture {
                         conditions.addProperty("dynamic_output", "missing_native_output");
                     } else outputs.add(output(declaration.output, true, conditions));
                     if (!conditions.has("dynamic_inputs") && !conditions.has("dynamic_output")) {
-                        executable = declaration.inputs.size() <= 16 && declaration.mana > 0;
+                        int mana = conditions.get("total_mana").getAsInt();
+                        executable = declaration.inputs.size() <= 16 && mana > 0;
                         if (!executable) conditions.addProperty("native_nonexecutable_reason",
-                            declaration.mana <= 0 ? "completion_requires_positive_mana_demand" : "more_than_sixteen_ingredient_occurrences");
+                            mana <= 0 ? "completion_requires_positive_mana_demand" : "more_than_sixteen_ingredient_occurrences");
                     }
                 }
             } catch (RuntimeException error) {
@@ -174,7 +178,53 @@ final class BotaniaCapture {
                 "unresolved_input_records", unresolvedInputs, "unresolved_output_records", unresolvedOutputs, "capture_errors", errors));
     }
 
-    private JsonObject runeInput(Object declared, int index, JsonObject conditions) throws IOException {
+    private void capturePetalApothecary(String version) throws IOException {
+        Map<String, Integer> classes = new LinkedHashMap<>();
+        int index = 0;
+        int declared = 0;
+        int unresolvedOutputs = 0;
+        int emptyGroups = 0;
+        int errors = 0;
+        for (RecipePetals recipe : new ArrayList<>(BotaniaAPI.petalRecipes)) {
+            String nativeClass = recipe == null ? null : recipe.getClass().getName();
+            classes.merge(nativeClass == null ? "null" : nativeClass, 1, Integer::sum);
+            JsonObject conditions = object("native_class", nativeClass, "native_version", version);
+            JsonArray outputs = new JsonArray();
+            try {
+                CatalogDeclaration declaration = petalDeclaration(recipe, version);
+                conditions = declaration.conditions;
+                if (declaration.known) {
+                    JsonArray nativeInputs = new JsonArray();
+                    conditions.add("native_inputs", nativeInputs);
+                    for (Object input : declaration.inputs) {
+                        JsonObject slot = catalogInput(input, nativeInputs.size(), conditions, false);
+                        nativeInputs.add(slot);
+                        if (slot.has("native_input_ore") && slot.getAsJsonArray("choices").size() == 0) emptyGroups++;
+                    }
+                    if (declaration.output == null) conditions.addProperty("dynamic_output", "missing_native_output");
+                    else outputs.add(output(declaration.output.copy(), true, conditions));
+                    declared++;
+                }
+            } catch (RuntimeException error) {
+                errors++;
+                conditions.addProperty("dynamic_inputs", "native_declaration_capture_failed");
+                conditions.addProperty("dynamic_output", "native_declaration_capture_failed");
+                conditions.add("capture_error", object("phase", "native_petal_apothecary_declarations",
+                    "class", error.getClass().getName(), "message", error.getMessage()));
+            }
+            if (conditions.has("dynamic_output")) unresolvedOutputs++;
+            capture.emitProcess("botania:petal_apothecary", "Botania Petal Apothecary", new JsonArray(), outputs,
+                null, null, null, null, conditions, object("owner", "BotaniaAPI.petalRecipes", "index", index++,
+                    "native_class", nativeClass, "native_version", version, "selection", "active_list_order"));
+        }
+        capture.coverage("botania:petal_apothecary", "1.13.39-GTNH".equals(version) ? "partial" : "unsupported", index,
+            "Exact base ingredient and fixed-output declarations only. Seed admission and consumed water/refill state do not form an interpreted material operation",
+            object("native_version", version, "native_recipe_classes", classes, "declared_records", declared,
+                "interpreted_records", 0, "unresolved_input_records", index, "unresolved_completion_records", declared,
+                "unresolved_output_records", unresolvedOutputs, "empty_native_group_occurrences", emptyGroups, "capture_errors", errors));
+    }
+
+    private JsonObject catalogInput(Object declared, int index, JsonObject conditions, boolean returnRunes) throws IOException {
         ItemStack[] stacks = new ItemStack[0];
         int oreId = -1;
         boolean direct = declared instanceof ItemStack;
@@ -183,6 +233,7 @@ final class BotaniaCapture {
             oreId = OreDictionary.getOreID((String) declared);
             stacks = OreDictionary.getOres((String) declared).toArray(new ItemStack[0]);
         }
+        for (int i = 0; i < stacks.length; i++) if (stacks[i] != null) stacks[i] = stacks[i].copy();
         JsonObject slot = capture.itemSlot(stacks, oreId, false, false);
         slot.remove("role");
         slot.addProperty("native_slot", index);
@@ -197,12 +248,12 @@ final class BotaniaCapture {
                 conditions.addProperty("dynamic_inputs", "null_native_ore_member");
                 continue;
             }
-            boolean returned = stack.getItem() == ModItems.rune;
+            boolean returned = returnRunes && stack.getItem() == ModItems.rune;
             retained |= returned;
             consumed |= !returned;
             JsonObject choice = choices.get(choiceIndex++).getAsJsonObject();
             choice.addProperty("amount", 1);
-            choice.addProperty("native_return_semantics", returned ? "same_selected_stack_copied" : "consumed_without_container_return");
+            if (returnRunes) choice.addProperty("native_return_semantics", returned ? "same_selected_stack_copied" : "consumed_without_container_return");
             if (choice.get("resource_id").isJsonNull()) conditions.addProperty("dynamic_inputs", "unregistered_native_input");
             else if (direct) choice.add("match", object("mode", "exact", "nbt_sensitive", false));
             else if (!choice.getAsJsonObject("match").has("group_id")) conditions.addProperty("dynamic_inputs", "unresolved_native_ore_group");
@@ -218,14 +269,14 @@ final class BotaniaCapture {
     }
 
     /** Reads only verified passive base getters. Custom matchers and outputs may mutate live state. */
-    static RuneDeclaration runeDeclaration(RecipeRuneAltar recipe, String version) {
+    static CatalogDeclaration runeDeclaration(RecipeRuneAltar recipe, String version) {
         JsonObject conditions = object("native_class", recipe == null ? null : recipe.getClass().getName(), "native_version", version);
         String reason = !runeVersionKnown(version) ? "unsupported_native_version" : recipe == null ? "null_native_recipe"
             : recipe.getClass() != RecipeRuneAltar.class ? "uninterpreted_native_subclass" : null;
         if (reason != null) {
             conditions.addProperty("dynamic_inputs", reason);
             conditions.addProperty("dynamic_output", reason);
-            return new RuneDeclaration(false, Collections.emptyList(), null, 0, conditions);
+            return new CatalogDeclaration(false, Collections.emptyList(), null, conditions);
         }
         int mana = recipe.getManaUsage();
         conditions.addProperty("native_semantics_basis", "verified_1.13.38_1.13.39_narrow_class_equivalence");
@@ -240,21 +291,52 @@ final class BotaniaCapture {
             "activation", "wand_interaction_and_live_dropped_livingrock_in_altar_aabb", "wand_consumed", false,
             "wand_wear", "none_in_altar_callback", "inventory_capacity", 16, "inventory_stack_limit", 1,
             "admission", "native_addItem_and_inventory_rules", "creative_execution", "outside_material_projection_scope"));
-        return new RuneDeclaration(true, recipe.getInputs(), recipe.getOutput(), mana, conditions);
+        return new CatalogDeclaration(true, recipe.getInputs(), recipe.getOutput(), conditions);
     }
 
-    static final class RuneDeclaration {
+    /** Keeps the controller-only seed and water transaction outside the declared ingredient list. */
+    static CatalogDeclaration petalDeclaration(RecipePetals recipe, String version) {
+        JsonObject conditions = object("native_class", recipe == null ? null : recipe.getClass().getName(), "native_version", version);
+        String reason = !"1.13.39-GTNH".equals(version) ? "unsupported_native_version" : recipe == null ? "null_native_recipe"
+            : recipe.getClass() != RecipePetals.class ? "uninterpreted_native_subclass" : null;
+        if (reason != null) {
+            conditions.addProperty("dynamic_inputs", reason);
+            conditions.addProperty("dynamic_output", reason);
+            return new CatalogDeclaration(false, Collections.emptyList(), null, conditions);
+        }
+        conditions.addProperty("native_semantics_basis", "source_and_bytecode_verified_1.13.39_GTNH");
+        conditions.addProperty("dynamic_inputs", "seed_trigger_and_water_refill_accounting_unmodeled");
+        conditions.addProperty("completion_accounting", "seed_trigger_and_water_refill_accounting_unmodeled");
+        conditions.addProperty("native_inputs_scope", "catalog_ingredient_occurrences_excludes_seed_and_refill");
+        conditions.addProperty("ingredient_accounting", "all_catalog_ingredients_consumed_including_runes_no_container_return");
+        conditions.addProperty("selection", "first_matching_recipe_in_active_list_order");
+        conditions.addProperty("inventory_matching", "greedy_contiguous_prefix_one_item_per_occurrence");
+        conditions.addProperty("effective_duration", "unmodeled_controller_transaction");
+        conditions.add("seed_trigger", object("consumed_items", 1, "predicate_input", "Item.getUnlocalizedName(stack)",
+            "predicate_pattern", "(?:(?:(?:[A-Z-_.:]|^)seed)|(?:(?:[a-z-_.:]|^)Seed))(?:[sA-Z-_.:]|$)",
+            "predicate_operation", "java.util.regex.Pattern.matcher.find", "matching_evaluated", false,
+            "precedence", "only_after_component_admission_fails"));
+        conditions.add("component_admission", object("lookup", "CustomBotaniaAPI.extraFlowerComponents_by_item_before_item_IFlowerComponent",
+            "predicate", "IFlowerComponent.canFit(stack,altar)", "matching_evaluated", false,
+            "runtime_context", "item_NBT_inventory_and_external_component_overrides", "inventory_capacity", 16, "inventory_stack_limit", 1));
+        conditions.add("water_state", object("required", "hasWater_true_and_hasLava_false", "on_success", "setWater_false",
+            "quantity_model", "boolean_filled_state_not_catalog_fluid_volume", "refill_accounting", "unresolved",
+            "refill_paths", new String[]{"dropped_water_bucket_to_empty_bucket", "right_click_water_bowl",
+                "right_click_valid_water_container", "right_click_water_rod_with_separate_mana_check", "rain"},
+            "container_returns_scope", "refill_transaction_not_recipe_output"));
+        return new CatalogDeclaration(true, recipe.getInputs(), recipe.getOutput(), conditions);
+    }
+
+    static final class CatalogDeclaration {
         final boolean known;
         final List<Object> inputs;
         final ItemStack output;
-        final int mana;
         final JsonObject conditions;
 
-        RuneDeclaration(boolean known, List<Object> inputs, ItemStack output, int mana, JsonObject conditions) {
+        CatalogDeclaration(boolean known, List<Object> inputs, ItemStack output, JsonObject conditions) {
             this.known = known;
             this.inputs = inputs;
             this.output = output;
-            this.mana = mana;
             this.conditions = conditions;
         }
     }

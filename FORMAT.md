@@ -235,6 +235,23 @@ fixed game duration or EU conversion. Generated container templates are counted
 separately. Their offered-container-dependent outputs are not expanded into
 invented fixed executions.
 
+`forestry:carpenter` retains passive declarations from the verified Forestry
+4.11.39 manager and exact recipe/grid classes. `conditions.native_pattern`
+preserves width, height, row-major cells including blanks, and nested alternative
+order. Matching can offset and mirror the pattern. Raw stack counts, metadata
+and typed NBT remain captured facts. The selected phantom-grid stock drives
+ore-aware inventory removal and container-return callbacks, so this is not a
+complete fixed material transaction.
+
+Top-level inputs stay empty. `conditions.native_inputs` provides literal
+ingredient references for declaration lookup. Pattern quantities are null with
+raw `declared_stack_size` retained. Separate packaging has a declared count of
+one and optional fluid retains its actual amount and NBT. These requirements
+do not resolve selected-stock removal or container returns. Full fixed main
+outputs retain their amounts. Executability, duration, EU/t and amperage stay
+null. Native Forestry work ticks and coefficients remain metadata. Unknown
+outer or grid classes are diagnostic without invoking their overridden getters.
+
 Eye of Harmony has a native machine declaration behind its GT display recipe.
 The GT arrays remain a captured projection. They do not establish execution
 quantities, guaranteed yield or recipe voltage. Its process has `executable: null`,
@@ -307,6 +324,22 @@ from recipe duration. Duration, EU/t and amperage stay null. Stateful output
 subclasses such as `HeadRecipe` do not acquire a fixed output from a cached name
 or an invoked matcher. Unknown class behavior remains unresolved. Interpreted
 material declarations do not certify present mana or altar readiness.
+
+`botania:petal_apothecary` retains the active `BotaniaAPI.petalRecipes` list
+under the verified 1.13.39-GTNH contract. Exact base RecipePetals declarations
+preserve ingredient occurrences, alternatives, raw stack counts, typed identity
+and fixed full outputs. Each catalog ingredient occurrence consumes one item,
+including runes. This family does not inherit Runic Altar's rune-return rule.
+
+Interpreted inputs remain empty. `conditions.native_inputs` contains catalog
+ingredient declarations, excluding the separate seed trigger and water refill
+transaction. `seed_trigger` preserves the native unlocalized-name regex and its
+precedence after component admission fails, without inventing a seed resource
+or OreDictionary group. `component_admission` records the native callback
+requirement without evaluating it. `water_state` describes consumed filled state
+and separate refill paths, not a universal fluid volume or bucket debit.
+Executability, duration, EU/t and amperage stay null. Unknown subclasses and
+unchecked versions remain diagnostic without matcher or overridden-getter probes.
 
 #### Optional GT registration callsites
 
