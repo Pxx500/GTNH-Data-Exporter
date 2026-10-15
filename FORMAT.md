@@ -223,6 +223,18 @@ duration and energy stay unknown because machine state and scaling affect them.
 Recipe-side wildcard metadata and asymmetric NBT matching remain explicit.
 Native HashSet selection order describes the captured run, not a stable priority.
 
+`forestry:squeezer` captures static declarations from the verified Forestry
+4.11.39 manager. Each declared stack is a separate AND requirement with its
+native amount. Literal predicates remain in `declared_match`, while authoritative
+matching stays `native_unknown` because initial selection, cached selection and
+removal have different native rules. Each record has `executable: null` and null
+duration, EU/t and amperage. Actual fluid quantity and optional remnant are
+preserved. Remnant probability uses the strict 24-bit float comparison, with its
+raw threshold retained. Work time and machine coefficients are context, not a
+fixed game duration or EU conversion. Generated container templates are counted
+separately. Their offered-container-dependent outputs are not expanded into
+invented fixed executions.
+
 Eye of Harmony has a native machine declaration behind its GT display recipe.
 The GT arrays remain a captured projection. They do not establish execution
 quantities, guaranteed yield or recipe voltage. Its process has `executable: null`,
@@ -277,6 +289,24 @@ requirement flags are retained. Mana availability, native list priority,
 entity-age gates and item pre-hooks remain runtime conditions. Unknown recipe
 subclasses and unresolved pre-hooks do not inherit base matching or guaranteed
 execution. Duration and EU rates remain unknown.
+
+`botania:runic_altar` preserves the active native list and distinguishes exact
+base declarations from custom classes. Each ordinary ingredient occurrence
+requires one item, ignoring the declaration's stack count and input NBT. Direct
+metadata is literal, including 32767, while OreDictionary member metadata can be
+wildcard. One additional Livingrock is consumed by item identity outside the
+catalog input list. Literal Botania runes are returned, so homogeneous rune
+slots use presence without also creating new rune coproducts. Other ingredients,
+including ordinary tools, are consumed. Choice-dependent return behavior cannot
+be represented by one slot role. Such records retain the full ordered list under
+`conditions.native_inputs`, clear interpreted inputs and remain unresolved.
+
+Runic Altar mana is a total native cost. Charging, wand interaction and the
+dropped Livingrock are runtime gates. The 60-tick success cooldown is separate
+from recipe duration. Duration, EU/t and amperage stay null. Stateful output
+subclasses such as `HeadRecipe` do not acquire a fixed output from a cached name
+or an invoked matcher. Unknown class behavior remains unresolved. Interpreted
+material declarations do not certify present mana or altar readiness.
 
 #### Optional GT registration callsites
 

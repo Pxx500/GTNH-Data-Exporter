@@ -2103,3 +2103,58 @@ This gate supports neither a new search pilot nor pruning. It concerns retained
 paths, not unseen frontiers, and Element intersection is not atom mapping.
 No Dataset, SQL, trace, formula parsing, source edit or index rebuild occurred.
 Exact vectors and unknown reasons are in reaction-local-element-feasibility/.
+
+### Capture two missing native catalogs without inventing execution
+
+Exact source and actual JAR checks verify Forestry Squeezer 4.11.39 and Botania
+Runic Altar 1.13.39-GTNH. Relevant Botania classes also match compiled .38
+classes. Existing ForestryCapture and BotaniaCapture owners now retain these
+catalogs. Static Squeezer input declarations remain native_unknown because
+initial selection, cached selection and removal differ. Generated containers
+are separate templates. Runic material projections include controller-supplied
+Livingrock and retained literal runes. Conditional returns and custom classes
+remain unresolved. HeadRecipe is not probed through its stateful matcher or
+dynamic output getter. Actual runtime version replaces the old hardcoded Mana
+Infusion version label, without changing its projection.
+
+Compile and all 34 Java tests pass. The two new safety tests exercise passive
+declaration order/runtime facts and refusal to call unsafe subclass overrides,
+including HeadRecipe. They were added with implementation, without a claimed
+preimplementation RED run. Source collectors still lack an isolated FML test
+seam for full emitted records, so no test-only hook or mirror was added.
+IntelliJ completes with 61 advisories. The combined runner skips PMD at its
+nested-wrapper root check. Supplemental PMD analyzes all three changed owners
+with the actual 119-entry classpath, no processing/configuration errors and 60
+advisories. Concrete source review retains complexity/native-literal/style
+findings and rejects an unreachable null warning without redundant guards.
+
+One capture/import completes in 185.49 seconds. New snapshot
+6af4b2b0-0c98-487e-94cd-4f8101c6bd1c has 260154 processes, 118721 resources and
+15.19 MiB across six compressed streams. Its 329 additional records are 280
+exact Squeezer declarations and 49 Runic entries. All Squeezer execution and
+physics fields stay null. There are two separately counted container templates.
+Runic has 48 represented exact-base projections and one diagnostic HeadRecipe.
+Actual JARs match Loader and source authority. No mixed-role or other unknown
+subclass branch is runtime-observed. The preferred multi-input Squeezer with
+remnant sample is absent, so the observed one-input case is used with that limit.
+
+Seven Dataset reads and eight guaranteed/expected ledger calls pass. Informational
+Squeezer and HeadRecipe records receive no stock credit. Imported records retain
+their full bodies. All 78 protected files, four absence gates, the complete UI
+directory and 46 frozen inputs remain unchanged. No service or active snapshot
+is switched. Existing native observer limitations still apply.
+
+The prior comparison proves 129999 strict complete-body pairs with explicit
+typed-reference mappings and full provenance. All 165 Mana Infusion records
+match after only the two documented version corrections. Centrifuge's 154
+records have explicit registry-order changes, and 32 also have output-order and
+native-output-index permutations. Complete output elements retain their amounts,
+identities, thresholds and probabilities. Raw order is preserved, because first
+match and RNG draw assignment can depend on it. No execution equivalence follows.
+Nine config/script digests differ. Remaining unmatched prior records stay
+unproven. No global recipe-equality claim or broad provenance deletion is made.
+
+Source contracts, audit and runtime evidence are in forestry-squeezer-coverage/,
+botania-runic-altar-coverage/, native-catalog-adapters-audit/ and
+native-catalog-adapters-acceptance/. There is no independent live catalog
+observer, controller execution proof or live GUI/MCP acceptance in this phase.

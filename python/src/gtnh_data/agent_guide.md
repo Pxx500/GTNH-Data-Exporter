@@ -124,6 +124,22 @@ The presentation pass and batched unresolved-producer checks use the existing
 imported data and keep analysis version 6. Reload running code after upgrading.
 Rebuild only if `flow_index_status` reports missing or incompatible data.
 
+Some captured catalogs are informational declarations. For example,
+`forestry:squeezer` retains static native ingredients and products with unresolved
+stateful matching. Inspect these with `find_processes` using the family or output,
+then `get_process`. A null `executable` does not supply a supported quantity
+ledger or trace transition. Generated filled-container executions are outside
+that static catalog. Do not turn unknown machine timing or energy into zero.
+Read the snapshot's coverage before assuming a catalog is present. New code
+does not add records to an existing immutable capture. A newer dump requires
+its own import and explicit selection.
+
+For `botania:runic_altar`, native mana is a total cost, not EU/t. Full material
+requirements include an extra Livingrock and retained literal Botania runes.
+Read unresolved native inputs and subclass reasons before using a declaration.
+Mana delivery, wand interaction and cooldown are separate runtime requirements.
+An unknown voltage tier is not evidence that the recipe requires no energy.
+
 Material search uses partial successor expansion. Each admitted cursor entry
 is one concrete child path and counts against `queued_states`. Its next sibling
 is admitted when that entry is processed. Deferred descriptors are not already

@@ -12,6 +12,13 @@ on the local setup. This adds 1,663 native EnderIO Sag Mill baseline recipes,
 22,898 conditional normal-ore mining branches and 2,106 small-ore drop rules.
 Public Sievert and Materials metadata is structured in 279 GT
 records. Timings describe this captured scope and machine.
+A separate 2026-10-15 capture contains 260,154 processes and 118,721 resources,
+including 280 static Forestry Squeezer declarations and 49 Botania Runic Altar
+entries. Its six compressed streams total 15.19 MiB. Build, launch, capture,
+shutdown and import took 185.49 seconds on the local setup. Squeezer execution
+remains unresolved. The altar has 48 represented material projections and one
+diagnostic `HeadRecipe`, with extra Livingrock and rune returns accounted for.
+Native mana and machine work units are retained without inventing EU costs.
 Coverage is reported per source. An export is not a declaration that every
 recipe family or acquisition route in the pack has been reproduced.
 Custom crafting wrappers and non-GT machine integrations remain important

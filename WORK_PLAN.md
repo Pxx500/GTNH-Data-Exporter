@@ -1079,10 +1079,51 @@ materialnego obiegu nie upoważnia do usuwania receptur z audytu loopów.
 
 ### Dalsze sprawdzenie jawnych luk katalogów
 
-- [ ] Sprawdzić pasywny katalog Forestry Squeezer w faktycznej kohorcie
+- [x] Sprawdzić pasywny katalog Forestry Squeezer w faktycznej kohorcie
   Forestry 4.11.39 i obecnego właściciela NativeCapture. Snapshot
   09961ff8-0679-4db1-83e8-c749753fd96a jawnie podaje, że eksport Forestry
   obejmuje tylko Centrifuge. Najpierw dokładna zgodność źródła i JAR,
   wejścia, płyny, produkty uboczne, szanse oraz jednostka czasu i energii.
   Nie zakładać znanych ilości operacji ani wykonalności. Dopiero po tym
   kontrakt małego adaptera i ograniczony plan odbioru runtime.
+  Źródło i rzeczywisty JAR są zgodne. Katalog statyczny jest dostępny.
+  Wejścia są AND, wyjście płynu i opcjonalna pozostałość mają natywne
+  ilości. Losowanie używa istniejącego modelu nextFloat. Dobór zapisanej
+  receptury i usuwanie wejść mają szersze reguły niż pierwsze dopasowanie.
+  Generowane receptury pojemników pozostają odrębnymi szablonami.
+- [x] Dodać informacyjny capture statycznego katalogu Squeezer w istniejącym
+  ForestryCapture. Zachować deklarowane dopasowanie i jawne native_unknown,
+  executable null oraz nieznany czas/EU. Surowy czas pracy i kontekst
+  maszyny trafią do warunków. Bez uruchamiania generatora pojemników.
+  Po przeglądzie i kontrolach jeden ograniczony odbiór runtime.
+  Jeden wspólny capture/import zakończył się w 185,49 s. Rzeczywisty katalog
+  ma 280 dokładnych deklaracji i dwa osobno raportowane szablony pojemników.
+  Wszystkie wpisy są informacyjne. Odczyt i odmowy ledger przechodzą.
+- [x] Sprawdzić źródłowo katalog Botania Runic Altar w faktycznej wersji
+  1.13.39-GTNH, istniejącego właściciela eksportu oraz dodatkowe zużycie
+  Livingrock, zwroty run i dynamiczne NBT wyjść. Bez zgadywania EU,
+  czasu lub zwykłej wykonalności niestandardowych klas receptur.
+  Zweryfikowano tag i rzeczywisty JAR .39 oraz wąską zgodność pięciu
+  klas .38/.39. Dodatkowy Livingrock i zwroty wyłącznie literalnych run
+  wynikają z transakcji kontrolera. HeadRecipe ma stanowe dopasowanie
+  i wynik z dynamicznym SkullOwner. Nie wywołujemy jego matchera/gettera.
+- [x] Domknąć capture Runic Altar w BotaniaCapture. Dokładna klasa bazowa
+  wymaga poprawnej normalizacji ilości, wildcard, Livingrock i zwrotów.
+  Nieobsługiwane role warunkowe zachowują komplet native_inputs oraz
+  pustą interpretowaną listę wejść z executable null. Zachować osobne
+  mana, cooldown i bramki runtime. Poprawić istniejącą etykietę wersji
+  Mana Infusion na faktyczną wartość runtime, bez zmiany receptur.
+  Wspólny przegląd, kompilacja i 34 testy Javy przechodzą. IntelliJ zakończył
+  analizę, a po znanym pominięciu PMD we wspólnym runnerze osobny PMD
+  przeanalizował trzy pliki bez błędów przetwarzania. Pozostawione ostrzeżenia
+  mają zapisane uzasadnienia. Nowy snapshot 6af4b2b0-0c98-487e-94cd-4f8101c6bd1c
+  zawiera 48 reprezentowanych receptur i jedno diagnostyczne HeadRecipe.
+  Siedem odczytów Dataset i osiem kontroli ledger przechodzi. Chronione
+  78 plików, cztery nieobecne konfiguracje, cały UI i 46 wejść pozostają zgodne.
+  Wszystkie 165 Mana Infusion zachowuje pola po udokumentowanej korekcie
+  dwóch etykiet wersji i dokładnych typowanych referencjach. Kolejność
+  rejestru i części wyjść Centrifuge różni się między przebiegami. Zachowano
+  surowe różnice bez deklaracji równoważności wykonania. Dziewięć digestów
+  konfiguracji różni się, a pozostałe niedopasowane wcześniejsze rekordy
+  pozostają nieudowodnionym zakresem porównania. Brak niezależnego obserwatora
+  katalogu, dowodu działania maszyn oraz testu działającego GUI/MCP.
