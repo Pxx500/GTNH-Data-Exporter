@@ -5,7 +5,9 @@ are ordering hints, never matching predicates or proof of chemical conversion.
 """
 
 import json
+import copy
 import hashlib
+import math
 import os
 import sqlite3
 import tempfile
@@ -300,7 +302,7 @@ def rebuild(dataset):
     return dict(status(dataset), prepared_seconds=time.perf_counter() - before)
 
 
-def _source_distances(dataset, connection, start_id, tier_filter, excluded):
+def _source_distances(dataset, connection, start_id, tier_filter, excluded, search):
     """Relaxed process-count distances preserve every consumed OR alternative.
 
     AND slots and required waypoints are relaxed only for this lower bound.
@@ -337,6 +339,9 @@ def _source_distances(dataset, connection, start_id, tier_filter, excluded):
         depth = distances[node]
         for i in range(offsets[node], offsets[node + 1]):
             work += 1
+            if work % 2048 == 0:
+                search['distance_work'] = work
+                yield 'distances'
             dest, cost = destinations[i], costs[i]
             next_depth = depth + cost
             if next_depth < distances[dest]:
@@ -349,15 +354,152 @@ def _source_distances(dataset, connection, start_id, tier_filter, excluded):
     return distances, nodes, work, False
 
 
+class _MaterialSearch:
+    """One thread's material frontier and its owned prepared-index connection."""
+
+    def __init__(self, args, budget_multiplier):
+        self._phase = 'initializing'
+        self._closed = False
+        self._finished = False
+        self._result = None
+        self._state = None
+        self._ordered = []
+        self._signatures = {}
+        self._admitted = set()
+        self._examined = set()
+        self._connection = None
+        self._active_seconds = 0
+        self._active_start = None
+        self._iterator = _search_steps(self, *args, budget_multiplier)
+
+    def _clock(self):
+        return self._active_seconds + (time.perf_counter() - self._active_start if self._active_start is not None else 0)
+
+    def _drive(self, deadline):
+        self._active_start = time.perf_counter()
+        try:
+            first = True
+            while not self._closed and not self._finished and (first or deadline is None or time.perf_counter() < deadline):
+                first = False
+                try:
+                    self._phase = next(self._iterator)
+                except StopIteration as done:
+                    self._result = done.value
+                    self._finished = True
+                    self._phase = 'finished'
+        except BaseException:
+            self.close()
+            raise
+        finally:
+            self._active_seconds += time.perf_counter() - self._active_start
+            self._active_start = None
+
+    def advance(self, seconds):
+        from .dataset import DatasetError
+        if isinstance(seconds, bool) or not isinstance(seconds, (int, float)) or not math.isfinite(seconds) or seconds <= 0:
+            raise DatasetError('seconds must be positive and finite')
+        if not self._closed and not self._finished:
+            self._drive(time.perf_counter() + seconds)
+        return {'status': 'closed' if self._closed else 'finished' if self._finished else 'paused',
+                'phase': self._phase, 'search': self._progress_search()}
+
+    def _progress_search(self):
+        if self._closed:
+            return {}
+        if self._finished:
+            return copy.deepcopy(self._result[2])
+        if self._state is None:
+            return {}
+        search = copy.deepcopy(self._state[2])
+        search.update(examined_processes=len(self._examined), loaded_process_records=len(self._admitted),
+                      truncated=bool(self._state[3]), pending_states=sum(len(job['heap']) for job in self._ordered),
+                      selection_policy='one_material_relevant_spine_per_target_ingredient_branch')
+        search['partial_expansion'].update(
+            pending_cursors=sum(len(job['cursors']) for job in self._ordered),
+            pending_cursor_entries=sum(len(entry) == 5 for job in self._ordered for entry in job['heap']))
+        incumbent = search['reference_candidate']
+        incumbent['reference_retained'] = (incumbent['reference_admitted'] and
+            (tuple(incumbent['process_ids']), tuple(incumbent['resource_ids'])) in self._signatures)
+        return search
+
+    def snapshot(self):
+        from .dataset import DatasetError
+        if self._closed:
+            raise DatasetError('Search is closed')
+        if self._finished:
+            return copy.deepcopy(self._result)
+        if self._state is None:
+            return ({'status': 'not_found', 'strategy': 'material_relevant_dependency_paths',
+                     'resource_ids': [], 'process_ids': []}, [], {}, [], [], [])
+        route, paths, _, reasons = self._state
+        paths = sorted(paths, key=lambda path: self._signatures[tuple(path['process_ids']), tuple(path['resource_ids'])]['score'])
+        route = dict(route)
+        if paths:
+            route.update(status='found', **paths[0])
+        elif reasons:
+            route['status'] = 'incomplete'
+        search = self._progress_search()
+        branches = []
+        for job in self._ordered:
+            indices = [i for i, path in enumerate(paths) if path['process_ids'][-1] == job['pid']
+                       and path['resource_ids'][-2] in job['candidates']]
+            branches.append({'target_process_id': job['pid'], 'slot_index': job['slot'],
+                             'candidate_resources': len(job['candidates']), 'paths': len(indices), 'path_indices': indices,
+                             'status': 'represented' if indices else 'not_discovered'})
+        duplicates = []
+        for pid in sorted(self._admitted):
+            ids = [row[0] for row in self._connection.execute(
+                'SELECT id FROM processes WHERE representative=? AND id!=? ORDER BY id', (pid, pid))]
+            if ids:
+                duplicates.append({'representative_id': pid, 'duplicate_ids': ids})
+        return copy.deepcopy((route, paths, search, sorted(reasons), duplicates, branches))
+
+    def close(self):
+        if self._closed:
+            return
+        self._closed = True
+        self._iterator.close()
+        self._iterator = None
+        self._connection = None
+        self._state = None
+        self._ordered = []
+        self._signatures = {}
+        self._admitted = set()
+        self._examined = set()
+        self._result = None
+        self._phase = 'closed'
+
+
+def begin_search(dataset, canonical, start_id, target_id, max_depth, max_processes, max_paths,
+                 required, excluded, max_extra_steps, tier_filter, terminal_artifact_policy='allow', *, budget_multiplier=1):
+    """Begin a same-thread continuation. The caller retains ownership of canonical."""
+    from .dataset import DatasetError
+    if type(budget_multiplier) is not int or not 1 <= budget_multiplier <= 10:
+        raise DatasetError('budget_multiplier must be an integer between 1 and 10')
+    return _MaterialSearch((dataset, canonical, start_id, target_id, max_depth, max_processes, max_paths,
+                            set(required), set(excluded), max_extra_steps, tier_filter, terminal_artifact_policy), budget_multiplier)
+
+
 def find_paths(dataset, canonical, start_id, target_id, max_depth, max_processes, max_paths,
                required, excluded, max_extra_steps, tier_filter, terminal_artifact_policy='allow'):
+    handle = begin_search(dataset, canonical, start_id, target_id, max_depth, max_processes, max_paths,
+                          required, excluded, max_extra_steps, tier_filter, terminal_artifact_policy)
+    try:
+        handle._drive(None)
+        return handle.snapshot()
+    finally:
+        handle.close()
+
+
+def _search_steps(handle, dataset, canonical, start_id, target_id, max_depth, max_processes, max_paths,
+                  required, excluded, max_extra_steps, tier_filter, terminal_artifact_policy, budget_multiplier):
     from .dataset import DatasetError
     prepared_status = status(dataset)
     if prepared_status['status'] != 'ready':
         raise DatasetError('Prepared flow index is missing or incompatible. Run rebuild_flow_index to rebuild it')
     route = {'status': 'not_found', 'strategy': 'material_relevant_dependency_paths', 'resource_ids': [], 'process_ids': []}
-    search = {'examined_processes': 0, 'limit': 10000, 'examined_states': 0, 'state_limit': 20000,
-              'expansion_work': 0, 'work_limit': 100000, 'enumeration_work': 0, 'enumeration_limit': 100000,
+    search = {'examined_processes': 0, 'limit': 10000 * budget_multiplier, 'examined_states': 0, 'state_limit': 20000 * budget_multiplier,
+              'expansion_work': 0, 'work_limit': 100000 * budget_multiplier, 'enumeration_work': 0, 'enumeration_limit': 100000,
               'queued_states': 0, 'peak_queue': 0, 'truncated': False, 'prepared_index': prepared_status,
               'prepared_lookup_hits': 0, 'distance_pruned_states': 0, 'loaded_process_records': 0}
     partial = {'created_cursors': 0, 'cursor_admissions': 0, 'cursor_resumes': 0, 'cursor_pops': 0,
@@ -389,6 +531,8 @@ def find_paths(dataset, canonical, start_id, target_id, max_depth, max_processes
     paths, reasons, branches = [], set(), []
     terminal_categories = {}
     search['terminal_artifacts'] = dataset._terminal_artifact_search(terminal_artifact_policy)
+    handle._state = route, paths, search, reasons
+    yield 'initializing'
 
     def class_charge(counter, units=1):
         if search['expansion_work'] + units > search['work_limit']:
@@ -406,14 +550,15 @@ def find_paths(dataset, canonical, start_id, target_id, max_depth, max_processes
             route.update(status='same_resource', **paths[0])
         return route, paths, search, [], [], branches
     with closing(sqlite3.connect(f'{index_path(dataset).as_uri()}?mode=ro', uri=True)) as connection:
+        handle._connection = connection
         if not dataset._terminal_endpoints_allowed(connection, start_id, target_id, terminal_categories, search, reasons, prepared=True):
             search['truncated'] = bool(reasons)
             if reasons:
                 route['status'] = 'incomplete'
             return route, paths, search, sorted(reasons), [], branches
-        before = time.perf_counter()
-        distances, nodes, distance_work, reused = _source_distances(dataset, connection, start_id, tier_filter, excluded)
-        search.update(distance_work=distance_work, distance_seconds=time.perf_counter() - before, distance_cache_hit=reused)
+        before = handle._clock()
+        distances, nodes, distance_work, reused = yield from _source_distances(dataset, connection, start_id, tier_filter, excluded, search)
+        search.update(distance_work=distance_work, distance_seconds=handle._clock() - before, distance_cache_hit=reused)
         @lru_cache(maxsize=None)
         def material_hint_for(rid):
             material_evidence['prepared_resource_lookups'] += 1
@@ -425,6 +570,7 @@ def find_paths(dataset, canonical, start_id, target_id, max_depth, max_processes
 
         source_materials = material_for(start_id)
         examined, reverse, checked_tiers = set(), {}, set()
+        handle._examined = examined
         connection.execute('CREATE TEMP TABLE distance(resource_id TEXT PRIMARY KEY,depth INTEGER)')
         connection.executemany('INSERT INTO distance VALUES(?,?)',
                                ((rid, distances[node]) for rid, node in nodes.items() if distances[node] != 0xffffffff))
@@ -531,6 +677,7 @@ def find_paths(dataset, canonical, start_id, target_id, max_depth, max_processes
             search['queued_states'] += 1
             search['peak_queue'] = max(search['peak_queue'], len(job['heap']))
 
+        handle._ordered = list(jobs.values())
         known_classes, settled_classes = set(), set()
         for key, job in jobs.items():
             if not class_charge('prepared_slot_lookups'):
@@ -581,6 +728,7 @@ def find_paths(dataset, canonical, start_id, target_id, max_depth, max_processes
         def advance(job):
             turns = 0
             while job['heap'] and turns < 64:
+                yield 'reference' if job.get('objective') == 'hops' else 'material'
                 entry = heappop(job['heap'])
                 score, _, rr, pp = entry[:4]
                 if len(entry) == 5:
@@ -650,7 +798,7 @@ def find_paths(dataset, canonical, start_id, target_id, max_depth, max_processes
             reasons.add('depth')
         before_reference = search['examined_states']
         while reference['heap'] and not reasons & {'search_process_limit', 'search_work_limit', 'search_state_limit'}:
-            reference_path = advance(reference)
+            reference_path = yield from advance(reference)
             if reference_path is not None:
                 scope = min(max_depth, len(reference_path['process_ids']) + max_extra_steps)
                 break
@@ -678,6 +826,8 @@ def find_paths(dataset, canonical, start_id, target_id, max_depth, max_processes
             not any(material_for(rid) & source_materials for rid in job['candidates']), job['pid'], job['slot']))
 
         signatures, admitted, provisional = {}, set(), None
+        handle._ordered = ordered
+        handle._signatures = signatures
 
         def candidate_charge(units=1):
             if search['expansion_work'] + units > search['work_limit']:
@@ -746,6 +896,7 @@ def find_paths(dataset, canonical, start_id, target_id, max_depth, max_processes
             paths.append(path)
             signatures[signature] = retained[-1]
             admitted = next_admitted
+            handle._admitted = admitted
             classes['represented_classes'] = sum(cid[0] == 'prepared' for cid in retained_classes)
             classes['represented_unresolved_jobs'] = sum(cid[0] == 'unresolved' for cid in retained_classes)
             classes['completed_witnesses_admitted_or_reused'] += 1
@@ -758,6 +909,7 @@ def find_paths(dataset, canonical, start_id, target_id, max_depth, max_processes
 
         if reference_path is not None:
             admit_candidate(reference_path, reference=True)
+            yield 'material'
 
         def class_round():
             selected, available, picked = [], [], set()
@@ -794,7 +946,7 @@ def find_paths(dataset, canonical, start_id, target_id, max_depth, max_processes
                 classes['actual_job_turns'] += 1
                 if provisional is not None and job['class'] in signatures[provisional]['classes']:
                     incumbent['compatible_improvement_turns'] += 1
-                path = advance(job)
+                path = yield from advance(job)
                 if path is None:
                     continue
                 if not admit_candidate(path):
@@ -802,35 +954,15 @@ def find_paths(dataset, canonical, start_id, target_id, max_depth, max_processes
                         break
                     continue
                 clear_job(job)
+                yield 'material'
                 if len(paths) >= max_paths and provisional is None:
                     break
             search['peak_queue'] = max(search['peak_queue'], sum(len(job['heap']) for job in ordered))
             if reasons & {'search_process_limit', 'search_work_limit', 'search_state_limit'}:
                 break
-        paths.sort(key=lambda path: signatures[tuple(path['process_ids']), tuple(path['resource_ids'])]['score'])
-        incumbent['reference_retained'] = (incumbent['reference_admitted'] and
-            (tuple(incumbent['process_ids']), tuple(incumbent['resource_ids'])) in signatures)
         if len(paths) >= max_paths:
             reasons.add('path_limit')
-        if paths:
-            route.update(status='found', **paths[0])
-        elif reasons:
-            route['status'] = 'incomplete'
-        for job in ordered:
-            indices = [i for i, path in enumerate(paths) if path['process_ids'][-1] == job['pid']
-                       and path['resource_ids'][-2] in job['candidates']]
-            branches.append({'target_process_id': job['pid'], 'slot_index': job['slot'],
-                             'candidate_resources': len(job['candidates']), 'paths': len(indices), 'path_indices': indices,
-                             'status': 'represented' if indices else 'not_discovered'})
-        duplicates = [{'representative_id': pid, 'duplicate_ids': [row[0] for row in connection.execute(
-            'SELECT id FROM processes WHERE representative=? AND id!=? ORDER BY id', (pid, pid))]} for pid in sorted(admitted)]
-        duplicates = [row for row in duplicates if row['duplicate_ids']]
-        search.update(examined_processes=len(examined), loaded_process_records=len(admitted), truncated=bool(reasons),
-                      pending_states=sum(len(job['heap']) for job in ordered),
-                      selection_policy='one_material_relevant_spine_per_target_ingredient_branch')
-        partial['pending_cursors'] = sum(len(job['cursors']) for job in ordered)
-        partial['pending_cursor_entries'] = sum(len(entry) == 5 for job in ordered for entry in job['heap'])
-        return route, paths, search, sorted(reasons), duplicates, branches
+        return handle.snapshot()
 
 
 def path_details(dataset, paths, resources, processes, branches):
