@@ -16,7 +16,7 @@ const limitDescriptions: Record<Trace['limit_reasons'][number],string> = {
   search_enumeration_limit:'Search reached the server path-enumeration bound. More candidate paths remain unexamined.',
   search_variant_limit:'Search reached its deferred recipe-variant bound while looking for different material routes. Further routes and recipe variants may remain unexamined.',
   path_limit:'Search reached the requested path count. Increase Paths to request additional alternatives.',
-  path_process_limit:'An additional complete path exceeded Maximum processes. Increase that bound to include more paths.',
+  path_process_limit:'An additional complete path exceeded the included recipe limit. Increase that limit to include more paths.',
 }
 
 export function TraceView({trace,onSelect,onUseStart,onUseTarget,tierOptions}: {trace: Trace;onSelect:(id:string)=>void;onUseStart?:(id:string)=>void;onUseTarget?:(id:string)=>void;tierOptions?:TierOptions}) {

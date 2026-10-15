@@ -867,6 +867,59 @@ etap. Bieżące pomiary i decyzje są w SEARCH_EXPERIMENTS.md.
   Nie przepina referentu delegata starego itemu. Wersja lokalna 1.19.11,
   capture 1.19.12, więc nie jest to ścisły dowód wersji konkretnego obiektu.
   Zachowano native_unknown. Odstąpiono od diagnostyki, zmian Javy i capture.
+- [x] Wybrać przed oceną silnika trzy nowe kontrole: Rutile Dust do Titanium
+  Plate, Scheelite Dust do Tungsten Dust oraz Naphtha do Polyethylene Pulp.
+  Najpierw dokładne ID i jeden świadek z pełnych natywnych receptur, najwyżej
+  60 odczytanych rekordów procesów na parę i trzy warianty endpointu.
+  Brak potwierdzenia oznacza nierozwiązaną selekcję, nie wymyśloną recepturę.
+  Po zamrożeniu wykonać najwyżej jeden trace na przypadek, z material,
+  max_depth=12, max_processes=300, max_paths=8, max_extra_steps=6 i compact.
+  Nie podnosić granic dla dłuższego świadka. Osobno ocenić legalność kroków,
+  reprezentowane stany świadka i główną trasę. Brak dokładnego PID wariantu
+  sam w sobie nie dowodzi regresji. Nie udawać dowodu dostarczenia cofeedów.
+  Zamrożono świadków długości 4, 3 i 5 kroków. Trzy pojedyncze wywołania:
+  Rutile 8 ścieżek, Scheelite 8, Naphtha 0. Wszystkie zwrócone receptury i kroki
+  są zgodne z natywnymi rekordami. Pusty wynik nie jest dowodem udanej trasy.
+  Chronione pliki i wybór świadków pozostają zgodne. Naphtha wyczerpuje
+  search.limit=10000, przy expansion_work=53108 i hop_reference=5.
+  max_processes=300 dotyczy odrębnego rozwijania wyniku, nie tej granicy.
+- [x] Wyjaśnić brak wyniku Naphtha przy istniejącym pięciokrokowym świadku
+  i dodatnim hop_reference. Najpierw zapisane liczniki i przepływ sterowania.
+  Bez powtórki, zwiększenia granic i zmiany scoringu przed rozpoznaniem etapu.
+  Referencja zawiera konkretną drogę, używaną tylko do granicy głębokości.
+  Jej usunięcie przed poszukiwaniem materiałowym pozwala oddać pusty wynik.
+  Nie wiadomo, czy referencja jest dokładnie zamrożonym świadkiem. Nie
+  odtwarzano zapytania w celu dodatkowej instrumentacji.
+- [x] Zachować znalezioną referencję jako poprawialnego kandydata w istniejącym
+  limicie K. Jeden właściciel admission, wspólna ocena i pełne pokrycie klas.
+  Retencja nie kończy poszukiwania lepszej drogi tej klasy, także przy K=1.
+  Zastąpienie aktualizuje zbiór receptur i liczniki. Bez dodatkowej puli,
+  drugiego silnika i ścieżki zwracania wyniku tylko po pustym wyszukiwaniu.
+  Najpierw publiczne RED/GREEN, potem pojedyncza ocena 12 zamrożonych kontroli.
+  Przechodzi 207 testów Pythona. Dwanaście wywołań zachowuje dokładne tablice
+  dróg, zasobów i procesów dziewięciu wcześniejszych przypadków oraz Rutile.
+  Naphtha ma teraz jedną legalną drogę przez pustą celkę, bez zamrożonej chemii.
+  Scheelite zachowuje osiem klas i chemię na indeksie 2, lecz dodatkowo dobija
+  limit procesów. Praca 199355 do 205787, bez obietnicy przyspieszenia.
+  Zgodne 45 hashy. Poprawiono też opis max_processes w GUI i MCP.
+  Przechodzi 28 testów App/TraceView, typecheck i build kandydata GUI.
+- [ ] Sprawdzić w prywatnym pilocie pomijanie rozpoznanych pustych celek jako
+  pośrednich w material. Autorytet to associated cell, Materials.Empty,
+  jawne null NBT i niewildcardowe metadata, nie nazwa itemu. Początek, cel
+  i jawne wymagane waypointy są wyjątkami. Pełne celki i cofeedy zostają.
+  Wspólny obecny właściciel ról i cache, bez nowego indeksu. Trzy pary
+  Polymer, Wafer i Scheelite, bez strojenia po wyniku. Dodatni wynik wymaga
+  rzeczywistego krakingu i polimeryzacji, nie kolejnego nośnikowego objazdu.
+- [x] Wyjaśnić kolejność Scheelite: główna droga ma siedem kroków przez QFT
+  i Space Mining, a trzyetapowy przerób chemiczny jest na indeksie 2.
+  Sprawdzić właściciela wyboru głównej trasy. Zachować wszystkie legalne
+  alternatywy i odróżnić zależność od dowodu przepływu materiału.
+  Globalne sortowanie zatrzymanych dróg daje koszt 2 wobec 6 dla chemii.
+  Dwie różne opaque deklaracje dostają 4 mimo braku struktury składników.
+  Obecny dodatkowy punkt kolejki to brak pokrycia z materiałem startowym,
+  nie opłata za krok. Uzgodnienie tych dwóch ocen nie promuje drogi chemicznej.
+  Nie zmieniono wag. Jawny max_tier=4 wyklucza UV QFT i ZPM mining, ale nie
+  rozwiązuje kolejności wyniku bez tego filtra.
 - [x] Sprawdzić literaturę o landmarkach i planach zrelaksowanych pod kątem
   kierowania przez gałęzie składników celu. Odróżnić osiągalność pojedynczej
   ścieżki od spełnienia wszystkich wejść receptury i policzyć przygotowanie.

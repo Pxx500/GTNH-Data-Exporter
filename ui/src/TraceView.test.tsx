@@ -249,7 +249,7 @@ test('incomplete search reports the fixed server bound separately from context l
   expect(screen.getByRole('heading',{name:'Route discovery is incomplete'})).toBeInTheDocument()
   expect(screen.queryByRole('list',{name:'Selected main route'})).not.toBeInTheDocument()
   expect(screen.getByText(/Graph controls do not change that server bound/)).toBeInTheDocument()
-  expect(screen.getByText(/An additional complete path exceeded Maximum processes/)).toBeInTheDocument()
+  expect(screen.getByText(/An additional complete path exceeded the included recipe limit/)).toBeInTheDocument()
   expect(screen.getByText(/Search examined .* processes/)).toHaveTextContent('Search truncated')
 })
 

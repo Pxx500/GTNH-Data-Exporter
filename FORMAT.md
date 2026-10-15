@@ -563,6 +563,23 @@ unification group IDs retain their distinct meanings. HTTP uses repeated
 The GUI requests compact presentation explicitly, retaining full selected
 recipes with bounded matching-variant presentation.
 
+Material search keeps a found hop-reference path as a provisional candidate
+inside the existing result limits. Its material jobs remain eligible to
+improve it, including at `max_paths=1`. Replacement requires the same complete
+requirement-class set and a better existing material-order key. Recipe-union
+limits apply to the resulting retained set. This adds no prepared format,
+query option or extra candidate position.
+
+`search.reference_candidate` has policy `provisional_material_candidate`,
+booleans `reference_admitted`, `reference_retained` and `reference_replaced`,
+the admitted reference `resource_ids` and `process_ids`,
+`compatible_improvement_turns` and `charged_work`. The arrays can identify a
+replaced witness whose records are absent from the final graph. Admission
+work includes scoring, signature and replacement bookkeeping. Class scans
+remain separately charged under `requirement_classes`. Retention and settled
+material exploration are separate facts. Search limits and incompleteness
+still apply to results that retain a reference.
+
 Trace `view` accepts `full`, `compact` and opt-in `concise`. Dataset, HTTP and
 CLI default to full. MCP defaults to compact. Concise retains the exact compact
 graph and complete selected native recipes, including all input choices,

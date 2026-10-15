@@ -1737,3 +1737,75 @@ No identity fallback, predicate weakening, Java diagnostic, build or capture
 was added. Protected artifact hashes remain. Evidence is in
 unresolved-boundary-study/ and the existing runtime-selected-projections-botania/
 NEI presentation context.
+
+### Frozen holdouts expose candidate loss and opaque-composition ranking
+
+Three new controls were selected from bounded native lookups before any trace
+result was inspected. Their four-, three- and five-step witnesses preserve
+all native inputs, coproducts, conditions and matching evidence. Each current
+query then ran once at material, compact, depth 12, max_processes 300, eight
+paths and six extra steps on the unchanged v6 copy.
+
+Rutile to Titanium Plate returns eight paths, including the frozen hot-ingot
+story. Its primary is a coherent shorter chloride-to-molten forming route.
+Scheelite to Tungsten Dust returns the frozen three-step acid route at index
+2, behind a legal seven-step QFT/tungstensteel/space-mining dependency.
+Naphtha to Polyethylene Pulp returns zero paths after 10000 examined processes,
+53108 work units and a found five-hop reference. max_processes 300 did not
+cause that search stop. The three observed trace times are 0.270249, 1.020009
+and 0.798940 seconds. These are behavior controls, not speedup measurements.
+
+Independent QA checks 84 returned hops and exact canonical bodies. Its 221
+full-record calls and 99 matcher calls are outside trace timing. The empty
+polymer result has zero validated hops, not a successful-route proof. All 41
+frozen hashes remain. Evidence is in holdout-route-controls/.
+
+Source diagnosis establishes that the hop reference contains a concrete
+resource/PID witness. The owner uses its length and discards it before material
+exploration. A bounded candidate design now retains that witness provisionally
+through the same admission owner and existing K/recipe-union caps. Compatible
+material completions can improve it. Retained coverage and settled exploration
+are separate. Existing guard semantics and prepared format stay. A real-cap
+public regression demonstrates RED then GREEN. A K=1 test verifies replacement
+and removal of old recipe-union members. All 207 Python tests pass. Diagnosis
+and design are in polymer-search-diagnosis/.
+
+Twelve single native treatments against saved baselines preserve exact ordered
+path/resource/process arrays for the old nine controls and Rutile. Wafer keeps
+its chemical primary. Polymer retains one legal container/cofeed witness but
+still lacks its frozen cracking/polymerization story. Scheelite keeps eight
+classes and chemical alternative index 2, changes one route and newly reaches
+the process limit. Charged work rises from 199355 to 205787. The reference
+subcounter is 3278, not the entire delta. These are explicit limits on quality
+and work, not a speedup claim. All 45 protected hashes remain. No baseline
+rerun, rebuild or active switch occurs. Native proof reuse covers 282 hop
+occurrences, with 23 new step checks separately charged. Evidence is in
+reference-candidate-acceptance/.
+
+Scheelite's saved material scores are 2 for the long primary and 6 for the
+chemical route. Two distinct opaque declarations contribute 4 despite lacking
+constituent structure. Mixed structured/opaque comparison contributes 1.
+This is not evidence of known disjoint constituents. The search-only surcharge
+tests source-material overlap, not step cost. Aligning its score with final
+ordering would still prefer the long route. All 43 retained paths in the old
+nine controls lack that distinct opaque/opaque case, which says nothing about
+unseen frontier changes. No replacement weight or formula inference was added.
+Evidence is in scheelite-primary-study/.
+
+### Empty-cell authority is narrower than a fluid-container guess
+
+The retained Polymer reference follows Empty Cell into a canner that requires
+already supplied molten polyethylene, then drains the same amount. Saved
+native declarations identify the untagged empty state through associated
+prefix cell and primary gregtech.api.enums.Materials.Empty. Hydrogen Cell
+shares the cell prefix and Tin byproduct but has Hydrogen primary. Filled
+molten polyethylene uses cellMolten and Plastic primary. They are not empty
+states. No absent ore membership or container-registry relation was invented.
+
+A private material-spine pilot will test excluding only positively recognized
+empty intermediates, preserving explicit start/target/required requests, full
+native cofeeds, filled cells and audit edges. It reuses the current role-cache
+owner after a cheap token screen. Runtime cost is not established by these
+saved declarations. The fixed pilot is three pairs and must recover the
+actual chemical story rather than merely another carrier path. Evidence and
+policy alternatives are in empty-container-routing-study/.

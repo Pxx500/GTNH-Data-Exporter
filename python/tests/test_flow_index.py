@@ -49,6 +49,51 @@ def recovery_fixture(root, *, explicit=True):
 
 
 class FlowIndexTests(unittest.TestCase):
+    def test_material_keeps_found_reference_when_material_frontier_hits_process_limit(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            rows = [material(id, 'Base') for id in ('start', 'bait', 'feed', 'target')]
+            rows += [material('short', 'Other'), resource('external'), resource('circuit')]
+            rows[0]['nbt'] = {'type': 'compound', 'value': {'grade': {'type': 'byte', 'value': 1}}}
+            recipes = [process('short-maker', [slot(choice('start')), slot(choice('external', amount=7)),
+                        slot(choice('circuit'), role='presence')], ['short']),
+                process('feed-maker', [slot(choice('bait'))], ['feed']),
+                process('finish', [slot(choice('short'), choice('feed'))], ['target'])]
+            recipes += [process(f'bait-{i:05}', [slot(choice('start'))], ['bait'],
+                                conditions={'native_variant': i}) for i in range(10001)]
+            dataset = Dataset.import_snapshot(snapshot(root / 'capture', resources=rows, processes=recipes), root / 'index.sqlite')
+            result = dataset.trace_processes(start_id='start', target_id='target', path_selection='material',
+                                             max_paths=1, view='compact')
+            self.assertEqual(result['search']['hop_reference']['hops'], 2)
+            self.assertIn('search_process_limit', result['limit_reasons'])
+            self.assertEqual(result['paths'], [{'resource_ids': ['start', 'short', 'target'],
+                                                'process_ids': ['short-maker', 'finish']}])
+            self.assertEqual(result['route']['status'], 'found')
+            self.assertEqual({p['id']: p for p in result['processes']},
+                             {p['id']: p for p in (recipes[0], recipes[2])})
+            self.assertEqual(next(r for r in result['resources'] if r['id'] == 'start'), rows[0])
+            self.assertEqual(result['search']['requirement_classes']['represented_classes'], 1)
+
+    def test_material_improves_short_reference_in_same_class_with_one_result_slot(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            rows = [material(id, 'Base') for id in ('start', 'middle', 'feed', 'target')]
+            rows += [material('short', 'Other'), resource('external'), resource('circuit')]
+            recipes = [process('short-maker', [slot(choice('start'))], ['short']),
+                process('middle-maker', [slot(choice('start'))], ['middle']),
+                process('feed-maker', [slot(choice('middle')), slot(choice('external', amount=3)),
+                        slot(choice('circuit'), role='presence')], ['feed']),
+                process('finish', [slot(choice('short'), choice('feed'))], ['target'])]
+            dataset = Dataset.import_snapshot(snapshot(root / 'capture', resources=rows, processes=recipes), root / 'index.sqlite')
+            result = dataset.trace_processes(start_id='start', target_id='target', path_selection='material',
+                                             max_paths=1, max_processes=3)
+            self.assertEqual(result['search']['hop_reference']['hops'], 2)
+            self.assertEqual(result['paths'], [{'resource_ids': ['start', 'middle', 'feed', 'target'],
+                'process_ids': ['middle-maker', 'feed-maker', 'finish']}])
+            self.assertEqual({p['id']: p for p in result['processes']}, {p['id']: p for p in recipes[1:]})
+            self.assertEqual(result['search']['requirement_classes']['represented_classes'], 1)
+            self.assertEqual(result['branch_coverage'][0]['path_indices'], [0])
+
     def test_material_requirement_effects_keep_amount_chance_nbt_and_unknown_slots_distinct(self):
         cases = ('amount', 'chance', 'nbt', 'or_effect', 'unknown', 'empty_group', 'unknown_chance', 'normalized', 'duplicate_or')
         for case in cases:

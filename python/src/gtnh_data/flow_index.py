@@ -381,6 +381,10 @@ def find_paths(dataset, canonical, start_id, target_id, max_depth, max_processes
     material_evidence = {'policy': 'native_declaration_basis', 'prepared_resource_lookups': 0,
                          'comparisons': 0, 'uncertain_disjoint_comparisons': 0}
     search['material_evidence'] = material_evidence
+    incumbent = {'policy': 'provisional_material_candidate', 'reference_admitted': False,
+                 'reference_retained': False, 'reference_replaced': False,
+                 'resource_ids': [], 'process_ids': [], 'compatible_improvement_turns': 0, 'charged_work': 0}
+    search['reference_candidate'] = incumbent
     families, resource_facts = {}, {}
     paths, reasons, branches = [], set(), []
     terminal_categories = {}
@@ -517,7 +521,7 @@ def find_paths(dataset, canonical, start_id, target_id, max_depth, max_processes
         target_entries = predecessors(target_id)
         for pid, si, input_id, position in target_entries:
             key = pid, si
-            job = jobs.setdefault(key, {'pid': pid, 'slot': si, 'candidates': set(), 'heap': [], 'seen': {}, 'paths': [], 'cursors': {}})
+            job = jobs.setdefault(key, {'pid': pid, 'slot': si, 'candidates': set(), 'heap': [], 'seen': {}, 'cursors': {}})
             job['candidates'].add(input_id)
             if distances[nodes[input_id]] + 1 > max_depth:
                 search['distance_pruned_states'] += 1
@@ -527,7 +531,7 @@ def find_paths(dataset, canonical, start_id, target_id, max_depth, max_processes
             search['queued_states'] += 1
             search['peak_queue'] = max(search['peak_queue'], len(job['heap']))
 
-        known_classes, represented_classes = set(), set()
+        known_classes, settled_classes = set(), set()
         for key, job in jobs.items():
             if not class_charge('prepared_slot_lookups'):
                 break
@@ -673,76 +677,139 @@ def find_paths(dataset, canonical, start_id, target_id, max_depth, max_processes
         ordered = sorted(jobs.values(), key=lambda job: (
             not any(material_for(rid) & source_materials for rid in job['candidates']), job['pid'], job['slot']))
 
+        signatures, admitted, provisional = {}, set(), None
+
+        def candidate_charge(units=1):
+            if search['expansion_work'] + units > search['work_limit']:
+                reasons.add('search_work_limit')
+                return False
+            search['expansion_work'] += units
+            incumbent['charged_work'] += units
+            return True
+
+        def admit_candidate(path, *, reference=False):
+            nonlocal admitted, provisional
+            if not candidate_charge(1 + len(path['resource_ids']) + len(path['process_ids'])):
+                return False
+            signature = tuple(path['process_ids']), tuple(path['resource_ids'])
+            if signature in signatures:
+                covered = signatures[signature]['classes']
+                if not candidate_charge(len(covered)):
+                    return False
+                settled_classes.update(covered)
+                if signature == provisional:
+                    provisional = None
+                classes['completed_witnesses_admitted_or_reused'] += 1
+                return True
+            score = 0
+            for rid, dest, pid in zip(path['resource_ids'], path['resource_ids'][1:], path['process_ids']):
+                if not candidate_charge(2):
+                    return False
+                position = connection.execute('SELECT MIN(position) FROM outputs WHERE process_id=? AND resource_id=?', (pid, dest)).fetchone()[0]
+                score += penalty(rid, dest, position, pid)
+            score = score, len(path['process_ids']), tuple(path['process_ids'])
+            if not class_charge('completion_coverage_decisions', len(ordered)):
+                return False
+            pid, rid = path['process_ids'][-1], path['resource_ids'][-2]
+            covered = frozenset(job['class'] for job in ordered if job['pid'] == pid and rid in job['candidates'])
+            replacement = None
+            if provisional is not None:
+                current = signatures[provisional]
+                if not candidate_charge(1 + len(covered) + len(current['classes'])):
+                    return False
+                if covered == current['classes']:
+                    if score >= current['score']:
+                        settled_classes.update(covered)
+                        provisional = None
+                        classes['completed_witnesses_admitted_or_reused'] += 1
+                        return True
+                    replacement = provisional
+            if replacement is None and len(paths) >= max_paths:
+                return True
+            if not candidate_charge(len(signatures) + 1):
+                return False
+            retained = [value for key, value in signatures.items() if key != replacement]
+            retained.append({'path': path, 'score': score, 'classes': covered})
+            next_admitted, retained_classes = set(), set()
+            for value in retained:
+                if not candidate_charge(len(value['path']['process_ids']) + len(value['classes'])):
+                    return False
+                next_admitted.update(value['path']['process_ids'])
+                retained_classes.update(value['classes'])
+            if len(next_admitted) > max_processes:
+                reasons.add('path_process_limit')
+                return False
+            if replacement is not None:
+                paths.remove(signatures.pop(replacement)['path'])
+                provisional = None
+                incumbent['reference_replaced'] = True
+            paths.append(path)
+            signatures[signature] = retained[-1]
+            admitted = next_admitted
+            classes['represented_classes'] = sum(cid[0] == 'prepared' for cid in retained_classes)
+            classes['represented_unresolved_jobs'] = sum(cid[0] == 'unresolved' for cid in retained_classes)
+            classes['completed_witnesses_admitted_or_reused'] += 1
+            if reference:
+                provisional = signature
+                incumbent.update(reference_admitted=True, resource_ids=path['resource_ids'], process_ids=path['process_ids'])
+            else:
+                settled_classes.update(covered)
+            return True
+
+        if reference_path is not None:
+            admit_candidate(reference_path, reference=True)
+
         def class_round():
-            selected, picked = [], set()
+            selected, available, picked = [], [], set()
             for job in ordered:
                 if not class_charge('scheduler_job_decisions'):
                     return [], True
                 cid = job['class']
-                if job['heap'] and cid not in represented_classes and cid not in picked:
+                if len(paths) >= max_paths and (provisional is None or cid not in signatures[provisional]['classes']):
+                    continue
+                if not job['heap']:
+                    continue
+                available.append(job)
+                if cid not in settled_classes and cid not in picked:
                     selected.append(job)
                     picked.add(cid)
             if selected:
                 classes['unrepresented_class_rounds'] += 1
                 return selected, True
             classes['remaining_endpoint_rounds'] += 1
-            return ordered, False
+            return available, False
 
-        def class_completed(path):
-            if not class_charge('completion_coverage_decisions', len(ordered)):
-                return False
-            pid, rid = path['process_ids'][-1], path['resource_ids'][-2]
-            for job in ordered:
-                if job['pid'] == pid and rid in job['candidates']:
-                    if job['class'] not in represented_classes:
-                        counter = 'represented_classes' if job['class'][0] == 'prepared' else 'represented_unresolved_jobs'
-                        classes[counter] += 1
-                    represented_classes.add(job['class'])
-            classes['completed_witnesses_admitted_or_reused'] += 1
-            return True
-
-        signatures, admitted = {}, set()
-        while (any(job['heap'] for job in ordered) and len(paths) < max_paths
+        while (any(job['heap'] for job in ordered) and (len(paths) < max_paths or provisional is not None)
                and not reasons & {'search_process_limit', 'search_work_limit', 'search_state_limit'}):
             selected, priority_round = class_round()
+            if not selected:
+                break
             for job in selected:
                 if not class_charge('scheduled_turn_decisions'):
                     break
-                if priority_round and job['class'] in represented_classes:
+                if len(paths) >= max_paths and (provisional is None or job['class'] not in signatures[provisional]['classes']):
+                    continue
+                if priority_round and job['class'] in settled_classes:
                     continue
                 classes['actual_job_turns'] += 1
+                if provisional is not None and job['class'] in signatures[provisional]['classes']:
+                    incumbent['compatible_improvement_turns'] += 1
                 path = advance(job)
                 if path is None:
                     continue
-                signature = tuple(path['process_ids']), tuple(path['resource_ids'])
-                if signature in signatures:
-                    if not class_completed(path):
+                if not admit_candidate(path):
+                    if 'search_work_limit' in reasons:
                         break
-                    job['paths'].append(signatures[signature])
-                    clear_job(job)
                     continue
-                if len(admitted | set(path['process_ids'])) > max_processes:
-                    reasons.add('path_process_limit')
-                    continue
-                if not class_completed(path):
-                    break
-                job['paths'].append(path)
                 clear_job(job)
-                paths.append(path)
-                signatures[signature] = path
-                admitted.update(path['process_ids'])
-                if len(paths) >= max_paths:
+                if len(paths) >= max_paths and provisional is None:
                     break
             search['peak_queue'] = max(search['peak_queue'], sum(len(job['heap']) for job in ordered))
             if reasons & {'search_process_limit', 'search_work_limit', 'search_state_limit'}:
                 break
-        def path_score(path):
-            score = 0
-            for rid, dest, pid in zip(path['resource_ids'], path['resource_ids'][1:], path['process_ids']):
-                position = connection.execute('SELECT MIN(position) FROM outputs WHERE process_id=? AND resource_id=?', (pid, dest)).fetchone()[0]
-                score += penalty(rid, dest, position, pid)
-            return score, len(path['process_ids']), tuple(path['process_ids'])
-        paths.sort(key=path_score)
+        paths.sort(key=lambda path: signatures[tuple(path['process_ids']), tuple(path['resource_ids'])]['score'])
+        incumbent['reference_retained'] = (incumbent['reference_admitted'] and
+            (tuple(incumbent['process_ids']), tuple(incumbent['resource_ids'])) in signatures)
         if len(paths) >= max_paths:
             reasons.add('path_limit')
         if paths:

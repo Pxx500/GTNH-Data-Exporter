@@ -122,6 +122,19 @@ an explicit native marker checked against its declaration context. Null EU by
 itself does not imply that status, free energy or resolved tool returns. Other
 unknown tiers continue to follow `unknown_tier_policy`.
 
+Material search retains a found hop-reference witness as a provisional
+candidate within the existing path and included-recipe limits. Its material
+jobs can still improve it. A better candidate replaces it only when the full
+covered requirement-class set agrees. Retention alone does not finish that
+material exploration, including when `max_paths=1`.
+Read `search.reference_candidate` for admission, final retention, replacement
+and compatible-improvement turns. Its resource and process arrays identify
+the admitted reference, which may later be replaced and not embedded in the
+final graph. Follow exact IDs in the same snapshot when needed. Its charged
+work includes candidate admission and replacement bookkeeping. Requirement
+class work is reported separately. A retained witness can coexist with search
+truncation. It does not prove optimality or supply the other recipe inputs.
+
 ## Keep tools and parts out of ordinary dependency spines
 
 Request `terminal_artifact_policy="direct_targets_only"` when tools and parts
@@ -195,6 +208,12 @@ only when the question needs them. There is no server-side `fields` projection
 parameter. Keep a compact working summary and retain IDs for detail calls.
 Do not repeat the full manifest, every discovered resource, all group members
 or the whole statistics payload in a final answer.
+
+Trace `max_processes` limits unique recipes included in the returned combined
+graph. It does not set the internal process-search cap. Read `search.limit`,
+`search.work_limit`, `search.truncated` and `limit_reasons` for search bounds.
+`search_process_limit` is different from `path_process_limit`. Raising the
+included-recipe limit does not raise the server search limits.
 
 MCP traces default to `view="compact"`. This retains every selected recipe in
 full, all declared input choices and outputs, endpoints and actual path
