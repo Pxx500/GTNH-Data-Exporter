@@ -3,6 +3,10 @@
 **Data:** 2026-10-14  
 **Status:** pierwotny zakres implementacji ukończony. Wyniki zapisano w WORK_RESULTS.md.
 Dalsze zatwierdzone badania i poprawki są śledzone poniżej oraz w SEARCH_EXPERIMENTS.md.
+Ostatni etap: pomiary jakości i czasu, diagnostyka brakujących dróg oraz
+wyszukiwanie z wynikami pojawiającymi się podczas pracy. Implementacja i odbiór
+tego etapu zakończone. Problem odkrywania oczekiwanej syntezy polietylenu
+pozostaje otwarty. Większy budżet go nie rozwiązał.
 
 ## Cel
 
@@ -1306,3 +1310,106 @@ materialnego obiegu nie upoważnia do usuwania receptur z audytu loopów.
   ujemną dla tego samego przebiegu bez odpływu. Wynik dotyczy zweryfikowanych
   klas źródłowych. Brak dowodu końcowych transformacji i reprodukcji live.
   Nie zmieniano moda ani nie publikowano zgłoszenia.
+
+## Etap zatwierdzony 2026-10-15: jakość w zadanym czasie i wyniki podczas pracy
+
+Cel użytkownika: szybciej otrzymywać użyteczne chainy, obserwować kolejne
+wyniki oraz zatrzymywać i kontynuować rozpoczęte wyszukiwanie. Większy limit
+skanowania jest dopuszczalnym sposobem wykorzystania poprawionej wydajności.
+Stała praca pozostaje kontrolą eksperymentu. Drugi reżim porównuje jakość
+w tym samym czasie. Zakończona próba nie oznacza rozwiązania problemu jakości.
+
+- [x] Zebrać istniejące dwanaście kontroli i znane świadki w jednym benchmarku.
+  Wiązać dokładne ID, snapshot, kohortę, oba indeksy i zapisane baselines.
+  Oddzielać sprawdzenie świadków od czasu zapytań. Mierzyć oczekiwaną drogę,
+  jej pozycję, gałęzie celu, różnorodność, pracę i czas. Zachować surowe wyniki.
+  Nie nazywać znanego świadka jedynym optimum. Koszt przygotowania jest jawny.
+  Harness ma osiem testów i oba reżimy. Jeden odbiór dwunastu zapytań zachowuje
+  dokładne zbiory ścieżek i poprzednio reprezentowane gałęzie. Wszystkie zadane
+  świadki przechodzą sprawdzenie dopasowania i pełnych deklaracji przed pomiarem.
+- [x] Wykonać jeden ograniczony odczyt losów pięciu krawędzi oczekiwanej drogi
+  polietylenu. Zidentyfikować rzeczywiste odrzucenie albo stan pozostawiony
+  w kolejce. Bez zmian scoringu i limitów w tym pomiarze. Użyć zamrożonych
+  prywatnych modułów, żeby nie blokować równoległej implementacji.
+  Jeden zamrożony przebieg potwierdza przygotowane przejście z etylenu do
+  krakowanej nafty w wyszukiwaniu wstecz. Kandydat ma indeks 16 z 81, lecz
+  jego cursor kończy z next=3. Pozostaje odroczony przed wejściem do heap.
+  Limit 10000 różnych PID wyczerpuje inna gałąź. Brak obserwowanego odrzucenia
+  tej dokładnej historii przez dominance, cykl, głębokość lub odległość.
+  Zostaje 46822 pracy i 6791 przyjęć do kolejki. Cztery gałęzie zużywają
+  63,11% pracy rozwijania. Rozkład nie dowodzi skuteczności innego schedulera.
+  Wyniki i liczniki odpowiadają zapisanemu baseline. Chronione pliki zgodne.
+  Ślad obejmuje jeden przypadek, bez pomiaru szybkości i bez zmiany algorytmu.
+- [x] Zachować frontier trybu material w istniejącym flow_index. Korutyna
+  pozwala pauzować bez ręcznego przenoszenia wszystkich lokalnych stanów.
+  Istniejący find_paths ma doprowadzać ten sam właściciel do końca.
+  Porównać to z jawnym obiektem wszystkich pól przed implementacją.
+  Snapshot jest odłączony od żywego stanu, a formatowanie go nie zmienia.
+  Pauza czasowa jest wznawialna. Twardy limit pracy, ścieżek lub głębokości
+  pozostaje osobnym zakończeniem. Mnożnik budżetu 1..10 jest jawny,
+  domyślnie 1. Większy budżet nie jest dowodem wydajniejszego algorytmu.
+  Pięć nowych i 27 dotychczasowych testów przepływów przechodzi. Cztery
+  syntetyczne porównania z silnikiem sprzed zmiany zachowują wynik i liczniki
+  poza czasem odległości. Snapshoty są odłączone od aktywnego stanu.
+- [x] Udostępnić wspólne zadanie Dataset przez HTTP i MCP. Stan zachowuje
+  SQLite i korutynę na tym samym wątku roboczym. Rewizje rozdzielają postęp
+  od gotowych wyników. Start, odczyt, pauza, kontynuacja i zamknięcie mają
+  prosty interfejs. Zadania są lokalne dla procesu, z ograniczonym czasem
+  życia i liczbą zachowanych zadań. Bez nowej bazy ani współdzielenia uchwytów
+  pomiędzy procesami HTTP i stdio. Istniejące synchroniczne kontrakty zostają
+  obsługiwane przez wspólny kod. Nowe zadania początkowo obsługują material.
+  Siedem testów cyklu życia i 29 testów transportów przechodzi, w tym stdio
+  MCP. Wynik pauzy zawiera ostatnią planszę, także przed pierwszym odczytem
+  klienta. Zamknięcie działającego zadania pozostaje kooperacyjne. Wspólny
+  renderer zachowuje 36 instrukcji oryginalnego składania wyniku bez zmian
+  AST. Pełne testy i pomiary rzeczywistych przypadków pozostają osobnym odbiorem.
+- [x] Podłączyć GUI do okresowych odczytów rewizji, około co 500 ms.
+  Pierwsze dopuszczone ścieżki pojawiają się przed końcem. Pauza zachowuje
+  planszę. Kontynuacja używa tego samego zadania. Nowe kafelki nie kasują
+  ręcznych pozycji ani kamery. Nieaktualna odpowiedź nie nadpisuje nowego
+  zadania. Edycja filtrów nie zmienia parametrów już rozpoczętego zadania.
+  Wyjaśnić granice trybu i przyczyny niedostępności kontynuacji.
+  Pełne 93 testy GUI, typecheck i osobny build przechodzą. Testy obejmują
+  pozycje i kamerę przy wzroście grafu, pauzę z pierwszym wynikiem, oczekiwanie
+  na zamknięcie przed nowym zadaniem i odrzucanie starych odpowiedzi.
+  Główny ui/dist pozostaje zgodny. Nowe UI nie zostało aktywowane w usłudze.
+- [x] Po wspólnych testach porównać zgodność trybu synchronicznego i pauzowanego,
+  a następnie jakość po 1, 5 i 15 sekundach pracy tego samego zadania.
+  Profilować ustalone przypadki, oddzielając przygotowanie, rozwijanie,
+  dopasowanie, składanie odpowiedzi i koszt GUI. Nową heurystykę wybierać
+  dopiero z rozpoznanej przyczyny. Luki dumpa naprawiać według wpływu na te
+  przypadki. Nie uruchamiać kolejnych niezwiązanych katalogów ani capture.
+  Pełne 255 testów Pythona i 93 testy GUI przechodzą. Pierwszy pełny przebieg
+  wykrył nieaktualne oczekiwanie 25 narzędzi w teście przewodnika MCP. Obecne
+  30 narzędzi i ich adnotacje sprawdzono targetowo i pełnym ponowieniem.
+  Jeden przebieg dwunastu kontroli oraz sześć zadań czasu zakończone poprawnie,
+  z niezmienionymi wejściami i źródłami. Budżet polietylenu x10 wydłuża pracę
+  z 0,833 s do 5,133 s, lecz nadal zachowuje jedną ścieżkę bez oczekiwanej
+  syntezy. Nowym ograniczeniem są przyjęcia stanów. Volcanus i wafel zachowują
+  dobre drogi na pierwszym miejscu. Pierwsze wyniki po stronie serwera są
+  dostępne około 0,26..0,31 s. To nie jest czas wyrenderowania planszy w GUI.
+  Dwa osobne profile wskazują poprzedników/scoring dla polietylenu oraz istotny
+  koszt składania odpowiedzi Volcanusa. Czasy profilowane nie są benchmarkiem.
+  Pomiary jednokrotne, bez twierdzenia o statystycznym przyspieszeniu.
+
+Otwarte po odbiorze: nowa hipoteza kierowania kolejką dla syntezy polietylenu,
+pełniejsze pokrycie alternatyw Volcanusa oraz wybór naturalnych dróg przy
+niepełnej wiedzy o składzie. Sam mechanizm wznowienia i większe limity nie
+naprawiają tych problemów. Aktywnego GUI/MCP nie przełączano. Surowe dane
+w exports/search-benchmark-20261015 są lokalne i Git-excluded.
+
+Kandydat do następnego etapu: porównać kierowanie oparte na obecnej karze P
+z kierowaniem P+d+h, gdzie d to liczba przebytych receptur, a h to istniejące
+oszacowanie pozostałych kroków. Każda receptura wnosi dodatni koszt kroku.
+W sprawdzonych trzech opracowaniach brak udokumentowanego testu tego ogólnego
+wariantu. Odrzucona wcześniej kara samych zmian prostych form jest inną próbą.
+Nie wdrożono nowego scoringu ani pilota. Krótsze drogi przez pojemniki mogą
+wygrać z potrzebnym przetwarzaniem, więc wymagane są kontrole jakości i czasu.
+
+Odbiór: testy wznowienia i niezmienności wyników, publiczne HTTP/MCP,
+interakcje planszy oraz zapisane porównanie jakości i czasu. Raport na czacie
+ma rozliczyć poprawę, brak poprawy, zakres aktywnego wdrożenia i ograniczenia.
+Kooperacyjny czas może przekroczyć okno podczas pojedynczego SQL lub sortu.
+Wynik jest świadkiem zależności z pełnymi recepturami i wymaganiami pobocznymi,
+a nie dowodem kompletnego planu dostaw. Aktywne usługi i stare dumpy pozostają
+chronione. Nie obchodzić wcześniejszego odrzucenia restartu przez politykę.

@@ -1,5 +1,35 @@
 # Prepared search and usability results
 
+## Latest stage: progressive search and measured limits, 2026-10-15
+
+Material search now retains its actual frontier across time slices. Dataset,
+HTTP and MCP share start/read/pause/continue/close operations. The GUI preserves
+its board, dragged tile positions and camera while receiving result revisions.
+Existing synchronous material queries use the same engine. Other synchronous
+selectors remain supported. These changes are tested and committed as source,
+without activating a new GUI bundle or reloading the existing MCP connection.
+
+The accepted benchmark runs twelve fixed-work controls and six same-job time
+cases, with explicit work multipliers 1 and 10 and cumulative targets 1/5/15 s.
+All final path sets and previously represented target jobs are preserved.
+Polymer still lacks its expected synthesis: x1 ends at 0.833 active seconds on
+the process guard, x10 at 5.133 seconds on the state-admission guard. Both retain
+one conditional container route. This is no improvement in that route quality.
+Volcanus and Wafer keep useful stories at rank one. Initial rendered dependency
+results are available on the server in about 0.26..0.31 seconds. GUI delivery
+and layout are separate. These are single observations, not a speedup study.
+
+A frozen diagnostic shows the expected Polymer continuation prepared at index
+16 of 81 while its lazy cursor ends at next=3. It remains pending rather than
+being rejected on that exact prefix. Separate profiles identify predecessor
+enumeration/scoring and Volcanus enrichment as relevant cost owners. The data
+supports another search-direction experiment, not a claim of solved discovery.
+
+All 255 Python and 93 GUI tests pass, with typecheck and an isolated UI build.
+Full local receipts and raw results are in exports/search-benchmark-20261015.
+SEARCH_EXPERIMENTS.md records the stage and remaining limits. The measurements
+below describe the earlier prepared-search milestone and its historical rollout.
+
 The accepted work is implemented on branch `automatic-export`. The GUI at
 `http://127.0.0.1:8000/` serves fresh snapshot
 `779ea030-ae9c-40ea-8854-99a176f7cc42`. The original snapshot remains intact.

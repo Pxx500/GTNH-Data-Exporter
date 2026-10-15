@@ -1,5 +1,9 @@
 # Fixed-budget search experiments
 
+The 2026-10-15 progressive-search stage also compares equal active-time budgets.
+Fixed-work controls remain useful for efficiency comparisons. Larger explicit
+work guards are allowed as a product tradeoff, with their additional cost visible.
+
 The user requested continued research and investigation on 2026-10-14.
 The previous implementation milestone is complete. This document tracks the
 new experiments without claiming they have entered production.
@@ -2400,3 +2404,93 @@ threshold change or extra Dataset call was made. This is independent native
 presentation observation from the same runtime catalog, not external catalog
 enumeration or proof of controller matching, batch yield, accepted tank output,
 timing or energy. Full evidence is in nei-still-comparison/.
+
+## Progressive material search and equal-time controls
+
+The accepted next stage combines reproducible quality metrics, profiling and
+results during search. A coroutine in the existing flow owner retains heaps,
+cursors, histories, scheduler position, candidates and cumulative work. Its
+synchronous wrapper drains the same owner. Detached snapshots share Dataset's
+existing rendering. A dedicated per-Dataset worker owns SQLite lifetimes.
+HTTP and MCP expose process-local jobs, cooperative pause/continue/close and
+revision polling. Time pauses retain work. Logical guards remain terminal.
+An explicit multiplier 1..10 scales existing work guards, with unchanged
+default 1 and separate path/depth/output bounds. It is not a hidden speedup.
+
+The GUI receives revisions without clearing its previous board or resetting
+retained node positions/camera. Draft and submitted settings stay distinct.
+Replacement waits for cooperative closure. Pause acknowledgements include the
+latest result, fixing a race where a first publication could otherwise be lost.
+Native matches, full recipes, cofeeds, typed identities and limits are retained.
+The current UI and connected MCP were not reloaded. No new dataset is selected.
+
+Five continuation tests, seven job-lifecycle tests, eight benchmark tests and
+transport tests are included in 255 passing Python tests. All 93 GUI tests,
+typecheck and a private build pass. The first full Python run found a stale
+guide assertion for 25 tools. Current 30 tools and mutation annotations pass
+focused and full verification. Root's one consolidated review/fix pass covers
+missed first-result acknowledgements, replacement closure and failed-job copy.
+All 36 original rendering statements remain AST-equal in the extracted owner.
+
+One frozen diagnostic replay finds the expected Polymer continuation at
+zero-based sorted position 16 of 81, while its lazy cursor terminates at next=3.
+The exact prefix reaches Ethylene. The cracking predecessor is prepared but not
+admitted, with no observed history/dominance/depth/distance rejection. Another
+job exhausts 10000 distinct PIDs while 46822 work units and 6791 admissions
+remain. Four jobs account for 63.11% of material advance work. This identifies
+a deferred opportunity, not proof that another scheduler will help.
+
+Two separate current-source cProfile calls identify Polymer predecessor and
+scoring costs. Volcanus also spends appreciable time enriching its result.
+Candidate sorting, compact projection and JSON encoding are smaller measured
+owners. Cumulative profile costs overlap, and profiler time is not CPU time or
+uninstrumented latency. The shared profiling process reaches 96 MiB peak working
+set at default budgets, not an exact per-case peak or a larger-budget memory
+measurement. The diagnostic and profiling attempts are closed without reruns.
+
+One fixed-work invocation covers twelve captured controls. All exact unordered
+path sets and previously represented target jobs match saved baselines. All
+declared witness preflights are valid and structural checks are empty. These
+parity results don't make the already-poor Polymer baseline good.
+
+Six jobs cover Polymer, Volcanus and Wafer with multipliers 1 and 10. Cumulative
+targets 1/5/15 seconds use the same actual frontier, with requested versus real
+active elapsed and early termination recorded separately. Polymer x1 returns
+one path and ends at 0.833 active seconds on search_process_limit. Polymer x10
+pauses at 1.003 and 5.002 seconds, then ends at 5.133 on search_state_limit.
+It examines 30082 PIDs, pops 170668 states and spends 443180 work units. Its
+expected synthesis still does not appear. More work alone didn't fix this case.
+The 15-second checkpoint carries the early terminal result, not a 15-second run.
+
+Volcanus and Wafer retain useful stories at rank one under both multipliers.
+Their jobs finish around 0.55 and 0.43 seconds, with unchanged final path sets.
+Server first nonempty results take about 0.26..0.31 seconds across the six jobs.
+Useful-story observation is reported separately as a client-observed upper
+bound. GUI polling/layout latency is not established by these server values.
+Scheelite retains the expected resource sequence at rank two while failing the
+full frozen family marker. Rutile retains its resource sequence at rank three.
+Neither exact PID identity nor a single known witness is a unique optimum.
+
+All protected inputs, source hashes and both stores remain unchanged through
+the accepted runs. Six jobs close correctly. No repeat, source tuning, import,
+rebuild, capture or service change occurs. There are no repeated timing samples
+or wall-job memory measurements, so no statistical speedup or general quality
+gain is claimed. Evidence is in exports/search-benchmark-20261015. The primary
+remaining question is queue direction for useful synthesis at bounded work,
+rather than recipe absence or whether continuation preserves the frontier.
+
+A bounded source/research follow-up finds no documented general additive
+per-recipe step-cost trial in the three search research records checked.
+The earlier rejected form-cost treatment charges only known simple-form
+conversions. Semantic-potential and tie-only experiments are different too.
+One future queue-only candidate is `(P + d + h, P, d + h, resource, PID)`
+instead of `(P, d + h, resource, PID)`, with the existing cumulative penalty P,
+depth d and prepared remaining-hop bound h. P must be retained separately,
+and the target seed also receives its unit step cost. This changes discovery
+priority, not native matching, dominance, final scoring or external inputs.
+The main risk is shorter container/acquisition paths displacing longer useful
+processing. Compare both work ceilings and equal active time on Polymer,
+Wafer and Volcanus before promotion. Cursor-age diversification changes more
+queue machinery and is deferred. No implementation or pilot ran. The baseline
+cursor observation does not establish the same internal fate in the x10 run.
+The short private recommendation is NEXT_HYPOTHESIS.md beside the benchmark.
