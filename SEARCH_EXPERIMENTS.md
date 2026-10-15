@@ -145,8 +145,8 @@ and recipe equality were checked for 35 paths and 173 steps.
 
 The GUI server was restarted with verified ownership at 127.0.0.1:8000.
 HTTP Volcanus matches all 20 native result fields of the treatment and reports
-1,357 admissions. A Water-to-Hydrogen HTTP check still ranks direct electrolysis
-first. It returns eight paths and swaps one alternative under the new ordering,
+1,357 admissions. A Water-to-Hydrogen HTTP check ranks a Large Chemical Reactor
+dependency first. It returns eight paths and swaps one alternative under the new ordering,
 with 713 admissions versus 866 before the change. All eight paths and 15 steps
 pass canonical recipe and native consumed-choice checks. This does not verify
 a closed regenerative network. Energy audits and chemical-loop tools are
@@ -165,10 +165,15 @@ so no unsupported control or automatic reconnection is claimed.
 
 A later check through the helper's actual MCP connection returns the current
 policy with weight two, snapshot `779ea030-ae9c-40ea-8854-99a176f7cc42`, eight
-Water-to-Hydrogen paths, 713 admissions and direct-electrolysis best recipe
+Water-to-Hydrogen paths, 713 admissions and first dependency recipe
 `p138456`. Those values agree with the independent fresh HTTP check. This
 establishes that the integration serves the new policy through a fresh loaded
 connection. It does not establish that root's earlier connection refreshed.
+
+The earlier electrolysis label was incorrect. Saved native p138456 consumes
+Water plus Bauxite Dust, Sodium Carbonate Dust and Coal Dust, with circuit
+presence, and produces Hydrogen among four outputs. This dependency check
+does not compare a regenerative loop against the water-electrolysis benchmark.
 
 The larger semantic-map hypothesis remains separate. Grouping a material's
 forms can hide familiar recycling circuits at the overview level, but an
@@ -1664,3 +1669,40 @@ successful structured result and serves the updated format-6 guide. Seventeen
 protected hashes match. Only the SDK-owned QA child is closed. This does not
 establish a reload of connected MCP or served UI. Evidence is in
 `cutter-transport-acceptance/`.
+
+### Concise trace presentation reduces repeated resource metadata
+
+The saved eight-path MCP result is 248726 bytes as compact UTF-8 JSON. Its
+93-byte text receipt contains no duplicate result. Resource material_facts
+and provenance dominate the avoidable response size. This is a byte census,
+not evidence of a particular client's prompt insertion or token accounting.
+
+Client-owned projection was compared with an opt-in view in the existing
+Dataset owner. The latter works across transports without a fields language,
+response cache or new tool. view=concise uses the compact graph and removes
+only those two resource keys. It discloses actual omission counts and directs
+same-snapshot exact-ID lookups. All native selected recipes, NBT identities,
+coverage, boundaries, path ordering and work remain. Existing defaults stay.
+
+The saved projection is 132199 bytes, 46.85% smaller. Root independently
+checked every resource against the allowed omissions and all other result
+sections for exact equality. This is an offline projection, not a new native
+query, timing benchmark or token estimate. Public Dataset, HTTP, CLI and MCP
+tests demonstrate RED then GREEN, including complete get_resource afterward.
+All 205 Python tests pass. No GUI source, dataset, prepared format or running
+service changes. Evidence is in mcp-payload-study/.
+
+### Hub popularity does not yet define a material-direction prior
+
+The current policy has no degree-normalized score. Related source-distance,
+reverse-region and use-profile studies do not constitute a direct trial of
+that idea. A shared Hydrogen identity has the same popularity after either
+an incidental iron byproduct or a useful reagent path. The prepared factor
+graph's resource fan-out counts matcher predicates, not unique recipes.
+
+The saved Water-to-Hydrogen witness also legitimately targets a non-first
+coproduct with external cofeeds. It corrects the earlier electrolysis label
+above. These observations leave soft query-conditioned normalization open,
+but do not yet define its scalar, cost or quality objective well enough for
+a fixed-budget pilot. No penalty, exclusion or additional preparation was
+implemented. Evidence is in hub-direction-study/.

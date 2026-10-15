@@ -563,6 +563,24 @@ unification group IDs retain their distinct meanings. HTTP uses repeated
 The GUI requests compact presentation explicitly, retaining full selected
 recipes with bounded matching-variant presentation.
 
+Trace `view` accepts `full`, `compact` and opt-in `concise`. Dataset, HTTP and
+CLI default to full. MCP defaults to compact. Concise retains the exact compact
+graph and complete selected native recipes, including all input choices,
+presence, quantities, outputs, chances, conditions and provenance. It omits
+only `material_facts` and `provenance` keys from resource records. Resource
+IDs, registry names, metadata and typed NBT remain exact. Coverage, source
+boundaries, cycles, exclusions, search work, limits and path ordering remain.
+
+Concise reports `presentation.view="concise"`,
+`resource_record_scope="resource_records_with_explicit_metadata_omissions"`,
+and `omitted_resource_field_counts` with the actual count of resource records
+that contained each omitted key. Its `resource_detail_notice` is
+`Resource material_facts and provenance are omitted. Resolve exact resource IDs in the same snapshot for full records.`
+Resolve those IDs through the existing resource lookup for omitted native
+evidence. Concise is suited to route topology and full recipes. Chemistry
+inspection may prefer compact. It changes response presentation without a
+new snapshot or prepared-index format and makes no token or CPU guarantee.
+
 `terminal_artifact_policy` is `allow` by default, or `direct_targets_only`.
 The restrictive policy uses captured item class/interface ancestry to recognize
 Tinkers ToolCore tools and ammunition, IToolPart implementations including

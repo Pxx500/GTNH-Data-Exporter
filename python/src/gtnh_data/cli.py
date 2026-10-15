@@ -79,7 +79,7 @@ def parser():
             command.add_argument("--max-paths", type=int, default=8)
             command.add_argument("--max-extra-steps", type=int, default=6)
             command.add_argument("--path-selection", choices=("diverse", "shortest", "material"), default="diverse", help="Spread target ingredients, prefer fewest steps, or prioritize native material flow using the prepared index")
-            command.add_argument("--view", choices=("full", "compact"), default="full", help="Keep every expanded match or return path anchors and declared choices with omission counts")
+            command.add_argument("--view", choices=("full", "compact", "concise"), default="full", help="Expand matches, retain compact graph evidence, or omit resource material facts and provenance while keeping complete recipes")
             command.add_argument("--terminal-artifact-policy", choices=("allow", "direct_targets_only"), default="allow",
                                  help="Allow intermediates, or keep tools and parts as direct targets while blocking their paths to ordinary outputs. Required cofeeds remain. Recognition covers Tinkers tools, ammo and parts (including TGregworks) and GT MetaGeneratedTool items (including turbine rotors), using captured runtime ancestry. Inspect search.terminal_artifacts for recognition limits")
             command.add_argument("--required-resource-id", action="append", dest="required_resource_ids", default=[])

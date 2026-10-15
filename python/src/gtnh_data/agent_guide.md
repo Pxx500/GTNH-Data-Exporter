@@ -211,6 +211,17 @@ results and may refer to unembedded candidate IDs. Fetch selected identities
 with `get_resource` when needed. Compact view reduces presentation, not search
 or uncertainty. Dataset, HTTP and CLI traces retain `full` as their default.
 
+Opt in to `view="concise"` for route topology and complete selected recipes
+without embedded resource `material_facts` and resource `provenance`. It keeps
+the compact graph, exact registry/metadata/typed-NBT identities, every selected
+recipe and its side inputs, coverage, source boundaries, limits and ordering.
+`presentation.resource_record_scope` and `omitted_resource_field_counts`
+identify the omitted evidence. Follow exact resource IDs with `get_resource`
+in the same snapshot for full composition and provenance. Chemistry tasks may
+prefer compact to avoid those follow-up lookups. Concise is opt-in and makes
+no token-count, model-context or CPU-time guarantee. It does not reduce search
+or uncertainty.
+
 ## Executable request examples
 
 Each JSON block is a `tools/call` params object. The MCP client supplies the

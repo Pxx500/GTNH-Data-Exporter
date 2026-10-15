@@ -2066,8 +2066,8 @@ class Dataset:
                         min_tier=None, max_tier=None, unknown_tier_policy='exclude', path_selection='diverse', view='full',
                         terminal_artifact_policy='allow'):
         tier_filter = self._tier_filter(min_tier, max_tier, unknown_tier_policy)
-        if view not in ('full', 'compact'):
-            raise DatasetError('view must be full or compact')
+        if view not in ('full', 'compact', 'concise'):
+            raise DatasetError('view must be full, compact or concise')
         if path_selection not in ('diverse', 'shortest', 'material'):
             raise DatasetError('path_selection must be diverse, shortest or material')
         if terminal_artifact_policy not in ('allow', 'direct_targets_only'):
@@ -2234,9 +2234,9 @@ class Dataset:
                       'group_exclusions': group_exclusions}
             if ordering is not None:
                 result['path_ordering'] = ordering
-            return self._compact_trace(result, connection) if view == 'compact' else result
+            return self._compact_trace(result, connection, view=view) if view != 'full' else result
 
-    def _compact_trace(self, result, connection):
+    def _compact_trace(self, result, connection, *, view='compact'):
         """Summarize expanded candidate records while keeping recipe authority intact."""
         retained = {result['start_id'], result['target_id']}
         retained.update(id for path in result['paths'] for id in path['resource_ids'])
@@ -2285,6 +2285,14 @@ class Dataset:
                         'unembedded_cycle_resource_count': len(cyclic_resources - retained),
                         'notice': 'Expanded candidate members are omitted from presentation. No selected recipe records are omitted. '
                                   'This remains a dependency spine with external input requirements.'}
+        if view == 'concise':
+            omitted = ('material_facts', 'provenance')
+            counts = {field: sum(field in row for row in resources) for field in omitted}
+            resources = [{key: value for key, value in row.items() if key not in omitted} for row in resources]
+            presentation.update(view='concise', resource_record_scope='resource_records_with_explicit_metadata_omissions',
+                                omitted_resource_field_counts=counts,
+                                resource_detail_notice='Resource material_facts and provenance are omitted. '
+                                                       'Resolve exact resource IDs in the same snapshot for full records.')
         return dict(result, resources=resources, edges=edges, leaves=leaves, presentation=presentation)
 
     def _choice_resources(self, connection, choice):

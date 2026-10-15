@@ -826,10 +826,31 @@ etap. Bieżące pomiary i decyzje są w SEARCH_EXPERIMENTS.md.
   poza czasem odległości. Przewodnik podaje wersję 6 i nową preferencję.
   Wszystkie 17 chronionych hashy jest zgodnych. Zamknięto wyłącznie proces QA.
   Nie jest to dowód przeładowania działającego MCP ani aktywnej strony.
-- [ ] Zmierzyć wielkość już zapisanej odpowiedzi MCP i jej pól. Sprawdzić
+- [x] Zmierzyć wielkość już zapisanej odpowiedzi MCP i jej pól. Sprawdzić
   istniejące receipt/projekcje przed proponowaniem nowego formatu. Zachować
   pełne dane natywne. Bez nowego zapytania i bez wnioskowania o tokenach
   wyłącznie z rozmiaru HTTP.
+  Wynik wafla ma 248726 bajtów zwartego JSON. Dane występują raz, z receipt
+  długości 93 bajtów. Pola material_facts i provenance zasobów odpowiadają
+  za około 46% rozmiaru. Nie wykazano sposobu ekspozycji w każdym kliencie.
+  Porównano projekcję klienta z jawnym widokiem istniejącego Dataset.
+- [x] Dodać opcjonalny widok concise przez istniejący Dataset, HTTP, CLI i MCP.
+  Zachować semantykę compact, wszystkie receptury i pokrycie. Pominąć tylko
+  material_facts i provenance rekordów zasobów, z jawnymi licznikami pominięć
+  i odwołaniem do pełnego rekordu tego samego snapshota. Dotychczasowe
+  ustawienia domyślne pozostają. Sprawdzić publiczne kontrakty i wielkość
+  już zapisanego wyniku, bez nowego dumpa ani przebudowy indeksu.
+  Wdrożono w obecnym właścicielu projekcji. Publiczne testy odtwarzają RED,
+  następnie GREEN dla Dataset, HTTP, CLI i MCP. Wszystkie 205 testów Pythona
+  przechodzi. Projekcja zapisanej odpowiedzi ma 132199 zamiast 248726 bajtów,
+  o 46,85% mniej. Pozostałe sekcje są dokładnie zgodne. Pełny get_resource
+  nadal zwraca pominięte dane. Bez pomiaru tokenów, zmiany usług i indeksu.
+- [x] Sprawdzić, czy kara popularnych produktów ubocznych stanowi odrębną,
+  uzasadnioną heurystykę wobec obecnego scoringu i wcześniejszych badań.
+  Normalizacja stopniem nie jest wdrożona, lecz obecne dane nie wyznaczają
+  konkretnej reguły odróżniającej objazd przez wodór od potrzebnego reagenta.
+  Nie wykonano pilota ani nie odrzucono wszystkich możliwych miękkich priorytetów.
+  Poprawiono starszą etykietę p138456: Large Chemical Reactor, nie elektroliza.
 - [x] Sprawdzić literaturę o landmarkach i planach zrelaksowanych pod kątem
   kierowania przez gałęzie składników celu. Odróżnić osiągalność pojedynczej
   ścieżki od spełnienia wszystkich wejść receptury i policzyć przygotowanie.

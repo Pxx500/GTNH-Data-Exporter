@@ -9,6 +9,63 @@ from .artifacts import choice, process, resource, slot, snapshot
 
 
 class DatasetTests(unittest.TestCase):
+    def test_concise_trace_omits_only_declared_resource_metadata_and_keeps_full_lookup(self):
+        rows = [resource(id) for id in ('start', 'alias', 'unembedded', 'coolant', 'circuit', 'target', 'offcut')]
+        rows[0].update(nbt={'type': 'compound', 'value': {'grade': {'type': 'byte', 'value': 1}}},
+                       provenance={}, material_facts={'schema_version': 1, 'status': 'unassociated'})
+        rows[1]['material_facts'] = None
+        rows[2]['material_facts'] = {'status': 'unassociated'}
+        rows[3].update(kind='fluid', metadata=None)
+        rows[5].update(display_name='Target α', material_facts={},
+                       nbt={'type': 'compound', 'value': {'serial': {'type': 'long', 'value': '9223372036854775807'}}})
+        groups = [{'id': 'substrates', 'kind': 'ore_dict', 'name': 'fixtureSubstrates',
+                   'members': ['start', 'alias', 'unembedded'], 'provenance': {'owner': 'fixture'}}]
+        recipe = process('make', [slot(choice('start', mode='ore_dict', group='substrates'), choice('alias', amount=2)),
+                                  slot(choice('coolant', amount=7)), slot(choice('circuit'), role='presence')],
+                         ['target', 'offcut', 'start'], conditions={'cleanroom': True, 'native_setting': 2})
+        recipe['outputs'][1]['chance'] = {'numerator': 1, 'denominator': 4}
+        recipe['provenance']['native_declaration'] = {'amount_decimal': '747788239373172480'}
+        coverage = [{'id': 'source-gap', 'domain': 'acquisition', 'status': 'partial', 'records': 1,
+                     'reason': 'Fixture has no captured inventory source', 'provenance': {'owner': 'fixture'}}]
+        dataset = Dataset.import_snapshot(snapshot(self.root / 'concise', resources=rows, groups=groups,
+                                                    processes=[recipe], coverage=coverage), self.root / 'concise.sqlite')
+        arguments = {'start_id': 'start', 'target_id': 'target', 'path_selection': 'material'}
+
+        def trace(**options):
+            result = Dataset(dataset.path).trace_processes(**arguments, **options)
+            result['search'].pop('distance_seconds', None)
+            return result
+
+        full = trace()
+        self.assertEqual(trace(view='full'), full)
+        compact = trace(view='compact')
+        self.assertNotIn('presentation', full)
+        self.assertEqual(compact['presentation']['view'], 'compact')
+        self.assertEqual(compact['presentation']['omitted_counts']['resources'], 1)
+        self.assertEqual(compact['processes'], [recipe])
+        self.assertEqual(compact['coverage'], coverage)
+        self.assertTrue(compact['cycles'])
+        self.assertTrue(compact['branch_coverage'])
+        self.assertTrue(compact['path_details'])
+        for row in compact['resources']:
+            self.assertEqual(row, next(native for native in rows if native['id'] == row['id']))
+        concise = trace(view='concise')
+        expected = deepcopy(compact)
+        expected['resources'] = [{key: value for key, value in row.items() if key not in ('material_facts', 'provenance')}
+                                 for row in compact['resources']]
+        expected['presentation'].update(
+            view='concise', resource_record_scope='resource_records_with_explicit_metadata_omissions',
+            omitted_resource_field_counts={'material_facts': 3, 'provenance': 6},
+            resource_detail_notice='Resource material_facts and provenance are omitted. '
+                                   'Resolve exact resource IDs in the same snapshot for full records.')
+        self.assertEqual(concise, expected)
+        self.assertEqual(trace(view='compact'), compact)
+        self.assertEqual(trace(), full)
+        for native in rows:
+            self.assertEqual(dataset.get_resource(native['id'])['item'], native)
+        with self.assertRaisesRegex(DatasetError, 'view must be full, compact or concise'):
+            dataset.trace_processes(**arguments, view='brief')
+
     def cutter_trace_fixture(self, name, *, change=None):
         rows = [resource(id) for id in ('start', 'middle', 'item-feed', 'fluid-feed', 'circuit', 'target', 'offcut')]
         next(row for row in rows if row['id'] == 'fluid-feed').update(kind='fluid', metadata=None)

@@ -404,6 +404,41 @@ class TransportTests(unittest.TestCase):
                     self.assertEqual(network_semantics(answer.structured_content), network_semantics(self.dataset.trace_processes(**arguments, view='compact')))
         asyncio.run(exercise())
 
+    def test_http_concise_trace_is_advertised_and_preserves_compact_graph_evidence(self):
+        arguments = {'start_id': 'a', 'target_id': 'b'}
+        compact = self.dataset.trace_processes(**arguments, view='compact')
+        with TestClient(create_app(self.dataset)) as client:
+            parameters = client.get('/openapi.json').json()['paths']['/api/trace']['get']['parameters']
+            view = next(row['schema'] for row in parameters if row['name'] == 'view')
+            self.assertEqual(view['enum'], ['full', 'compact', 'concise'])
+            self.assertEqual(view['default'], 'full')
+            response = client.get('/api/trace', params={**arguments, 'view': 'concise'})
+            self.assertEqual(response.status_code, 200)
+            answer = response.json()
+            self.assertEqual(answer['presentation']['view'], 'concise')
+            for key in ('processes', 'edges', 'paths', 'coverage', 'leaves', 'cycles', 'branch_coverage', 'limit_reasons'):
+                self.assertEqual(answer[key], compact[key])
+            self.assertTrue(all('material_facts' not in row and 'provenance' not in row for row in answer['resources']))
+            self.assertEqual(client.get('/api/resources/a').json(), self.dataset.get_resource('a'))
+            self.assertEqual(client.get('/api/trace', params={**arguments, 'view': 'unknown'}).status_code, 400)
+
+    def test_cli_concise_trace_keeps_recipes_and_reports_resource_metadata_omissions(self):
+        arguments = ['trace', '--database', str(self.database), '--start-id', 'a', '--target-id', 'b']
+        compact = self.dataset.trace_processes(start_id='a', target_id='b', view='compact')
+        output = StringIO()
+        with redirect_stdout(output):
+            code = main([*arguments, '--view', 'concise'])
+        self.assertEqual(code, 0)
+        answer = json.loads(output.getvalue())
+        self.assertEqual(answer['presentation']['view'], 'concise')
+        self.assertEqual(answer['presentation']['omitted_resource_field_counts']['provenance'], len(compact['resources']))
+        self.assertTrue(all('provenance' not in row and 'material_facts' not in row for row in answer['resources']))
+        for key in ('processes', 'paths', 'coverage', 'leaves', 'cycles', 'branch_coverage', 'limit_reasons'):
+            self.assertEqual(answer[key], compact[key])
+        with redirect_stderr(StringIO()), self.assertRaises(SystemExit) as invalid:
+            main([*arguments, '--view', 'unknown'])
+        self.assertEqual(invalid.exception.code, 2)
+
     def test_official_mcp_trace_defaults_to_compact_but_full_view_remains_available(self):
         arguments = {'start_id': 'a', 'target_id': 'b'}
         full = self.dataset.trace_processes(**arguments)
@@ -413,6 +448,9 @@ class TransportTests(unittest.TestCase):
             async with stdio_client(parameters) as (read_stream, write_stream):
                 async with ClientSession(read_stream, write_stream, read_timeout_seconds=15) as session:
                     await session.initialize()
+                    tools = {tool.name: tool for tool in (await session.list_tools()).tools}
+                    self.assertEqual(tools['trace_processes'].input_schema['properties']['view'],
+                                     {'enum': ['compact', 'full', 'concise'], 'default': 'compact'})
                     compact = await session.call_tool('trace_processes', arguments)
                     self.assertFalse(compact.is_error, compact.content)
                     self.assertEqual(compact.structured_content['presentation']['view'], 'compact')
@@ -421,6 +459,17 @@ class TransportTests(unittest.TestCase):
                     expanded = await session.call_tool('trace_processes', dict(arguments, view='full'))
                     self.assertFalse(expanded.is_error, expanded.content)
                     self.assertEqual(network_semantics(expanded.structured_content), network_semantics(full))
+                    concise = await session.call_tool('trace_processes', dict(arguments, view='concise'))
+                    self.assertFalse(concise.is_error, concise.content)
+                    self.assertEqual(network_semantics(concise.structured_content),
+                                     network_semantics(self.dataset.trace_processes(**arguments, view='concise')))
+                    self.assertEqual(concise.structured_content['presentation']['resource_record_scope'],
+                                     'resource_records_with_explicit_metadata_omissions')
+                    restored = await session.call_tool('get_resource', {'id': 'a'})
+                    self.assertEqual(restored.structured_content, self.dataset.get_resource('a'))
+                    self.assertIn('provenance', restored.structured_content['item'])
+                    invalid = await session.call_tool('trace_processes', dict(arguments, view='unknown'))
+                    self.assertTrue(invalid.is_error)
         asyncio.run(exercise())
 
     def test_http_and_cli_forward_recipe_voltage_filters_without_inferring_machine_tiers(self):

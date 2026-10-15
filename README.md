@@ -213,8 +213,15 @@ MCP traces default to `view="compact"`, retaining complete selected recipes,
 declared choices and path resources with explicit omission counts for expanded
 matching candidates. Request `view="full"` for the expanded candidate graph.
 Dataset, HTTP and CLI retain the full default. CLI accepts `--view compact`.
+Opt in to `view="concise"` or CLI `--view concise` for route topology and
+complete selected recipes without resource `material_facts` and resource
+`provenance`. Exact identities, recipe inputs and outputs, coverage, boundaries
+and search limits remain. The response reports the omitted fields explicitly.
+Use `get_resource` with an exact ID in the same snapshot for full composition
+and provenance evidence. Chemistry tasks may prefer compact. Concise changes
+presentation and makes no token-count or CPU-time guarantee.
 The [agent guide](python/src/gtnh_data/agent_guide.md) explains matching references
-and source-boundary evidence in both presentations.
+and source-boundary evidence in these presentations.
 
 Each graph tile represents a whole recipe, with its input slots, required
 tools, outputs, quantities, chances and machine parameters together. Tiles
