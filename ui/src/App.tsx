@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {useTraceJob} from './useTraceJob'
 import type { Environment, Group, Page, Process, Resource, Single, Source, Status, Trace } from './api'
 import { query, useRequest } from './api'
 import { ActionHint, Badge, CoverageList, JsonData, RequestState, SourceDetail, ResourceRef, ProcessInputSummary } from './Details'
 import { ProcessInspector } from './RecordInspector'
-import { TraceView } from './TraceView'
+import { TraceActivity, TraceView } from './TraceView'
+import type {TraceActivityState} from './TraceView'
 import { ResourcePicker } from './ResourcePicker'
 import { ChemicalFacts } from './ChemicalFacts'
 import {AcquisitionBadges,AcquisitionDetails} from './AcquisitionDetails'
@@ -107,46 +108,103 @@ function SelectedTraceGroup({id,remove}:{id:string;remove:()=>void}) {
 function TraceWorkspace({snapshotId,startId,targetId,setStartId,setTargetId,onSelect}: {snapshotId:string;startId:string;targetId:string;setStartId:(id:string)=>void;setTargetId:(id:string)=>void;onSelect:(id:string)=>void}) {
   const [resolvedStart,setResolvedStart]=useState('')
   const [resolvedTarget,setResolvedTarget]=useState('')
-  const [depth,setDepth]=useState(12)
-  const [maxProcesses,setMaxProcesses]=useState(150)
-  const [maxPaths,setMaxPaths]=useState(8)
-  const [extraSteps,setExtraSteps]=useState(6)
+  const [depth,setDepth]=useState('12')
+  const [maxProcesses,setMaxProcesses]=useState('150')
+  const [maxPaths,setMaxPaths]=useState('8')
+  const [extraSteps,setExtraSteps]=useState('6')
   const [pathSelection,setPathSelection]=useState('material')
   const [terminalArtifactPolicy,setTerminalArtifactPolicy]=useState('allow')
   const [minTier,setMinTier]=useState('')
   const [maxTier,setMaxTier]=useState('')
+  const [tierBadInput,setTierBadInput]=useState({minTier:false,maxTier:false})
+  const readTierValidity=(field:'minTier'|'maxTier',input:HTMLInputElement)=>{
+    const badInput=input.validity.badInput
+    setTierBadInput(value=>({...value,[field]:badInput}))
+  }
   const [unknownTierPolicy,setUnknownTierPolicy]=useState('exclude')
   const [required,setRequired]=useState<string[]>([])
   const [excluded,setExcluded]=useState<string[]>([])
   const [excludedGroups,setExcludedGroups]=useState<string[]>([])
-  const [timeBudget,setTimeBudget]=useState(5)
+  const [timeBudget,setTimeBudget]=useState('5')
   const [budgetMultiplier,setBudgetMultiplier]=useState(1)
   const [submitted,setSubmitted]=useState<{url:string;kind:'job'|'sync'}>()
+  const [requestClock,setRequestClock]=useState<{id:string;sampledAt:number;elapsedSeconds:number;pending:boolean;kind:'job'|'sync';failed?:boolean}>()
+  const requestSequence=useRef(0)
+  const beginRequestClock=(kind:'job'|'sync')=>setRequestClock({id:`${snapshotId}:request:${++requestSequence.current}`,sampledAt:Date.now(),elapsedSeconds:0,pending:true,kind})
+  const finishRequestClock=(failed=false)=>setRequestClock(value=>value?.pending?{...value,elapsedSeconds:Math.max(0,Date.now()-value.sampledAt)/1000,pending:false,failed}:value)
   const jobs=useTraceJob(snapshotId)
   const synchronous=useRequest<Trace>(submitted?.kind==='sync'?submitted.url:null)
   const trace=submitted?.kind==='job'?{data:jobs.result,loading:jobs.busy,error:jobs.error,reload:jobs.retry}:synchronous
   const url=submitted?.url??null
   const activeJob=submitted?.kind==='job'?jobs.job:undefined
+  useEffect(()=>{
+    if(submitted?.kind==='sync' && !synchronous.loading)finishRequestClock()
+  },[submitted?.kind,synchronous.loading,synchronous.data,synchronous.error])
+  const activeSampledAt=useMemo(()=>Date.now(),[activeJob?.job_id,activeJob?.status,activeJob?.elapsed_seconds])
+  const requestActivity:TraceActivityState|undefined=requestClock?{
+    id:requestClock.id,status:requestClock.failed || trace.error?'failed':requestClock.kind==='sync'?(requestClock.pending?'running':'finished'):(requestClock.pending?'starting':'closed'),
+    elapsedSeconds:requestClock.elapsedSeconds,sampledAt:requestClock.sampledAt,timing:'request',error:trace.error,
+  }:undefined
+  const activity:TraceActivityState|undefined=requestClock?.pending || requestClock?.failed?requestActivity:activeJob?{
+    id:activeJob.job_id,status:activeJob.status,phase:activeJob.phase,elapsedSeconds:activeJob.elapsed_seconds,sampledAt:activeSampledAt,timing:'active',error:trace.error??activeJob.error,
+  }:requestActivity
   const terminalArtifacts=trace.data?.search.terminal_artifacts
   const pathOrdering=trace.data?.path_ordering
   const ready=!!startId && !!targetId && resolvedStart===startId && resolvedTarget===targetId
-  const currentUrl=query('trace',{start_id:startId,target_id:targetId,max_depth:depth,max_processes:maxProcesses,max_paths:maxPaths,max_extra_steps:extraSteps,path_selection:pathSelection,terminal_artifact_policy:terminalArtifactPolicy,required_resource_id:required,excluded_resource_id:excluded,excluded_group_id:excludedGroups,min_tier:minTier,max_tier:maxTier,unknown_tier_policy:unknownTierPolicy,view:'compact',time_budget_seconds:pathSelection==='material'?timeBudget:undefined,budget_multiplier:pathSelection==='material'?budgetMultiplier:undefined})
+  const currentUrl=query('trace',{start_id:startId,target_id:targetId,max_depth:Number(depth),max_processes:Number(maxProcesses),max_paths:Number(maxPaths),max_extra_steps:Number(extraSteps),path_selection:pathSelection,terminal_artifact_policy:terminalArtifactPolicy,required_resource_id:required,excluded_resource_id:excluded,excluded_group_id:excludedGroups,min_tier:minTier===''?undefined:Number(minTier),max_tier:maxTier===''?undefined:Number(maxTier),unknown_tier_policy:unknownTierPolicy,view:'compact',time_budget_seconds:pathSelection==='material'?Number(timeBudget):undefined,budget_multiplier:pathSelection==='material'?budgetMultiplier:undefined})
   const current=url===currentUrl
-  const validTime=Number.isFinite(timeBudget) && timeBudget>=.05 && timeBudget<=60
-  const disabledReason=pathSelection==='material' && (!validTime || !Number.isInteger(budgetMultiplier) || budgetMultiplier<1 || budgetMultiplier>10)?'Choose a valid material-search time and work budget.':jobs.busy || ((trace.loading || activeJob?.status==='running') && current)?'Searching paths. Wait for this request to finish.':!startId && !targetId?'Select a supplied start and a target from the search results.':!startId?'Select a supplied start from the search results.':!targetId?'Select a target from the search results.':!ready?'Wait for both selected resources to load.':undefined
+  const numberError=(value:string|number,label:string,min:number,max:number,integer=true)=>{
+    const number=Number(value)
+    return String(value).trim()==='' || !Number.isFinite(number) || (integer && !Number.isInteger(number)) || number<min || number>max?`${label} must be ${integer?'a whole number':'a finite number'} from ${min} to ${max}.`:undefined
+  }
+  const fieldErrors={
+    depth:numberError(depth,'Maximum depth',1,64),
+    maxProcesses:numberError(maxProcesses,'Included recipe limit',1,5000),
+    maxPaths:numberError(maxPaths,'Paths',1,100),
+    extraSteps:numberError(extraSteps,'Additional steps',0,64),
+    minTier:tierBadInput.minTier?'Minimum recipe voltage tier must be a whole number from 0 to 15.':minTier===''?undefined:numberError(minTier,'Minimum recipe voltage tier',0,15),
+    maxTier:tierBadInput.maxTier?'Maximum recipe voltage tier must be a whole number from 0 to 15.':maxTier===''?undefined:numberError(maxTier,'Maximum recipe voltage tier',0,15),
+    timeBudget:pathSelection==='material'?numberError(timeBudget,'Search time per run (seconds)',.05,60,false):undefined,
+    budgetMultiplier:pathSelection==='material'?numberError(budgetMultiplier,'Search work budget',1,10):undefined,
+  }
+  if(minTier!=='' && maxTier!=='' && !fieldErrors.minTier && !fieldErrors.maxTier && Number(minTier)>Number(maxTier)){
+    fieldErrors.minTier='Minimum recipe voltage tier must not exceed the maximum tier.'
+    fieldErrors.maxTier='Maximum recipe voltage tier must not be below the minimum tier.'
+  }
+  const validationErrors=Object.values(fieldErrors).filter(message=>message!==undefined)
+  const validationProps=(field:keyof typeof fieldErrors,helpId?:string)=>({'aria-invalid':!!fieldErrors[field],'aria-describedby':[helpId,fieldErrors[field]?`trace-${field}-error`:undefined].filter(Boolean).join(' ') || undefined})
+  const fieldError=(field:keyof typeof fieldErrors)=>fieldErrors[field] && <p id={`trace-${field}-error`} className="warning-text">{fieldErrors[field]}</p>
+  const validTime=!numberError(timeBudget,'Search time per run (seconds)',.05,60,false)
+  const activityActions=<>
+    {jobs.closing && <p className="help">Closing the previous search before starting a new one.</p>}
+    {submitted?.kind==='job' && !trace.data && (jobs.busy || activeJob?.status==='running') && <p className="help">Preparing the first retained result.</p>}
+    {activeJob && <><button type="button" disabled={jobs.busy || activeJob.status!=='running'} onClick={()=>void jobs.pause()}>Stop search</button>
+      <button type="button" disabled={jobs.busy || activeJob.status!=='paused' || !validTime} onClick={()=>void jobs.continueSearch(Number(timeBudget))}>Continue search</button>
+      {activeJob.status==='paused' && <small>Results and unfinished work retained.</small>}
+      {activeJob.status==='finished' && <small>Continue is unavailable. Submit a new search to change bounds or work budget.</small>}
+    </>}
+    {trace.error && (activeJob || submitted?.kind==='sync') && <button type="button" onClick={()=>{if(submitted?.kind==='sync')beginRequestClock('sync');trace.reload()}}>Try again</button>}
+  </>
+  const disabledReason=validationErrors.length>0?'Fix the highlighted Trace settings before searching.':jobs.busy || ((trace.loading || activeJob?.status==='running') && current)?'Searching paths. Wait for this request to finish.':!startId && !targetId?'Select a supplied start and a target from the search results.':!startId?'Select a supplied start from the search results.':!targetId?'Select a target from the search results.':!ready?'Wait for both selected resources to load.':undefined
   const routeLabel=pathSelection==='material'?'Main material flow':pathSelection==='diverse'?'Diverse routes':'Fewest steps first'
-  const customSearchLimits=[depth!==12,maxProcesses!==150,maxPaths!==8,extraSteps!==6,pathSelection==='material' && timeBudget!==5,pathSelection==='material' && budgetMultiplier!==1].filter(Boolean).length
+  const customSearchLimits=[Number(depth)!==12,Number(maxProcesses)!==150,Number(maxPaths)!==8,Number(extraSteps)!==6,pathSelection==='material' && Number(timeBudget)!==5,pathSelection==='material' && budgetMultiplier!==1].filter(Boolean).length
   const materialSummary=[required.length>0?`${required.length} required`:null,excluded.length>0?`${excluded.length} excluded`:null,excludedGroups.length>0?`${excludedGroups.length} excluded groups`:null,terminalArtifactPolicy==='direct_targets_only'?'Tools: direct targets only':null].filter(Boolean).join(' · ') || 'No material filters'
   const voltageSummary=minTier!=='' || maxTier!==''?`Tiers ${minTier || '0'}–${maxTier || '15'} · Unknown ${unknownTierPolicy==='include'?'included':'excluded'}`:unknownTierPolicy==='include'?'Any tier · Unknown included':'Any tier'
-  return <section className="trace-workspace"><div className="panel-heading"><div><h2>Trace production paths</h2><p>Find recipe paths from a supplied resource to a target.</p></div></div><form onSubmit={event=>{event.preventDefault();if(!ready || disabledReason)return
+  return <section className="trace-workspace"><div className="panel-heading"><div><h2>Trace production paths</h2><p>Find recipe paths from a supplied resource to a target.</p></div></div><form noValidate onSubmit={event=>{event.preventDefault()
+      const minBad=(event.currentTarget.elements.namedItem('minTier') as HTMLInputElement).validity.badInput
+      const maxBad=(event.currentTarget.elements.namedItem('maxTier') as HTMLInputElement).validity.badInput
+      setTierBadInput({minTier:minBad,maxTier:maxBad})
+      if(minBad || maxBad || !ready || disabledReason)return
+      beginRequestClock(pathSelection==='material'?'job':'sync')
       if(pathSelection==='material'){
         if(submitted?.kind!=='job')setSubmitted({url:currentUrl,kind:'job'})
-        void jobs.start({start_id:startId,target_id:targetId,max_depth:depth,max_processes:maxProcesses,max_paths:maxPaths,max_extra_steps:extraSteps,path_selection:'material',terminal_artifact_policy:terminalArtifactPolicy,required_resource_ids:required,excluded_resource_ids:excluded,excluded_group_ids:excludedGroups,min_tier:minTier===''?undefined:Number(minTier),max_tier:maxTier===''?undefined:Number(maxTier),unknown_tier_policy:unknownTierPolicy,view:'compact',time_budget_seconds:timeBudget,budget_multiplier:budgetMultiplier}).then(accepted=>{if(accepted)setSubmitted({url:currentUrl,kind:'job'})})
+        void jobs.start({start_id:startId,target_id:targetId,max_depth:Number(depth),max_processes:Number(maxProcesses),max_paths:Number(maxPaths),max_extra_steps:Number(extraSteps),path_selection:'material',terminal_artifact_policy:terminalArtifactPolicy,required_resource_ids:required,excluded_resource_ids:excluded,excluded_group_ids:excludedGroups,min_tier:minTier===''?undefined:Number(minTier),max_tier:maxTier===''?undefined:Number(maxTier),unknown_tier_policy:unknownTierPolicy,view:'compact',time_budget_seconds:Number(timeBudget),budget_multiplier:budgetMultiplier}).then(accepted=>{finishRequestClock(!accepted);if(accepted)setSubmitted({url:currentUrl,kind:'job'})})
       }else{
         void jobs.close().then(closed=>{if(!closed)return;if(current && submitted?.kind==='sync')synchronous.reload();else setSubmitted({url:currentUrl,kind:'sync'})})
       }
     }}>
     <div className="trace-endpoints"><ResourcePicker label="Supplied start resource" selectedId={startId} onSelect={setStartId} onResolve={setResolvedStart}/><ResourcePicker label="Target resource" selectedId={targetId} onSelect={setTargetId} onResolve={setResolvedTarget}/></div>
+    {validationErrors.length>0 && <section className="notice error" role="region" aria-label="Trace setting errors" aria-live="polite"><strong>Check {validationErrors.length} Trace {validationErrors.length===1?'setting':'settings'}</strong><ul>{validationErrors.map(message=><li key={message}>{message}</li>)}</ul></section>}
     <div className="trace-search-action"><ActionHint id="trace-action-hint" reason={disabledReason} ready="Ready to find paths between the selected resources."/><button aria-describedby="trace-action-hint" className="primary" disabled={!!disabledReason}>Trace dependencies</button></div>
     <details className="trace-settings"><summary><span>Materials and intermediates</span><small>{materialSummary}</small></summary>
       <p className="help">Select a material, then Add. Filters apply to intermediates, not tools, presence requirements or co-products.</p>
@@ -156,39 +214,28 @@ function TraceWorkspace({snapshotId,startId,targetId,setStartId,setTargetId,onSe
     </details>
     <details className="trace-settings"><summary><span>Recipe voltage limits</span><small>{voltageSummary}</small></summary>
       <p className="help">Filter by recipe voltage tier, not full machine capability.</p>
-      <div className="tier-controls"><label>Minimum recipe voltage tier<input type="number" min="0" max="15" value={minTier} placeholder="Any" onChange={event=>setMinTier(event.target.value)}/></label><label>Maximum recipe voltage tier<input type="number" min="0" max="15" value={maxTier} placeholder="Any" onChange={event=>setMaxTier(event.target.value)}/></label><label>Unknown recipe voltage<select value={unknownTierPolicy} onChange={event=>setUnknownTierPolicy(event.target.value)}><option value="exclude">Exclude when filtering tiers</option><option value="include">Include unresolved tiers</option></select></label></div>
+      <div className="tier-controls"><div><label>Minimum recipe voltage tier<input {...validationProps('minTier')} name="minTier" type="number" min="0" max="15" value={minTier} placeholder="Any" onInput={event=>readTierValidity('minTier',event.currentTarget)} onChange={event=>{setMinTier(event.target.value);readTierValidity('minTier',event.target)}}/></label>{fieldError('minTier')}</div><div><label>Maximum recipe voltage tier<input {...validationProps('maxTier')} name="maxTier" type="number" min="0" max="15" value={maxTier} placeholder="Any" onInput={event=>readTierValidity('maxTier',event.currentTarget)} onChange={event=>{setMaxTier(event.target.value);readTierValidity('maxTier',event.target)}}/></label>{fieldError('maxTier')}</div><label>Unknown recipe voltage<select value={unknownTierPolicy} onChange={event=>setUnknownTierPolicy(event.target.value)}><option value="exclude">Exclude when filtering tiers</option><option value="include">Include unresolved tiers</option></select></label></div>
     </details>
     <details className="trace-settings"><summary><span>Search strategy and budgets</span><small>{routeLabel}{customSearchLimits>0?` · ${customSearchLimits} custom ${customSearchLimits===1?'limit':'limits'}`:''}</small></summary>
       <div className="trace-setting"><label>Route selection<select aria-describedby="trace-strategy-help" value={pathSelection} onChange={event=>setPathSelection(event.target.value)}><option value="diverse">Diverse routes</option><option value="material">Main material flow</option><option value="shortest">Fewest steps first</option></select></label><p id="trace-strategy-help" className="help">{pathSelection==='material'?'Follow native material continuity and target ingredient branches. Recipe variants are representative. Side inputs need external supplies.':pathSelection==='diverse'?'Spread routes across target ingredients, including longer alternatives.':'Show the shortest qualifying paths first.'}</p></div>
       <div className="trace-settings-grid">
-        <div><label>Maximum depth<input aria-describedby="trace-depth-help" type="number" min="1" max="64" value={depth} onChange={event=>setDepth(Number(event.target.value))} required/></label><p id="trace-depth-help" className="help">Recipes per path.</p></div>
-        <div><label>Included recipe limit<input aria-describedby="trace-recipes-help" type="number" min="1" max="5000" value={maxProcesses} onChange={event=>setMaxProcesses(Number(event.target.value))} required/></label><p id="trace-recipes-help" className="help">Unique recipes in the combined map.</p></div>
-        <div><label>Paths<input aria-describedby="trace-paths-help" type="number" min="1" max="100" value={maxPaths} onChange={event=>setMaxPaths(Number(event.target.value))} required/></label><p id="trace-paths-help" className="help">Maximum alternatives to retain.</p></div>
-        <div><label>Additional steps<input aria-describedby="trace-detour-help" type="number" min="0" max="64" value={extraSteps} onChange={event=>setExtraSteps(Number(event.target.value))} required/></label><p id="trace-detour-help" className="help">Detour beyond the shortest qualifying path.</p></div>
+        <div><label>Maximum depth<input {...validationProps('depth','trace-depth-help')} type="number" min="1" max="64" value={depth} onChange={event=>setDepth(event.target.value)} required/></label>{fieldError('depth')}<p id="trace-depth-help" className="help">Recipes per path.</p></div>
+        <div><label>Included recipe limit<input {...validationProps('maxProcesses','trace-recipes-help')} type="number" min="1" max="5000" value={maxProcesses} onChange={event=>setMaxProcesses(event.target.value)} required/></label>{fieldError('maxProcesses')}<p id="trace-recipes-help" className="help">Unique recipes in the combined map.</p></div>
+        <div><label>Paths<input {...validationProps('maxPaths','trace-paths-help')} type="number" min="1" max="100" value={maxPaths} onChange={event=>setMaxPaths(event.target.value)} required/></label>{fieldError('maxPaths')}<p id="trace-paths-help" className="help">Maximum alternatives to retain.</p></div>
+        <div><label>Additional steps<input {...validationProps('extraSteps','trace-detour-help')} type="number" min="0" max="64" value={extraSteps} onChange={event=>setExtraSteps(event.target.value)} required/></label>{fieldError('extraSteps')}<p id="trace-detour-help" className="help">Detour beyond the shortest qualifying path.</p></div>
       </div>
       {pathSelection==='material' && <><div className="trace-settings-grid">
-        <div><label>Search time per run (seconds)<input aria-describedby="trace-time-help" type="number" min=".05" max="60" step=".05" value={timeBudget} onChange={event=>setTimeBudget(Number(event.target.value))} required/></label><p id="trace-time-help" className="help">Time allowed for each run or continuation.</p></div>
-        <div><label>Search work budget<select aria-describedby="trace-work-help" value={budgetMultiplier} onChange={event=>setBudgetMultiplier(Number(event.target.value))}>{Array.from({length:10},(_,index)=><option key={index+1} value={index+1}>{index+1}×</option>)}</select></label><p id="trace-work-help" className="help">Choose before starting a new search.</p></div>
+        <div><label>Search time per run (seconds)<input {...validationProps('timeBudget','trace-time-help')} type="number" min=".05" max="60" step="any" value={timeBudget} onChange={event=>setTimeBudget(event.target.value)} required/></label>{fieldError('timeBudget')}<p id="trace-time-help" className="help">Time allowed for each run or continuation.</p></div>
+        <div><label>Search work budget<select {...validationProps('budgetMultiplier','trace-work-help')} value={budgetMultiplier} onChange={event=>setBudgetMultiplier(Number(event.target.value))}>{Array.from({length:10},(_,index)=><option key={index+1} value={index+1}>{index+1}×</option>)}</select></label>{fieldError('budgetMultiplier')}<p id="trace-work-help" className="help">Choose before starting a new search.</p></div>
       </div><p className="help">Results appear while searching. Stop retains results and unfinished work. Continue resumes the same search.</p></>}
     </details>
   </form>
-  <RequestState {...trace} retry={trace.reload}/>
-  {submitted?.kind==='job' && <section aria-label="Material search progress">
-    {jobs.closing && <p role="status">Closing the previous search before starting a new one. Its retained board stays visible until the new search is accepted.</p>}
-    {!trace.data && (jobs.busy || activeJob?.status==='running') && <p role="status">Preparing the first retained result. Search is still running.</p>}
-    {activeJob && <><p role="status">{activeJob.status==='running'?'Search running':activeJob.status==='paused'?'Search paused':activeJob.status==='finished'?'Search finished':activeJob.status==='failed'?'Search failed':'Search closed'} · {activeJob.phase.replaceAll('_',' ')} · {activeJob.elapsed_seconds.toLocaleString(undefined,{maximumFractionDigits:1})} seconds</p>
-      <button type="button" disabled={jobs.busy || activeJob.status!=='running'} onClick={()=>void jobs.pause()}>Stop search</button>
-      <button type="button" disabled={jobs.busy || activeJob.status!=='paused' || !validTime} onClick={()=>void jobs.continueSearch(timeBudget)}>Continue search</button>
-      {activeJob.status==='paused' && <p className="help">Retained results and unfinished work are available. Continue keeps the submitted settings.</p>}
-      {activeJob.status==='finished' && <p className="help">Search finished within its retained bounds. Continue is unavailable. Change bounds or work budget and submit a new search for more exploration.</p>}
-      {activeJob.status==='failed' && <p className="warning-text">{activeJob.error??'The search failed. Retained results remain available.'}</p>}
-    </>}
-  </section>}
   {current && pathOrdering?.changed && (pathOrdering.policy==='cutter_consumed_item_first' || (!pathOrdering.acquisition_changed && pathOrdering.cutter_preference?.changed)) && <p className="help">For comparable Cutter recipes, paths through the consumed item are shown first. Fluid routes remain available.</p>}
   {current && pathOrdering?.policy==='native_acquisition_after_retained_alternatives' && pathOrdering.changed && pathOrdering.acquisition_changed && <p className="help">Space Mining acquisition paths are shown after alternatives already found in this search.</p>}
   {current && terminalArtifacts?.policy==='direct_targets_only' && terminalArtifacts.endpoint_compatibility==='incompatible' && <p className="notice" role="status">The selected start is a tool or part. Direct targets only won't use it to make other products. Select Allow intermediates for unrestricted path inspection.</p>}
   {current && terminalArtifacts?.policy==='direct_targets_only' && terminalArtifacts.recognition_status==='partial' && <p className="notice" role="status">Tool and part recognition is incomplete for this search: {terminalArtifacts.unknown_resources.toLocaleString()} inspected resources lack usable captured class evidence. Direct-target restrictions apply only to recognized tools and parts.</p>}
   {url && !current && <p className="notice">Settings changed. The displayed result uses the submitted settings. Submit a new search to apply these changes.</p>}
-  {trace.data && <TraceView key={activeJob?.job_id??url??undefined} boardId={activeJob?.job_id} jobStatus={activeJob?.status} resultRevision={activeJob?.result_revision} trace={trace.data} onSelect={onSelect} onUseStart={setStartId} onUseTarget={setTargetId} tierOptions={trace.data.tier_filter??{unknown_tier_policy:'exclude'}}/>}
+  {!trace.data && activity && <TraceActivity activity={activity}>{activityActions}</TraceActivity>}
+  {trace.data && <TraceView key={activeJob?.job_id??url??undefined} activity={activity} activityActions={activityActions} boardId={activeJob?.job_id} jobStatus={activeJob?.status} resultRevision={activeJob?.result_revision} trace={trace.data} onSelect={onSelect} onUseStart={setStartId} onUseTarget={setTargetId} tierOptions={trace.data.tier_filter??{unknown_tier_policy:'exclude'}}/>}
   </section>
 }

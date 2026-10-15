@@ -2,9 +2,66 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testi
 import { afterEach, expect, test, vi } from 'vitest'
 import {traceFixture} from './trace-fixture'
 import type { Process, Resource, Trace } from './api'
-import { TraceView } from './TraceView'
+import { TraceActivity, TraceView } from './TraceView'
+import type {TraceActivityState} from './TraceView'
 
-afterEach(() => {cleanup(); vi.unstubAllGlobals()})
+afterEach(() => {cleanup(); vi.unstubAllGlobals();vi.useRealTimers()})
+
+test('the pre-result clock ticks without publications and excludes paused time from active search samples',async()=>{
+  vi.useFakeTimers()
+  vi.setSystemTime(new Date('2026-10-15T12:00:00Z'))
+  const starting:TraceActivityState={id:'request',status:'starting',elapsedSeconds:0,sampledAt:Date.now(),timing:'request'}
+  const view=render(<TraceActivity activity={starting}/>)
+  expect(screen.getByRole('status')).toHaveTextContent('Starting search')
+  expect(screen.getByRole('progressbar')).not.toHaveAttribute('value')
+  await act(async()=>{await vi.advanceTimersByTimeAsync(2000)})
+  expect(screen.getByRole('timer')).toHaveTextContent('2.0 s')
+  const running:TraceActivityState={id:'job',status:'running',phase:'searching',elapsedSeconds:5,sampledAt:Date.now(),timing:'active'}
+  view.rerender(<TraceActivity activity={running}/>)
+  await act(async()=>{await vi.advanceTimersByTimeAsync(1000)})
+  expect(screen.getByRole('timer')).toHaveTextContent('~6.0 s')
+  view.rerender(<TraceActivity activity={{...running,phase:'enumerating'}}/>)
+  await act(async()=>{await vi.advanceTimersByTimeAsync(1000)})
+  expect(screen.getByRole('timer')).toHaveTextContent('~7.0 s')
+  const paused={...running,status:'paused' as const,elapsedSeconds:6.4,sampledAt:Date.now()}
+  view.rerender(<TraceActivity activity={paused}/>)
+  expect(screen.getByRole('region',{name:'Recipe search activity'})).toHaveAttribute('aria-busy','false')
+  expect(screen.queryByRole('progressbar')).not.toBeInTheDocument()
+  await act(async()=>{await vi.advanceTimersByTimeAsync(4000)})
+  expect(screen.getByRole('timer')).toHaveTextContent('6.4 s')
+  view.rerender(<TraceActivity activity={{...paused,status:'running',sampledAt:Date.now()}}/>)
+  await act(async()=>{await vi.advanceTimersByTimeAsync(1000)})
+  expect(screen.getByRole('timer')).toHaveTextContent('~7.4 s')
+  view.rerender(<TraceActivity activity={{...paused,status:'finished',elapsedSeconds:7.5,sampledAt:Date.now()}}/>)
+  await act(async()=>{await vi.advanceTimersByTimeAsync(3000)})
+  expect(screen.getByRole('status')).toHaveTextContent('Search finished')
+  expect(screen.getByRole('timer')).toHaveTextContent('7.5 s')
+  expect(screen.queryByRole('progressbar')).not.toBeInTheDocument()
+  view.rerender(<TraceActivity activity={{...paused,status:'failed',error:'Native preparation failed'}}/>)
+  expect(screen.getByRole('alert')).toHaveTextContent('Native preparation failed')
+  expect(screen.getByRole('status')).toHaveTextContent('Search failed')
+  view.rerender(<TraceActivity activity={{...paused,status:'closed'}}/>)
+  expect(screen.getByRole('status')).toHaveTextContent('Search closed')
+})
+
+test('running activity sits beside the usable retained board with indeterminate progress and controls',async()=>{
+  const stop=vi.fn()
+  render(<TraceView trace={trace} boardId="activity-board" activity={{id:'activity-board',status:'running',phase:'branch_search',elapsedSeconds:2,sampledAt:Date.now(),timing:'active'}} activityActions={<button onClick={stop}>Stop search</button>} onSelect={vi.fn()}/>)
+  const panel=screen.getByRole('region',{name:'Recipe search activity'})
+  expect(panel).toHaveAttribute('aria-busy','true')
+  expect(within(panel).getByRole('status')).toHaveTextContent('Search running')
+  expect(within(panel).getByText('Phase: branch search')).toBeVisible()
+  const progress=within(panel).getByRole('progressbar',{name:'Recipe search in progress'})
+  expect(progress).not.toHaveAttribute('value')
+  expect(progress).not.toHaveAttribute('aria-valuenow')
+  expect(within(panel).queryByText(/100%|ETA/)).not.toBeInTheDocument()
+  fireEvent.click(within(panel).getByRole('button',{name:'Stop search'}))
+  expect(stop).toHaveBeenCalledTimes(1)
+  const board=screen.getByRole('region',{name:'Recipe path graph'})
+  expect(panel.compareDocumentPosition(board) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  expect(await within(board).findByRole('article',{name:'Recipe Furnace'})).toBeVisible()
+  expect(board).not.toHaveAttribute('aria-disabled','true')
+})
 
 test('material route families select only retained complete execution paths and recycle the exact highlighted witness',async()=>{
   const craft={...processes[0],id:'craft',display_name:'Craft press'}
@@ -58,14 +115,16 @@ test('progressive variant grouping preserves node positions, camera and the chos
   const view=render(<TraceView trace={initial} boardId="progressive" resultRevision={1} onSelect={vi.fn()}/>)
   const node=(await screen.findByRole('article',{name:'Recipe Furnace'})).closest('.react-flow__node') as HTMLElement
   await waitFor(()=>expect(node.style.transform).not.toBe('translate(0px,0px)'))
+  const viewport=node.closest('.react-flow__viewport') as HTMLElement
+  // The positive Dagre position shifts this fixture's fitted camera left.
+  // Wait for that queued fit before moving or zooming, not a guessed frame.
+  await waitFor(()=>expect(viewport.style.transform).toMatch(/^translate\(-/))
   const before=node.style.transform
   fireEvent.click(node)
   node.focus()
   fireEvent.keyDown(node,{key:'ArrowRight'})
   await waitFor(()=>expect(node.style.transform).not.toBe(before))
   const position=node.style.transform
-  const viewport=node.closest('.react-flow__viewport') as HTMLElement
-  await act(async()=>{await new Promise(requestAnimationFrame)})
   const beforeCamera=viewport.style.transform
   fireEvent.wheel(node,{deltaY:-80,ctrlKey:true,clientX:100,clientY:100})
   await waitFor(()=>expect(viewport.style.transform).not.toBe(beforeCamera))

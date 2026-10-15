@@ -17,6 +17,174 @@ function page(items: unknown[]) {return {snapshot_id:'test-snapshot',items,total
 function finishedJob(result:unknown,state='finished') {return response({job_id:'fixture-job',snapshot_id:status.snapshot_id,revision:state==='closed'?2:1,status:state,phase:state,elapsed_seconds:1,progress:{},result_revision:1,request:{path_selection:'material'},result})}
 function traceSection(name:string) {return screen.getByText(name).closest('summary')!}
 
+test('synchronous search exposes a ticking placeholder at the board and a finished elapsed status beside the result',async()=>{
+  const target={...resource,id:'sync-target',display_name:'Sync target'}
+  let finish:((value:Response)=>void)|undefined
+  vi.stubGlobal('fetch',vi.fn(async(input:string)=>{
+    const url=new URL(input,'http://localhost')
+    if(url.pathname==='/api/status')return response(status)
+    if(url.pathname==='/api/environments')return response(page([]))
+    if(url.pathname==='/api/resources')return response(page(url.searchParams.get('q')==='Sync target'?[target]:[resource]))
+    if(url.pathname.startsWith('/api/resources/'))return response({snapshot_id:status.snapshot_id,item:decodeURIComponent(url.pathname).endsWith(target.id)?target:resource})
+    if(url.pathname==='/api/trace')return new Promise<Response>(resolve=>{finish=resolve})
+    throw new Error(`Unexpected route ${url.pathname}`)
+  }))
+  render(<App/>)
+  await screen.findByText('Pack: Synthetic contract fixture')
+  fireEvent.click(screen.getByRole('button',{name:'Trace'}))
+  for(const [label,name] of [['Supplied start resource','Test mold'],['Target resource','Sync target']]){
+    fireEvent.focus(screen.getByLabelText(label));fireEvent.change(screen.getByLabelText(label),{target:{value:name}})
+    fireEvent.click(await screen.findByRole('option',{name:new RegExp(name)}))
+  }
+  fireEvent.click(traceSection('Search strategy and budgets'))
+  fireEvent.change(screen.getByLabelText('Route selection'),{target:{value:'shortest'}})
+  fireEvent.click(traceSection('Search strategy and budgets'))
+  fireEvent.click(screen.getByRole('button',{name:'Trace dependencies'}))
+  const pending=await screen.findByRole('region',{name:'Recipe search activity'})
+  expect(pending).toHaveAttribute('aria-busy','true')
+  expect(within(pending).getByRole('status')).toHaveTextContent('Search running')
+  expect(within(pending).getByRole('progressbar')).not.toHaveAttribute('value')
+  const initialTime=within(pending).getByRole('timer').textContent
+  await waitFor(()=>expect(within(pending).getByRole('timer').textContent).not.toBe(initialTime))
+  expect(screen.queryByRole('article',{name:'Recipe Mold cast'})).not.toBeInTheDocument()
+  await act(async()=>{finish!(response({path_selection:'shortest',snapshot_id:status.snapshot_id,start_id:resource.id,target_id:target.id,resources:[resource,target],processes:[process],edges:[],leaves:[],cycles:[],truncated:false,coverage:[],route:{status:'found',strategy:'shortest_known_dependency_path',resource_ids:[resource.id,target.id],process_ids:[process.id]},paths:[{resource_ids:[resource.id,target.id],process_ids:[process.id]}],branch_coverage:[],search:{examined_processes:1,limit:1000,truncated:false},limit_reasons:[]}))})
+  await screen.findByRole('article',{name:'Recipe Mold cast'})
+  const completed=screen.getByRole('region',{name:'Recipe search activity'})
+  expect(screen.getAllByRole('region',{name:'Recipe search activity'})).toHaveLength(1)
+  expect(completed).toHaveAttribute('aria-busy','false')
+  expect(within(completed).getByRole('status')).toHaveTextContent('Search finished')
+  expect(within(completed).queryByRole('progressbar')).not.toBeInTheDocument()
+  expect(within(completed).getByRole('timer')).not.toHaveTextContent('0.0 s')
+})
+
+test('trace reports every invalid numeric setting while typing and keeps the whole error summary visible when sections close',async()=>{
+  const searches:unknown[]=[]
+  vi.stubGlobal('fetch',vi.fn(async(input:string,init?:RequestInit)=>{
+    const url=new URL(input,'http://localhost')
+    if(url.pathname.startsWith('/api/trace'))searches.push(init?.body??input)
+    if(url.pathname==='/api/status')return response(status)
+    if(url.pathname.startsWith('/api/resources/'))return response({snapshot_id:status.snapshot_id,item:resource})
+    return response(page(url.pathname==='/api/resources'?[resource]:[]))
+  }))
+  render(<App/>)
+  await screen.findByText('Pack: Synthetic contract fixture')
+  fireEvent.click(screen.getByRole('button',{name:'Trace'}))
+  for(const label of ['Supplied start resource','Target resource']){
+    fireEvent.change(screen.getByLabelText(label),{target:{value:'Test mold'}})
+    fireEvent.click(await screen.findByRole('option',{name:/Test mold/}))
+  }
+  const submit=screen.getByRole('button',{name:'Trace dependencies'})
+  expect(submit).toBeEnabled()
+  const strategy=traceSection('Search strategy and budgets'),voltage=traceSection('Recipe voltage limits')
+  fireEvent.click(strategy)
+  fireEvent.click(voltage)
+  const invalid=[['Maximum depth','0'],['Included recipe limit','5001'],['Paths','1.5'],['Additional steps',''],['Search time per run (seconds)','0'],['Minimum recipe voltage tier','-1'],['Maximum recipe voltage tier','16']]
+  for(const [label,value] of invalid){
+    fireEvent.change(screen.getByLabelText(label),{target:{value}})
+    expect(screen.getByLabelText(label)).toHaveAttribute('aria-invalid','true')
+    expect(screen.getByLabelText(label)).toHaveAccessibleDescription(/must be/)
+  }
+  const summary=screen.getByRole('region',{name:'Trace setting errors'})
+  expect(within(summary).getAllByRole('listitem')).toHaveLength(7)
+  for(const [label] of invalid)expect(summary).toHaveTextContent(label)
+  fireEvent.click(strategy)
+  fireEvent.click(voltage)
+  expect(summary).toBeVisible()
+  expect(submit).toBeDisabled()
+  fireEvent.submit(submit.closest('form')!)
+  expect(searches).toHaveLength(0)
+  fireEvent.click(strategy)
+  fireEvent.change(screen.getByLabelText('Maximum depth'),{target:{value:'64'}})
+  expect(screen.getByLabelText('Maximum depth')).toHaveAttribute('aria-invalid','false')
+  expect(within(summary).getAllByRole('listitem')).toHaveLength(6)
+  expect(summary).not.toHaveTextContent('Maximum depth')
+  expect(screen.getByLabelText('Paths')).toHaveAttribute('aria-invalid','true')
+  expect(submit).toBeDisabled()
+})
+
+test('trace validates optional tier ranges and only applies time budgets in material mode without restricting decimal precision',async()=>{
+  const calls:{url:URL;body?:Record<string,unknown>}[]=[]
+  const result:Trace=traceFixture({branch_coverage:[],path_selection:'shortest',snapshot_id:status.snapshot_id,start_id:resource.id,target_id:resource.id,resources:[resource],processes:[],edges:[],leaves:[],cycles:[],truncated:false,coverage:[],route:{status:'same_resource',strategy:'shortest_known_dependency_path',resource_ids:[resource.id],process_ids:[]},paths:[{resource_ids:[resource.id],process_ids:[]}],search:{examined_processes:0,limit:1000,truncated:false},limit_reasons:[]})
+  vi.stubGlobal('fetch',vi.fn(async(input:string,init?:RequestInit)=>{
+    const url=new URL(input,'http://localhost')
+    if(url.pathname==='/api/status')return response(status)
+    if(url.pathname.startsWith('/api/resources/'))return response({snapshot_id:status.snapshot_id,item:resource})
+    if(init?.method==='DELETE')return finishedJob(undefined,'closed')
+    if(url.pathname==='/api/trace' || url.pathname==='/api/trace-jobs'){
+      calls.push({url,body:init?.body?JSON.parse(String(init.body)):undefined})
+      return url.pathname==='/api/trace'?response(result):finishedJob({...result,path_selection:'material'})
+    }
+    return response(page(url.pathname==='/api/resources'?[resource]:[]))
+  }))
+  render(<App/>)
+  await screen.findByText('Pack: Synthetic contract fixture')
+  fireEvent.click(screen.getByRole('button',{name:'Trace'}))
+  for(const label of ['Supplied start resource','Target resource']){
+    fireEvent.change(screen.getByLabelText(label),{target:{value:'Test mold'}})
+    fireEvent.click(await screen.findByRole('option',{name:/Test mold/}))
+  }
+  const submit=screen.getByRole('button',{name:'Trace dependencies'})
+  expect(submit.closest('form')).toHaveAttribute('novalidate')
+  fireEvent.click(traceSection('Recipe voltage limits'))
+  fireEvent.click(traceSection('Search strategy and budgets'))
+  const minimum=screen.getByLabelText('Minimum recipe voltage tier'),maximum=screen.getByLabelText('Maximum recipe voltage tier')
+  expect(minimum).toHaveAttribute('aria-invalid','false')
+  expect(maximum).toHaveAttribute('aria-invalid','false')
+  for(const input of [minimum,maximum]){
+    // Browsers retain an empty value for incomplete numbers such as "-".
+    // Input still fires even when React's change tracker sees no value change.
+    Object.defineProperty(input,'validity',{configurable:true,value:{badInput:true}})
+    fireEvent.input(input)
+    expect(input).toHaveAttribute('aria-invalid','true')
+    expect(submit).toBeDisabled()
+    fireEvent.submit(submit.closest('form')!)
+    expect(calls).toHaveLength(0)
+    Object.defineProperty(input,'validity',{configurable:true,value:{badInput:false}})
+    fireEvent.input(input)
+    expect(input).toHaveAttribute('aria-invalid','false')
+    expect(submit).toBeEnabled()
+  }
+  Object.defineProperty(minimum,'validity',{configurable:true,value:{badInput:true}})
+  fireEvent.submit(submit.closest('form')!)
+  expect(calls).toHaveLength(0)
+  expect(minimum).toHaveAttribute('aria-invalid','true')
+  Object.defineProperty(minimum,'validity',{configurable:true,value:{badInput:false}})
+  fireEvent.input(minimum)
+  fireEvent.change(minimum,{target:{value:'1.5'}})
+  expect(minimum).toHaveAttribute('aria-invalid','true')
+  fireEvent.change(minimum,{target:{value:'4'}})
+  fireEvent.change(maximum,{target:{value:'3'}})
+  expect(minimum).toHaveAccessibleDescription(/must not exceed/)
+  expect(maximum).toHaveAccessibleDescription(/must not be below/)
+  expect(within(screen.getByRole('region',{name:'Trace setting errors'})).getAllByRole('listitem')).toHaveLength(2)
+  fireEvent.change(maximum,{target:{value:'5'}})
+  expect(screen.queryByRole('region',{name:'Trace setting errors'})).not.toBeInTheDocument()
+  fireEvent.change(minimum,{target:{value:''}})
+  fireEvent.change(maximum,{target:{value:''}})
+  const time=screen.getByLabelText('Search time per run (seconds)')
+  fireEvent.change(time,{target:{value:'0.051'}})
+  expect(submit).toBeEnabled()
+  fireEvent.change(time,{target:{value:'61'}})
+  expect(submit).toBeDisabled()
+  fireEvent.change(screen.getByLabelText('Maximum depth'),{target:{value:'12.0'}})
+  fireEvent.change(screen.getByLabelText('Route selection'),{target:{value:'shortest'}})
+  expect(screen.queryByRole('region',{name:'Trace setting errors'})).not.toBeInTheDocument()
+  expect(submit).toBeEnabled()
+  fireEvent.click(submit)
+  await waitFor(()=>expect(calls).toHaveLength(1))
+  expect(calls[0].url.searchParams.get('max_depth')).toBe('12')
+  expect(calls[0].url.searchParams.has('time_budget_seconds')).toBe(false)
+  expect(calls[0].url.searchParams.has('min_tier')).toBe(false)
+  expect(calls[0].url.searchParams.has('max_tier')).toBe(false)
+  fireEvent.change(screen.getByLabelText('Route selection'),{target:{value:'material'}})
+  expect(screen.getByLabelText('Search time per run (seconds)')).toHaveValue(61)
+  expect(submit).toBeDisabled()
+  fireEvent.change(screen.getByLabelText('Search time per run (seconds)'),{target:{value:'0.051'}})
+  fireEvent.click(submit)
+  await waitFor(()=>expect(calls).toHaveLength(2))
+  expect(calls[1].body).toMatchObject({time_budget_seconds:0.051,max_depth:12,max_processes:150,max_paths:8,max_extra_steps:6})
+})
+
 test('trace starts with optional controls collapsed and keeps source, target and search visible',async()=>{
   vi.stubGlobal('fetch',vi.fn(async(input:string)=>{
     const url=new URL(input,'http://localhost')
@@ -63,6 +231,7 @@ test('pause can deliver the first result and replacing a running job waits for c
   let closing=false
   let oldRead:((value:Response)=>void)|undefined
   let finishClosure:((value:Response)=>void)|undefined
+  let finishReplacement:((value:Response)=>void)|undefined
   const envelope=(revision:number,state:string,extra={})=>({job_id:'old-job',snapshot_id:status.snapshot_id,revision,status:state,phase:'searching',elapsed_seconds:1,progress:{},result_revision:revision>=3?1:0,request:{path_selection:'material'},...extra})
   vi.stubGlobal('fetch',vi.fn(async(input:string,init?:RequestInit)=>{
     const url=new URL(input,'http://localhost')
@@ -72,9 +241,9 @@ test('pause can deliver the first result and replacing a running job waits for c
     if(url.pathname.startsWith('/api/resources/'))return response({snapshot_id:status.snapshot_id,item:decodeURIComponent(url.pathname).endsWith(target.id)?target:resource})
     if(url.pathname==='/api/trace-jobs'){
       creations++
-      return creations===1?response(envelope(1,'running')):response({...envelope(1,'finished'),job_id:'new-job',result_revision:1,result:{...result,processes:[next],paths:[{resource_ids:[resource.id,target.id],process_ids:[next.id]}]}})
+      return creations===1?response(envelope(1,'running')):creations===2?new Promise<Response>(resolve=>{finishReplacement=resolve}):response({error:'Replacement unavailable'},503)
     }
-    if(init?.method==='DELETE'){closing=true;return response(envelope(5,'running'))}
+    if(init?.method==='DELETE'){closing=true;return response(url.pathname.endsWith('/new-job')?{...envelope(2,'closed'),job_id:'new-job'}:envelope(5,'running'))}
     if(url.pathname.endsWith('/pause'))return response(envelope(3,'paused',{result}))
     if(url.pathname.endsWith('/continue'))return response(envelope(4,'running'))
     if(url.pathname==='/api/trace-jobs/old-job')return new Promise<Response>(resolve=>{if(closing)finishClosure=resolve;else oldRead=resolve})
@@ -102,10 +271,23 @@ test('pause can deliver the first result and replacing a running job waits for c
   expect(creations).toBe(1)
   expect(screen.getByRole('article',{name:'Recipe Mold cast'})).toBe(tile)
   await act(async()=>{finishClosure!(response(envelope(6,'closed')))})
+  await waitFor(()=>expect(finishReplacement).toBeDefined())
+  expect(within(screen.getByRole('region',{name:'Recipe search activity'})).getByRole('status')).toHaveTextContent('Starting search')
+  expect(screen.getByRole('progressbar',{name:'Recipe search in progress'})).not.toHaveAttribute('value')
+  const clock=screen.getByRole('timer').textContent
+  await waitFor(()=>expect(screen.getByRole('timer').textContent).not.toBe(clock))
+  expect(screen.getByRole('article',{name:'Recipe Mold cast'})).toBe(tile)
+  await act(async()=>{finishReplacement!(response({...envelope(1,'finished'),job_id:'new-job',result_revision:1,result:{...result,processes:[next],paths:[{resource_ids:[resource.id,target.id],process_ids:[next.id]}]}}))})
   await screen.findByRole('article',{name:'Recipe Replacement recipe'})
   expect(creations).toBe(2)
   await act(async()=>{oldRead!(response(envelope(2,'running')))})
   expect(screen.queryByRole('article',{name:'Recipe Mold cast'})).not.toBeInTheDocument()
+  fireEvent.change(screen.getByLabelText('Maximum depth'),{target:{value:'9'}})
+  fireEvent.click(screen.getByRole('button',{name:'Trace dependencies'}))
+  await waitFor(()=>expect(screen.getByRole('alert')).toHaveTextContent('Replacement unavailable'))
+  expect(within(screen.getByRole('region',{name:'Recipe search activity'})).getByRole('status')).toHaveTextContent('Search failed')
+  expect(screen.queryByRole('progressbar',{name:'Recipe search in progress'})).not.toBeInTheDocument()
+  expect(screen.getByRole('article',{name:'Recipe Replacement recipe'})).toBeVisible()
 })
 
 
@@ -150,7 +332,7 @@ test('material jobs show retained results, stop and continue the same search wit
   fireEvent.change(screen.getByLabelText('Search time per run (seconds)'),{target:{value:'0'}})
   fireEvent.click(settings)
   expect(screen.getByRole('button',{name:'Trace dependencies'})).toBeDisabled()
-  expect(screen.getByText('Choose a valid material-search time and work budget.')).toBeVisible()
+  expect(screen.getByRole('region',{name:'Trace setting errors'})).toHaveTextContent('Search time per run (seconds) must be a finite number from 0.05 to 60.')
   fireEvent.click(settings)
   fireEvent.change(screen.getByLabelText('Search time per run (seconds)'),{target:{value:'2'}})
   fireEvent.change(screen.getByLabelText('Search work budget'),{target:{value:'2'}})
@@ -161,6 +343,8 @@ test('material jobs show retained results, stop and continue the same search wit
   expect(await screen.findByText(/Preparing the first retained result/)).toBeVisible()
   expect(screen.queryByText('No known route found')).not.toBeInTheDocument()
   const tile=(await screen.findByRole('article',{name:'Recipe Mold cast'})).closest('.react-flow__node') as HTMLElement
+  expect(screen.getAllByRole('region',{name:'Recipe search activity'})).toHaveLength(1)
+  expect(screen.getByRole('region',{name:'Recipe search activity'})).toHaveAttribute('aria-busy','true')
   expect(requests[0].body).toMatchObject({time_budget_seconds:2,budget_multiplier:2,path_selection:'material',required_resource_ids:[],excluded_resource_ids:[],excluded_group_ids:[],view:'compact'})
   expect(screen.getByRole('button',{name:'Stop search'})).toBeEnabled()
   await waitFor(()=>expect(tile.style.transform).not.toBe('translate(0px,0px)'))
@@ -176,7 +360,8 @@ test('material jobs show retained results, stop and continue the same search wit
   const camera=viewport.style.transform
   await waitFor(()=>expect(late).toBeDefined(),{timeout:2000})
   fireEvent.click(screen.getByRole('button',{name:'Stop search'}))
-  expect(await screen.findByText(/^Search paused ·/)).toBeVisible()
+  await waitFor(()=>expect(within(screen.getByRole('region',{name:'Recipe search activity'})).getByRole('status')).toHaveTextContent('Search paused'))
+  expect(screen.queryByRole('progressbar',{name:'Recipe search in progress'})).not.toBeInTheDocument()
   await act(async()=>{late!(response(envelope(3,'running',{result:{...result,processes:[],paths:[]}})))})
   expect(screen.getByRole('article',{name:'Recipe Mold cast'}).closest('.react-flow__node')).toBe(tile)
   fireEvent.click(settings)
@@ -193,7 +378,8 @@ test('material jobs show retained results, stop and continue the same search wit
   expect(screen.getByLabelText('Highlight route')).toHaveValue('1')
   expect(screen.getByRole('article',{name:'Recipe Second job recipe'})).toHaveClass('path-muted')
   expect(screen.getByRole('button',{name:'Continue search'})).toBeDisabled()
-  expect(screen.getByText(/Search finished.*new search/)).toBeVisible()
+  expect(within(screen.getByRole('region',{name:'Recipe search activity'})).getByRole('status')).toHaveTextContent('Search finished')
+  expect(screen.getByText(/Continue is unavailable.*new search/)).toBeVisible()
   fireEvent.click(screen.getByRole('button',{name:'Arrange recipes'}))
   await waitFor(()=>expect(tile.style.transform).not.toBe(position))
   view.unmount()

@@ -332,6 +332,18 @@ footer { text-align: center; color: #8593a5; font-size: 10px; padding: 12px 24px
 .trace-settings .scope-options label { display: flex; }
 .trace-setting { margin-top: 14px; }
 .trace-settings-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 16px; }
+.trace-activity { position: sticky; top: 8px; z-index: 5; margin: 14px 0; padding: 12px 14px; border: 1px solid var(--border); border-radius: 8px; background: #fff; box-shadow: 0 3px 12px #1c2b3d0d; font-size: 13px; }
+.trace-activity-summary { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; }
+.trace-activity-phase { color: var(--muted); font-size: 12px; }
+.trace-activity-elapsed { margin-left: auto; font-variant-numeric: tabular-nums; }
+.trace-activity-progress { display: block; width: 100%; height: 6px; margin-top: 10px; accent-color: var(--teal); }
+.trace-activity-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 10px; }
+.trace-activity-actions button { padding: 6px 10px; font-size: 12px; }
+.trace-activity-actions .help { flex-basis: 100%; margin: 0; font-size: 12px; }
+.trace-activity[data-state="finished"] { border-color: #94cbb9; }
+.trace-activity[data-state="paused"] { border-color: #d9bf7c; }
+.trace-activity[data-state="failed"] { border-color: #e6a3a3; }
+.trace-activity-error { margin: 8px 0 0; color: #a32c2c; }
 .machine-variants { margin-top: 16px; border-top: 1px solid var(--border); padding-top: 12px; }
 .machine-variants > summary { cursor: pointer; font-size: 12px; font-weight: 600; }
 .machine-variant { margin-top: 12px; border: 1px solid var(--border); border-radius: 7px; padding: 12px; }

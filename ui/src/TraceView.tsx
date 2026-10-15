@@ -19,7 +19,37 @@ const limitDescriptions: Record<Trace['limit_reasons'][number],string> = {
   path_process_limit:'An additional complete path exceeded the included recipe limit. Increase that limit to include more paths.',
 }
 
-export function TraceView({trace,onSelect,onUseStart,onUseTarget,tierOptions,boardId,jobStatus,resultRevision}: {trace: Trace;onSelect:(id:string)=>void;onUseStart?:(id:string)=>void;onUseTarget?:(id:string)=>void;tierOptions?:TierOptions;boardId?:string;jobStatus?:TraceJob['status'];resultRevision?:number}) {
+export interface TraceActivityState {
+  id:string;status:TraceJob['status']|'starting';phase?:string
+  elapsedSeconds:number;sampledAt:number;timing:'active'|'request';error?:string
+}
+
+export function TraceActivity({activity,children}:{activity:TraceActivityState;children?:React.ReactNode}) {
+  const [now,setNow]=useState(()=>Date.now())
+  const ticking=activity.status==='running' || activity.status==='starting'
+  useEffect(()=>{
+    setNow(Date.now())
+    if(!ticking)return
+    const timer=setInterval(()=>setNow(Date.now()),250)
+    return ()=>clearInterval(timer)
+  },[activity.id,activity.sampledAt,ticking])
+  const elapsed=Number.isFinite(activity.elapsedSeconds) && Number.isFinite(activity.sampledAt)
+    ? Math.max(0,activity.elapsedSeconds+(ticking?Math.max(0,now-activity.sampledAt)/1000:0)) : undefined
+  const labels:Record<TraceActivityState['status'],string>={starting:'Starting search',running:'Search running',paused:'Search paused',finished:'Search finished',failed:'Search failed',closed:'Search closed'}
+  return <section className="trace-activity" aria-label="Recipe search activity" aria-busy={ticking} data-state={activity.status}>
+    <div className="trace-activity-summary"><strong role="status">{labels[activity.status]}</strong>
+      {activity.phase && <span className="trace-activity-phase">Phase: {activity.phase.replaceAll('_',' ')}</span>}
+      <span className="trace-activity-elapsed" title={activity.timing==='active'?'Cumulative active job time across runs, excluding pauses. The running display is estimated between server updates, not CPU time.':'Wall time since this request started, including waiting. This is not CPU time.'}>
+        {activity.timing==='active'?'Active time':'Elapsed'}: <span role="timer" aria-label="Calculation elapsed time" aria-live="off">{elapsed===undefined?'Unknown':`${activity.timing==='active' && ticking?'~':''}${elapsed.toLocaleString('en',{minimumFractionDigits:1,maximumFractionDigits:1})} s`}</span>
+      </span>
+    </div>
+    {ticking && <progress className="trace-activity-progress" aria-label="Recipe search in progress"/>}
+    {activity.error && <p className="trace-activity-error" role="alert">{activity.error}</p>}
+    {children && <div className="trace-activity-actions">{children}</div>}
+  </section>
+}
+
+export function TraceView({trace,onSelect,onUseStart,onUseTarget,tierOptions,boardId,jobStatus,resultRevision,activity,activityActions}: {trace: Trace;onSelect:(id:string)=>void;onUseStart?:(id:string)=>void;onUseTarget?:(id:string)=>void;tierOptions?:TierOptions;boardId?:string;jobStatus?:TraceJob['status'];resultRevision?:number;activity?:TraceActivityState;activityActions?:React.ReactNode}) {
   const [selection,setSelection] = useState<string|null>(null)
   const pathKey=(path:Trace['paths'][number])=>JSON.stringify([path.resource_ids,path.process_ids])
   const [highlightPath,setHighlightPath] = useState<{key:string;index:number}|null>(null)
@@ -62,7 +92,8 @@ export function TraceView({trace,onSelect,onUseStart,onUseTarget,tierOptions,boa
   },[trace,overlay])
   const graph=useMemo(()=>recipeGraphForTrace(graphTrace,attachments),[graphTrace,attachments])
   const {route}=trace
-  const pending=jobStatus!==undefined && jobStatus!=='finished'
+  const currentStatus=activity?.status??jobStatus
+  const pending=currentStatus!==undefined && currentStatus!=='finished'
   const resourceById=useMemo(()=>new Map(graphTrace.resources.map(resource=>[resource.id,resource])),[graphTrace.resources])
   const processById=useMemo(()=>new Map(graphTrace.processes.map(process=>[process.id,process])),[graphTrace.processes])
   const connections=useMemo(()=>pathConnections(graphTrace),[graphTrace])
@@ -82,14 +113,14 @@ export function TraceView({trace,onSelect,onUseStart,onUseTarget,tierOptions,boa
           <p className="eyebrow">Target-directed discovery</p>
             <h3>{route.status === 'found' ? 'Known paths found' : pending && route.status!=='same_resource' ? 'No complete path retained yet' : route.status === 'not_found' ? 'No known route found' : route.status === 'incomplete' ? 'Route discovery is incomplete' : 'Start and target are the same resource'}</h3>
         </div>
-        <Badge tone={route.status === 'found' ? 'good' : route.status === 'same_resource' ? '' : 'warning'}>{pending && route.status==='not_found'?jobStatus:route.status.replaceAll('_', ' ')}</Badge>
+        <Badge tone={route.status === 'found' ? 'good' : route.status === 'same_resource' ? '' : 'warning'}>{pending && route.status==='not_found'?currentStatus:route.status.replaceAll('_', ' ')}</Badge>
       </div>
         {route.status === 'found' && <p className="help">{trace.path_selection === 'material' ? 'Results prioritize native material continuity and target ingredient coverage using captured hints. This is a heuristic, not a chemical balance proof.' : trace.path_selection === 'diverse' ? 'Results spread across target ingredient branches, including longer alternatives within the requested bounds. The first path has the fewest known steps.' : 'Results prefer the fewest qualifying process steps within the requested extra-step allowance. The first path has the fewest known steps.'} This does not optimize yield. Every tile retains its additional ingredients, machine requirements and conditions.</p>}
         {route.status === 'not_found' && !pending && <p className="help">No connecting dependency path was found in the captured data. Coverage and unresolved mechanics still limit that conclusion. Check the selected resource variants, relax intermediate filters, or raise the Advanced search bounds.</p>}
       {route.status === 'incomplete' && <p className="help">The bounded result does not establish a complete route to the target. Inspect the limits and coverage before using these records.</p>}
       {route.status === 'same_resource' && <p className="help">Zero production steps are required to identify the same resource. This does not establish its availability or quantity.</p>}
       <div className="route-endpoints"><span>Supplied start</span><ResourceRef id={trace.start_id} resources={resourceById} onSelect={selectResource}/><span>Target</span><ResourceRef id={trace.target_id} resources={resourceById} onSelect={selectResource}/></div>
-        <p className="route-search-summary">Search examined {trace.search.examined_processes.toLocaleString()} processes · Server search limit {trace.search.limit.toLocaleString()} · {pending?`Search ${jobStatus} with retained results`:trace.search.truncated ? 'Search truncated' : 'Search finished within its bound'}</p>
+        <p className="route-search-summary">Search examined {trace.search.examined_processes.toLocaleString()} processes · Server search limit {trace.search.limit.toLocaleString()}{!activity && <> · {pending?`Search ${jobStatus} with retained results`:trace.search.truncated ? 'Search truncated' : 'Search finished within its bound'}</>}</p>
       {!!trace.group_exclusions?.length && <p className="help" title="Exclusions use literal captured members on paths. Other recipe inputs remain visible.">Excluded groups on paths: {trace.group_exclusions.map(group=>`${group.name} (${group.kind}, ${group.member_count.toLocaleString()} members)`).join(', ')}.</p>}
     </section>
     {(trace.truncated || trace.limit_reasons.length > 0 || trace.search.truncated) && <div className="notice warning" role="status">
@@ -102,6 +133,7 @@ export function TraceView({trace,onSelect,onUseStart,onUseTarget,tierOptions,boa
       {selectedProcess && graphTrace.recipe_tiers && <p className="help">Selected recipe voltage: {selectedTier?.status==='not_applicable'?'No machine voltage requirement':selectedTier?.name??'Unknown'} · This is not a machine capability estimate.</p>}
 
 
+    {activity && <TraceActivity activity={activity}>{activityActions}</TraceActivity>}
     <div className="graph-toolbar"><label>Highlight route<select value={highlightedGroup?.representative_path_index??'all'} onChange={event=>setHighlight(event.target.value==='all'?null:Number(event.target.value))}><option value="all">All routes</option>{trace.path_groups.map((group,index)=><option value={group.representative_path_index} key={group.id}>Route {index+1} · {trace.paths[group.representative_path_index].process_ids.length} steps</option>)}</select></label>
       {highlightedGroup && highlightedGroup.path_indices.length>1 && <label>Execution path<select value={highlight!} onChange={event=>setHighlight(Number(event.target.value))}>{highlightedGroup.path_indices.map((index,variant)=><option value={index} key={index}>Variant {variant+1} · {trace.paths[index].process_ids.map(recipeName).join(' → ')}</option>)}</select></label>}
     </div>
