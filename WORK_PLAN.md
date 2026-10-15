@@ -1201,8 +1201,13 @@ materialnego obiegu nie upoważnia do usuwania receptur z audytu loopów.
   i Squeezer o tym samym indeksie nie dowodzą tożsamości między przebiegami.
   Brak niezależnego obserwatora katalogu, wykonania kontrolera i aktywacji UI/MCP.
 
-- [ ] Poprawić widok deklarowanych wejść w istniejącym GUI. Puste wejścia
+- [x] Poprawić widok deklarowanych wejść w istniejącym GUI. Puste wejścia
   interpretowane nie powinny sugerować, że nie przechwycono składników.
   Wspólna prezentacja w Details ma pokazać uporządkowane deklaracje,
   alternatywy i nieznane ilości, z oddzielnym kontekstem kontrolera.
   Zachować jawne ograniczenia dopasowania i bilansu oraz surowy rekord.
+  Wspólny właściciel prezentacji waliduje wyświetlane pola bez rzutowania
+  metadanych na wykonawcze wejścia. Nieznana rola lub ilość pozostaje nieznana,
+  błędne wpisy pozostają widoczne, a kontroler ma osobną sekcję. Zwinięte karty
+  nie wykonują zapytań o zasoby. Przechodzi 87 testów GUI, typecheck i osobny
+  build. Cztery pliki głównego UI pozostają zgodne. Bez aktywacji strony.

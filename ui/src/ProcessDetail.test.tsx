@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, expect, test, vi } from 'vitest'
-import { ProcessDetail } from './Details'
+import { ProcessDetail, ProcessInputSummary } from './Details'
 import type { Process } from './api'
 
 afterEach(() => {cleanup(); vi.unstubAllGlobals()})
@@ -8,6 +8,53 @@ afterEach(() => {cleanup(); vi.unstubAllGlobals()})
 const manaProcess: Process = {id:'mana-recipe',family:'botania:mana_infusion',display_name:'Mana infusion',
   inputs:[],outputs:[],duration_ticks:null,eu_per_tick:null,amperage:null,executable:true,
   conditions:{total_mana:1000000,energy_unit:'mana',effective_duration:'collision_runtime_gate_unknown'},provenance:{}}
+
+test('captured declarations preserve order and uncertainty without becoming interpreted inputs',()=>{
+  const first={id:'first',kind:'item',registry_name:'test:first',display_name:'First ingredient',metadata:0,nbt:null,provenance:{}}
+  const second={...first,id:'second',registry_name:'test:second',display_name:'Second ingredient'}
+  const controller={...first,id:'controller',registry_name:'test:controller',display_name:'Controller ingredient'}
+  const resources=new Map([first,second,controller].map(value=>[value.id,value]))
+  const record:Process={...manaProcess,executable:null,conditions:{dynamic_inputs:'choice_dependent_rune_return',native_inputs:[
+    {native_slot:3,choices:[{resource_id:first.id,amount:null,native_amount:99,declared_stack_size:99,match:{mode:'toString'}},{resource_id:second.id,amount:1,match:{mode:'exact',nbt_sensitive:false},native_return_semantics:'same_selected_stack_copied'}]},
+    null,{choices:[{resource_id:42,amount:'7',match:['exact']}]}],
+    native_controller_input:{role:'consume',choices:[{resource_id:controller.id,amount:1,match:{mode:'wildcard'}}]}}}
+  const fetch=vi.fn()
+  vi.stubGlobal('fetch',fetch)
+  const summary=render(<ProcessInputSummary process={record}/>)
+  expect(screen.getByText('3 captured ingredient slots')).toBeVisible()
+  expect(fetch).not.toHaveBeenCalled()
+  summary.unmount()
+  const view=render(<ProcessDetail process={record} resources={resources}/>)
+  const ingredients=screen.getByRole('heading',{name:'Captured ingredients'}).closest<HTMLElement>('.recipe-inputs')!
+  expect(within(ingredients).queryByText('No input slots captured.')).not.toBeInTheDocument()
+  expect(within(ingredients).getByText('Amount unknown')).toBeVisible()
+  expect(within(ingredients).queryByText('Amount 99')).not.toBeInTheDocument()
+  expect(within(ingredients).getAllByText('Consumption unresolved').length).toBeGreaterThan(0)
+  expect(within(ingredients).getByText('Selected stack returned')).toBeVisible()
+  expect(within(ingredients).getByText('Native matching unresolved')).toBeVisible()
+  expect(within(ingredients).getByText('Captured entry unresolved')).toBeVisible()
+  expect(within(ingredients).getByText('Captured alternative unresolved')).toBeVisible()
+  expect(within(ingredients).getByText('First ingredient').compareDocumentPosition(within(ingredients).getByText('Second ingredient')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  expect(within(ingredients).getByRole('heading',{name:'Separate controller input'})).toBeVisible()
+  expect(within(ingredients).getByText('Controller ingredient')).toBeVisible()
+  expect(JSON.parse(screen.getByText('Technical data: full process record').closest('details')!.querySelector('pre')!.textContent!)).toEqual(record)
+  view.rerender(<ProcessDetail process={{...record,inputs:[{role:'presence',choices:[{resource_id:first.id,amount:1,match:{mode:'exact'}}]}]}} resources={resources}/>)
+  expect(screen.getByRole('heading',{name:'Inputs'})).toBeVisible()
+  expect(screen.queryByRole('heading',{name:'Captured ingredients'})).not.toBeInTheDocument()
+  expect(screen.getByText('Required presence')).toBeVisible()
+})
+
+test('malformed declaration metadata stays unresolved and Petal scope stays explicit',()=>{
+  const view=render(<ProcessDetail process={{...manaProcess,conditions:{native_inputs:{choices:[]}}}}/>)
+  expect(screen.getByRole('heading',{name:'Captured ingredients'})).toBeVisible()
+  expect(screen.getByText('Captured ingredient list unresolved. See technical data.')).toBeVisible()
+  view.rerender(<ProcessDetail process={{...manaProcess,conditions:{native_inputs:[{role:'consume',choices:[]}],native_inputs_scope:'catalog_ingredient_occurrences_excludes_seed_and_refill'}}}/>)
+  expect(screen.getByText('Seed trigger and water refill are separate from these ingredients.')).toBeVisible()
+  expect(screen.getByText('No alternatives captured.')).toBeVisible()
+  view.rerender(<ProcessDetail process={manaProcess}/>)
+  expect(screen.getByText('No input slots captured.')).toBeVisible()
+  expect(screen.queryByRole('heading',{name:'Captured ingredients'})).not.toBeInTheDocument()
+})
 
 test('captured Space Pumping selectors and nominal scope are readable without guessing environment mappings',()=>{
   const metadata={status:'captured_native_declaration',planet_type:3,gas_type:5,quantity_scope:'selected_line_one_parallel_batch_one',runtime_execution:'unresolved',environment_mapping:'unresolved',controller_class:'fixture.Controller',source_api:'fixture.entries',duration_source_api:'fixture.duration',energy_source_api:'fixture.energy'}

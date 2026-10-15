@@ -81,8 +81,65 @@ function Chance({value, label = 'Chance'}: {value: Output['chance']; label?: str
 export function OutputRows({outputs, onSelect, resources, onRecycle}: {outputs: Output[]; onSelect?: (id: string) => void; resources?: ReadonlyMap<string, Resource>;onRecycle?:(id:string)=>void}) {
   return <div className="output-list">{outputs.map((output, index) => <div className="choice" key={index}><ResourceRef id={output.resource_id} onSelect={onSelect} resources={resources} amount={output.amount??null}/><div className="choice-meta"><Chance value={output.chance}/>{onRecycle && <button onClick={()=>onRecycle(output.resource_id)} aria-label={`Recycle output ${output.resource_id}`}>Recycle output</button>}</div></div>)}</div>
 }
+function fields(value:unknown):Record<string,unknown>|undefined {
+  return value!==null && typeof value==='object' && !Array.isArray(value) ? value as Record<string,unknown> : undefined
+}
+function reference(value:unknown) {
+  return typeof value==='string' && value.trim()!=='' ? value : undefined
+}
+function declaredSlot(value:unknown) {
+  const slot=fields(value)
+  if(!slot || !Array.isArray(slot.choices))return undefined
+  return {
+    position:typeof slot.native_slot==='number' && Number.isSafeInteger(slot.native_slot) && slot.native_slot>=0 ? slot.native_slot+1 : undefined,
+    role:slot.role==='consume'?'Captured consumption':slot.role==='presence'?'Required presence':slot.role==='tool'?'Tool':'Consumption unresolved',
+    choices:slot.choices.map(value=>{
+      const choice=fields(value)
+      if(!choice || (choice.resource_id!==null && !reference(choice.resource_id)))return undefined
+      const match=fields(choice.match)
+      const modes:Record<string,string>={exact:'Exact reference',wildcard:'Metadata wildcard',ore_dict:'OreDictionary reference',unified:'Unified reference'}
+      const mode=typeof match?.mode==='string' && Object.hasOwn(modes,match.mode) ? modes[match.mode] : undefined
+      return {id:reference(choice.resource_id),amount:typeof choice.amount==='number' && Number.isFinite(choice.amount) && choice.amount>=0 ? choice.amount : null,
+        matching:mode??'Native matching unresolved',nbtSensitive:match?.nbt_sensitive===true,group:reference(match?.group_id),
+        returned:choice.native_return_semantics==='same_selected_stack_copied'?'Selected stack returned':choice.native_return_semantics==='consumed_without_container_return'?'Consumed without container return':undefined}
+    })
+  }
+}
+function declaredInputs(conditions:unknown) {
+  const native=fields(conditions)
+  if(!native || (!('native_inputs' in native) && !('native_controller_input' in native)))return undefined
+  return {slots:Array.isArray(native.native_inputs)?native.native_inputs.map(declaredSlot):[],malformed:!Array.isArray(native.native_inputs),
+    hasController:'native_controller_input' in native,controller:declaredSlot(native.native_controller_input),
+    excludesSeedAndRefill:native.native_inputs_scope==='catalog_ingredient_occurrences_excludes_seed_and_refill'}
+}
+export function ProcessInputSummary({process}:{process:Process}) {
+  const declared=process.inputs.length===0 ? declaredInputs(process.conditions) : undefined
+  if(!declared)return <>{process.inputs.length} input slots</>
+  if(declared.malformed)return <>Captured ingredients unresolved</>
+  return <>{declared.slots.length} captured ingredient {declared.slots.length===1?'slot':'slots'}</>
+}
+function DeclaredSlot({slot,index,onSelect,resources}:{slot:ReturnType<typeof declaredSlot>;index:number;onSelect?:(id:string)=>void;resources?:ReadonlyMap<string,Resource>}) {
+  return <section className="slot"><div className="slot-heading"><strong>Captured slot {slot?.position??index+1}</strong><Badge>{slot?.role??'Consumption unresolved'}</Badge></div>
+    {!slot ? <p>Captured entry unresolved</p> : slot.choices.length===0 ? <p>No alternatives captured.</p> : slot.choices.map((choice,choiceIndex)=><div className="choice" key={choiceIndex}>
+      {choiceIndex>0 && <span className="choice-or">OR</span>}
+      {!choice ? <p>Captured alternative unresolved</p> : <>{choice.id ? <ResourceRef id={choice.id} amount={choice.amount} resources={resources} onSelect={onSelect}/> : <><span>Identity unresolved</span><Amount value={choice.amount}/></>}
+        <div className="choice-meta"><Badge>{choice.matching}</Badge>{choice.nbtSensitive && <Badge>NBT-sensitive</Badge>}{choice.returned && <Badge>{choice.returned}</Badge>}</div>
+        {choice.group && <GroupRef id={choice.group} onSelect={onSelect} resources={resources}/>}</>}
+    </div>)}
+  </section>
+}
+function CapturedInputs({declared,onSelect,resources}:{declared:NonNullable<ReturnType<typeof declaredInputs>>;onSelect?:(id:string)=>void;resources?:ReadonlyMap<string,Resource>}) {
+  return <><h4>Captured ingredients</h4><p className="help">Input accounting is incomplete. Captured alternatives don’t confirm native acceptance.</p>
+    {declared.excludesSeedAndRefill && <p className="help">Seed trigger and water refill are separate from these ingredients.</p>}
+    {declared.malformed && <p>Captured ingredient list unresolved. See technical data.</p>}
+    {!declared.malformed && declared.slots.length===0 && <p>No ingredient declarations captured.</p>}
+    <div className="slot-list">{declared.slots.map((slot,index)=><DeclaredSlot key={index} slot={slot} index={index} onSelect={onSelect} resources={resources}/>)}</div>
+    {declared.hasController && <section><h4>Separate controller input</h4><DeclaredSlot slot={declared.controller} index={0} onSelect={onSelect} resources={resources}/></section>}
+  </>
+}
 export function ProcessDetail({process, projectionIssue, onSelect, resources, onRecycle}: {process: Process; projectionIssue?:ProcessInspection['projection_issue']; onSelect?: (id: string) => void; resources?: ReadonlyMap<string, Resource>;onRecycle?:(id:string)=>void}) {
   const roles: Record<string, string> = {presence: 'Required presence', tool: 'Tool'}
+  const declared=process.inputs.length===0 ? declaredInputs(process.conditions) : undefined
   const conditions = process.conditions
   const native = conditions !== null && typeof conditions === 'object' ? conditions as Record<string, unknown> : undefined
   const noMachineVoltage=native?.recipe_voltage_applicability==='not_applicable_crafting_grid'
@@ -115,10 +172,10 @@ export function ProcessDetail({process, projectionIssue, onSelect, resources, on
       </div>)}
     </section>}
     {outputTemplates && <p className="notice warning">Runtime result is unresolved. Shown outputs are native display templates.</p>}
-    <div className="recipe-io"><div className="recipe-inputs"><h4 title="All slots are required. Choose one alternative within each slot.">Inputs</h4>
+    <div className="recipe-io"><div className="recipe-inputs">{declared ? <CapturedInputs declared={declared} onSelect={onSelect} resources={resources}/> : <><h4 title="All slots are required. Choose one alternative within each slot.">Inputs</h4>
     {process.inputs.length === 0 && <p className="empty-inline">No input slots captured.</p>}
     <div className="slot-list">{process.inputs.map((slot, index) => <section className="slot" key={index}><div className="slot-heading"><strong>Slot {index + 1}</strong>{slot.role !== 'consume' && <Badge tone="presence">{roles[slot.role] || slot.role}</Badge>}{slot.consumption_chance !== undefined && <Chance value={slot.consumption_chance} label="Consumption chance"/>} {slot.choices.length > 1 && <small>{slot.choices.length} alternatives</small>}</div>{slot.choices.map((choice, choiceIndex) => <div className="choice" key={choiceIndex}>{choiceIndex > 0 && <span className="choice-or">OR</span>}{choice.resource_id !== null && <ResourceRef id={choice.resource_id} onSelect={onSelect} resources={resources} amount={choice.amount}/>}<div className="choice-meta">{choice.resource_id===null && <Amount value={choice.amount}/>}{!['exact','unified','ore_dict'].includes(choice.match.mode) && <Badge>{choice.match.mode}</Badge>}{choice.match.nbt_sensitive === true && <Badge>NBT-sensitive</Badge>}{choice.consumption_chance !== undefined && <Chance value={choice.consumption_chance} label="Consumption chance"/>}</div>{choice.match.group_id && <GroupRef id={choice.match.group_id} onSelect={onSelect} resources={resources}/>}</div>)}</section>)}</div>
-    </div><div className="recipe-outputs"><h4>{outputTemplates ? 'Output templates' : 'Outputs'}</h4>{projectionIssue?.status==='unsupported_accounting' && <section className="notice warning"><h4>Operation accounting unavailable</h4><p>{projectionIssue.reason}</p></section>}<OutputRows outputs={process.outputs} onSelect={onSelect} resources={resources} onRecycle={onRecycle}/></div></div>
+    </>}</div><div className="recipe-outputs"><h4>{outputTemplates ? 'Output templates' : 'Outputs'}</h4>{projectionIssue?.status==='unsupported_accounting' && <section className="notice warning"><h4>Operation accounting unavailable</h4><p>{projectionIssue.reason}</p></section>}<OutputRows outputs={process.outputs} onSelect={onSelect} resources={resources} onRecycle={onRecycle}/></div></div>
     <ConditionFacts value={process.conditions}/><JsonData label="Technical data: full process record" value={process}/>
   </section>
 }

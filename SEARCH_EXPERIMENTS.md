@@ -2270,3 +2270,22 @@ preserved with explicit per-unit scope, unknown chance and null execution,
 without claiming a guaranteed batch or canonical energy. Neither family is
 implemented in this source-gate phase. Exact evidence is in
 forestry-fermenter-coverage/ and forestry-still-coverage/.
+
+### Declaration ingredients are visible without raw JSON
+
+The existing Details presentation owner now supplies both collapsed card input
+summaries and expanded declaration rows. When interpreted inputs are empty but
+native declarations exist, the GUI shows captured ingredient slots rather than
+claiming no inputs were captured. It preserves occurrence/alternative order,
+unknown quantities, unresolved roles, captured return facts and separate
+controller inputs. Petal seed/refill scope remains explicit. Freeform metadata
+is validated for display without becoming executable input types. Raw stack
+counts do not become operation amounts. Unreadable entries remain visible as
+unresolved, and the full record stays in technical inspection.
+
+The focused tests first failed on the missing presenter and behavior. The final
+integrated check passes all 87 GUI tests, typecheck and a private build at
+declared-input-presentation/ui-dist. Collapsed summaries perform no resource
+requests. Existing interpreted rendering remains covered. All four files of the
+main UI bundle match the previous acceptance manifest. No live GUI activation,
+API, solver, recipe model or storage change occurred.
