@@ -950,11 +950,17 @@ etap. Bieżące pomiary i decyzje są w SEARCH_EXPERIMENTS.md.
   Natywne rekordy i chronione hashe są zgodne. Nie promujemy kodu pilota.
   Indeks dodaje 380928 bajtów. Przygotowanie 266,6 s ze śledzeniem alokacji
   nie jest porównywalne z wcześniejszym pomiarem bez tej instrumentacji.
-- [ ] Osobno sprawdzić zapamiętanie dokładnego 1-support raz na RID w prywatnym
+- [x] Osobno sprawdzić zapamiętanie dokładnego 1-support raz na RID w prywatnym
   wariancie. Powtórzone odejmowanie stanowi 84,60% nowych jednostek pilota.
   Zachować identyczne wartości ocen, profil celu, unknowns, limity i kryteria.
   Ponownie użyć niezmiennego prywatnego v7 bez przebudowy. Jedna seria tych
   samych 12 żądań, bez promocji i bez zmiany zasad bilansu ilości.
+  Wariant również odrzucony. Fixture zachowuje 33 przyjęcia do kolejki i
+  identyczne oceny. Dwanaście natywnych wyników zachowuje dokładne tablice
+  dróg pierwszego v7, w tym utratę czterech klas Scheelite i objazd Polymer.
+  Praca spada do 231582, nadal 12,5% ponad v6. Scheelite dobija limit
+  procesów, Polymer limit przyjęć stanów. Problem nie wynika tylko z kosztu
+  powtórzonej arytmetyki. Natywne dowody i hashe są zgodne, bez przebudowy.
 - [x] Wyjaśnić kolejność Scheelite: główna droga ma siedem kroków przez QFT
   i Space Mining, a trzyetapowy przerób chemiczny jest na indeksie 2.
   Sprawdzić właściciela wyboru głównej trasy. Zachować wszystkie legalne

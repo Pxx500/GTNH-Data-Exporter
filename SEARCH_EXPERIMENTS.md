@@ -1921,3 +1921,18 @@ was loosened. A separate complement-cache pilot is frozen around computation
 reuse alone, with the original score, target eligibility and quality gates.
 It reuses the immutable private v7 preparation and does not change production.
 See pilot/COST-INTERPRETATION.md for the measured scope and limits.
+
+The separately frozen cached-complement variant is also rejected. A public
+fixture preserves all 33 heap admissions and exact values while avoiding
+repeated subtraction. Its twelve native calls preserve the first v7's exact
+returned paths in every case. Physical subtractions fall from 113864 to 6246,
+but Scheelite still loses four original routes/classes and Polymer still
+returns the carrier reference without an Ethylene processing path.
+
+Total work is 231582, lower than first v7 but 12.5 percent above v6. Scheelite
+now stops at the 10000-process cap and Polymer at 20000 admissions. Coverage
+loss therefore is not explained solely by repeated subtraction consuming the
+work budget. Every current call respects its fixed caps. Native QA and protected
+hashes pass. There is no rebuild or production promotion. Evidence is in
+target-constituent-relevance/complement-cache-pilot/REPORT.md. Saved results
+do not establish the content of unretained candidate histories.
