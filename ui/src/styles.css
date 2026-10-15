@@ -260,7 +260,6 @@ footer { text-align: center; color: #8593a5; font-size: 10px; padding: 12px 24px
 .filter-tags .resource-ref { font-size: 10px; }
 .filter-tags .resource-ref code { display: none; }
 .filter-tags button { padding: 1px 4px; background: none; border: 0; }
-.trace-submit { display: flex; justify-content: flex-end; margin-bottom: 20px; }
 .trace-controls { grid-template-columns: minmax(180px, 2fr) minmax(180px, 2fr) repeat(4, minmax(80px, 1fr)); }
 @media (max-width: 1100px) { .trace-controls { grid-template-columns: 1fr 1fr; } }
 @media (max-width: 700px) { .intermediate-filters { grid-template-columns: 1fr; } .free-recipe-graph { min-height: 650px; } .recipe-board-canvas { height: 650px; } }
@@ -318,6 +317,22 @@ footer { text-align: center; color: #8593a5; font-size: 10px; padding: 12px 24px
 .action-hint.ready { border-color: #2d8468; background: #edf7f1; color: #25624b; }
 .advanced-settings { margin: 16px 0; padding: 10px 12px; border: 1px solid var(--border); border-radius: 7px; }
 .advanced-settings > summary { font-weight: 600; cursor: pointer; }
+.trace-endpoints { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.trace-dataset-summary { padding: 12px 16px; cursor: pointer; color: var(--muted); font-size: 12px; font-weight: 600; }
+.trace-search-action { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin: 12px 0 18px; }
+.trace-search-action .action-hint { flex: 1; margin: 0; font-size: 12px; }
+.trace-search-action > button { flex-shrink: 0; font-size: 12px; }
+.trace-settings { margin: 10px 0; padding: 12px 14px; border: 1px solid var(--border); border-radius: 7px; font-size: 12px; }
+.trace-settings > summary { cursor: pointer; font-weight: 600; }
+.trace-settings > summary small { display: block; margin: 3px 0 0 15px; font-weight: 400; overflow-wrap: anywhere; }
+.trace-settings[open] > summary { margin-bottom: 14px; }
+.trace-settings .help { font-size: 11px; margin: 6px 0 12px; }
+.trace-settings label { display: grid; gap: 6px; color: var(--muted); font-size: 12px; }
+.trace-settings input, .trace-settings select { font-size: 12px; }
+.trace-settings .scope-options label { display: flex; }
+.trace-setting { margin-top: 14px; }
+.trace-settings-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 16px; }
+@media (max-width: 700px) { .trace-endpoints, .trace-settings-grid { grid-template-columns: 1fr; } .trace-search-action { flex-wrap: wrap; } .trace-search-action .action-hint { flex-basis: 100%; } }
 .pagination small { flex-basis: 100%; color: var(--muted); }
 
 .recipe-board-actions { padding: 9px 11px; border-bottom: 1px solid #c8d9df; background: #ffffff; }
