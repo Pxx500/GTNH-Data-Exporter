@@ -1451,3 +1451,113 @@ inflate ordinary Dataset status responses. This remains a deferred design,
 without a schema change, budget reinterpretation or additional game capture.
 The next core studies return to material-route choice and observed runtime
 costs, using saved witnesses and unchanged search limits.
+
+### Input-conditioned output preference rejected
+
+One nine-request baseline/treatment pilot replaces the existing two-point
+array-position hint only when complete native declarations identify exactly
+one output sharing material-reference tokens with the selected consumed input.
+The Raw Silicon Dust to Trichlorosilane witness changes score as intended.
+This descriptive hint does not prove atom contribution or cofeed supply.
+
+Classification adds 465299 logical work units. Wafer exhausts its 100000-work
+cap and returns no paths, versus eight paths and five baseline classes. The
+other eight cases retain exact represented classes and primary routes. Three
+changes only swap native producers. One Hull alternative takes nine steps
+through machine manufacture and polymer recovery instead of a five-step
+chemical route. Neither satisfies the material-story improvement gate.
+Measured query time totals 7.737 versus 8.166 seconds, separately from logical
+work, with one observation per case. No tuning or production change follows.
+
+All 43 baseline and 35 returned treatment paths retain verified native steps
+and full records. A single protected-copy v5 rebuild costs 50.334 seconds and
+134836224 sidecar bytes. The copy, sidecar and protected originals retain
+their hashes. Evidence is in `core-route-next/pilot/`.
+
+### Cursor heap ordering rejected at cost gate
+
+One recorded Casing baseline provides 23 exact batches, 11377 distinct
+descriptors and 87 requested heads. Offline heap replay preserves every full
+sequence and consumed prefix, including 302 equal-score/bound groups. The
+existing full key totally orders distinct descriptors without a new tie rule.
+
+Replay ordering costs 4.058 ms for sort and 2.072 ms for heap preparation and
+requested pops. The 1.986 ms saving is 0.0765% of the recording-adjusted 2.596 s
+instrumented query. Actual baseline sort/dedup takes 5.346 ms, only 0.206%.
+Recording, allocation tracing and setup remain explicit measurement limits.
+This is no end-to-end speedup estimate. The practical cost gate is negative,
+so there is no heap treatment query, wafer control or acceptance batch.
+The exact native baseline and all protection hashes pass. Source and services
+remain unchanged. Evidence is in `core-cost-next/pilot/`.
+
+### Two current-source profiles identify larger metadata costs
+
+Exactly one Casing and one Wafer query are profiled with standard cProfile,
+using fresh Dataset instances and the unchanged v5 copy. Both preserve full
+responses and work counters, apart from elapsed distance time. Profiled wall
+times are 0.728 and 0.847 seconds. These include profiler overhead and are not
+unprofiled latency or a speedup comparison.
+
+Wafer makes 5489 first-time recipe-family reads from canonical JSON, while
+the existing query-local cache handles 13647 hits. Family lookup takes 0.209 s,
+including 0.191 s attributed to SQLite execute. Rebuild already parses every
+process and has the exact family available. The chosen implementation stores
+that field in the existing prepared process table, with explicit version 6.
+It preserves the per-query cache and identifies the new metadata source.
+All 197 Python tests pass. Native acceptance and actual latency remain separate
+gates, with no claimed gain from profile percentages.
+
+Casing loads 2199 full canonical records, taking 0.087 s in the record owner.
+Another 4359 direct trace SQL calls take 0.164 s, but their individual statement
+costs are not attributed. Only known full-resource reads are considered for
+bounded batching. Acquisition and unresolved-producer statements stay outside
+that proposal. Cold source-distance construction takes about 0.21 s each and
+already has a Dataset-local cache. No duplicate cache is added.
+Evidence is in `core-runtime-profile/` and `trace-record-batching/`.
+
+Prepared-family acceptance runs one frozen v5 baseline and one v6 treatment
+for each of the nine requests, alternating pair order and using fresh Dataset
+instances. All nine pairs retain exact payloads and semantic work/cache counters.
+Only distance time, prepared-index database/version/size/build time and the
+explicit family-source marker are exempted. All 259781 prepared family values
+literally match canonical JSON, with 172 distinct families and no nulls.
+
+The single paired series totals 6.883 s baseline and 6.103 s treatment. Wafer
+changes from 0.627 to 0.439 s. Every pair is lower in this observation, without
+a repeated benchmark or profiler-derived speedup claim. One v6 rebuild takes
+46.481 s and produces 142098432 bytes, 7262208 above the v5 copy. Matcher work
+remains 74159 unique calls and 205990 memberships. Protection hashes remain
+equal. Memory-sampler failures occurred before any rebuild/query and were
+fixed by restoring one omitted field in the 72-byte Windows structure. Their logs
+remain explicit. Evidence is in `prepared-family-acceptance/`.
+
+### Verified path-deviation boundary
+
+Official NetworkX documentation and source were retrieved successfully.
+The implementation retains root/spur alternatives in a candidate buffer.
+It is not a direct replacement for the current constrained enumeration.
+The saved pair-cost matrix for one recipe is [[6,2],[1,3]], which cannot be
+factored into entry-plus-exit costs through one shared recipe node. Separate
+transition nodes preserve costs but allow the same PID on distinct transitions.
+The stock generator also lacks our hop and internal work limits.
+
+A bounded adapter would need explicit PID-group checks, independent endpoint
+frontiers and charged spur operations. It could emit legal dependency spines,
+without certifying cofeed supplies or guaranteeing K results within the budget.
+No solver, query or package installation is promoted from this source reading.
+The original inaccessible Yen paper remains unread. Verified sources and exact
+content hashes are in `path-deviation-research/`.
+
+### Elemental alias evidence stops at the native data gap
+
+The saved silicon witness has one complete Element.Si leaf at Raw Silicon Dust.
+Trichlorosilane declares H, Si and Cl. Solar Grade Silicon has Element null,
+empty components and unresolved accounting. Boule and wafer have no captured
+ItemData association. All five facts have chemistry_purity:not_certified.
+The existing accounting owner already keys element leaves by native Element
+ID, independently of material names and with separate quantity scales.
+
+No supported single-element grade pair exists in this witness. Native display
+Si* and recipe output cannot certify composition or purity. No alias, formula
+parser, compound-atom union or new scan is added. Exact evidence is in
+`elemental-alias-evidence/`.

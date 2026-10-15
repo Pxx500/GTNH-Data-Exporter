@@ -702,17 +702,81 @@ etap. Bieżące pomiary i decyzje są w SEARCH_EXPERIMENTS.md.
   pozycje pokazują dwie różne deklaracje i jedną zmianę tekstu obiektu.
   Nie dowodzi to mutacji tej samej receptury ani przyczyny różnic.
   Nie powtarzamy capture i nie promujemy badawczego snapshota.
-- [ ] Wskazać jedną nową heurystykę wyboru gałęzi materiałowej na podstawie
+- [x] Wskazać jedną nową heurystykę wyboru gałęzi materiałowej na podstawie
   zapisanych świadków wafla, Volcanusa i LV hull. Oprzeć ją na istniejących
   danych natywnych lub dokładnym kontekście wymagań celu. Podać przeciwny
   przykład i granice stosowania. Bez zgadywania nazw, większej puli ścieżek
   ani powtarzania zakończonych negatywnych prób. Najpierw krótki projekt
   jednej próby z niezmienionym budżetem, bez nowego zapytania w tym badaniu.
-- [ ] Wskazać konkretny zbędny koszt obecnego silnika ścieżek, korzystając
+  Projekt wskazuje preferencję wyjścia względem wybranego wejścia. Gdy pełne
+  deklaracje materiałowe wszystkich dodatnich wyjść wskazują dokładnie jedno
+  wspólne z wejściem wyjście, zastępuje ono preferencję pozycji w tablicy.
+  Przykład Raw Silicon Dust wskazuje Trichlorosilane zamiast Hydrogen Cell.
+  Nie jest to mapowanie atomów ani dowód dostarczenia pozostałych składników.
+  Jedna prywatna próba dziewięciu zapisanych żądań ma zmierzyć dodatkowy koszt
+  i przyrost względem chemicznej gałęzi już zwracanej przez obecny silnik.
+  Próba jest negatywna. Dodatkowa klasyfikacja kosztuje 465299 jednostek.
+  Wafel dobija limit 100000 i nie zwraca ścieżek. Pozostałe osiem kontroli
+  zachowuje klasy i główne trasy, ale zmiany to warianty producentów lub
+  dłuższy objazd przez rozkład maszyny. Nie wdrażamy reguły ani kolejnej próby.
+- [x] Wskazać konkretny zbędny koszt obecnego silnika ścieżek, korzystając
   z kodu i zapisanych liczników. Zachować kolejność kandydatów, pełne rekordy
   i uczciwe rozliczenie pracy. Bez ponownej próby cache oceny, skanowania
   kubełków historii i regionów. Najpierw dowód osiągalnej powtarzanej pracy
   oraz mały plan weryfikacji, bez szerokiego benchmarku.
+  Zapisane kontrole przygotowują 127466 kandydatów kursora, a dopuszczają
+  12257. Jedna próba ma sprawdzić heapq zamiast pełnego sortowania ogonów.
+  Klucz jest bijekcją dokładnego deskryptora, więc nie wymaga nowej reguły
+  remisów. Najpierw porównanie zapisanych sekwencji, potem tylko przy dodatnim
+  wyniku dwie kontrole czasu całego zapytania. Liczniki fizycznego porządkowania
+  pozostają oddzielone od pracy wyszukiwania. Bez łączenia obu nowych hipotez.
+  Wszystkie 23 partie i 87 wybranych elementów zachowują dokładną kolejność.
+  Sortowanie zajmuje jednak 5,346 ms, tylko 0,206% obserwowanego zapytania.
+  Replay oszczędza 1,986 ms. Próba kończy się przed wdrożeniem i kontrolami
+  całego silnika. Nie zmieniamy kolejki dla tak małego praktycznego zysku.
+- [x] Sprofilować dwa obecne zapytania, Casing i Wafer, na tej samej kopii.
+  Oddzielić budowę mapy źródłowej, inicjalizację Dataset i rozwijanie ścieżek.
+  Zachować dokładne wyniki i limity. Profilowanie nie jest benchmarkiem
+  przyspieszenia. Nie dodawać cache, który już istnieje w Dataset.
+  Oba profile zachowują dokładne wyniki i liczniki. Dla wafla 5489 nowych
+  odczytów rodziny receptury zajmuje 0,209 s z 0,847 s profilowanego zapytania.
+  Rodzina jest już dostępna podczas rebuild. Dla casingu ładowanie pełnych
+  rekordów zasobów zajmuje 0,087 s. Cache mapy źródłowej już istnieje.
+- [x] Porównać algorytm odchyleń prostych ścieżek z naszymi ograniczeniami.
+  Sprawdzić oficjalną implementację NetworkX, statyczne koszty, brak powtórzeń
+  zasobów i receptur, klasy wymagań celu, limit kroków i wspólny budżet pracy.
+  Podać wykonalną adaptację albo konkretną przeszkodę. Bez implementacji
+  i nowych zapytań receptur w tym badaniu.
+  NetworkX zachowuje alternatywy, ale parowe koszty wejście/wyjście nie dają
+  się zawsze rozłożyć na wspólny węzeł receptury. Węzły przejść zachowują koszt,
+  lecz pozwalają powtórzyć PID. Stock generator nie ma naszego budżetu pracy
+  ani limitu kroków. Adaptacja pozostaje odłożona, bez nowego solvera.
+- [x] Sprawdzić istniejące wektory chemiczne jako źródło aliasów pierwiastka
+  w zapisanym chainie krzemu. Tylko natywne deklaracje i istniejący właściciel
+  bilansu, bez zgadywania wzorów. Solar Grade nie ma Element ani składników,
+  a boule i wafer nie mają ItemData. Czystość żadnego etapu nie jest certyfikowana.
+  Wektor już używa dokładnych ID pierwiastków. Nie dodajemy aliasu z nazwy.
+- [x] Przenieść dokładne przechwycone pole `process.family` do istniejącego
+  przygotowanego indeksu. Jawna wersja 6 i zwykła odbudowa, bez migracji
+  i odczytu starego sidecara. Zachować ranking, cache zapytania, pełne receptury
+  i liczniki. Najpierw testy, potem jedna kontrola dziewięciu zapisanych żądań
+  na osobnej kopii i pomiar kosztu z uwzględnieniem przygotowania.
+  Przechodzi 25 testów indeksu i wszystkie 197 testów Pythona. Dziewięć par
+  zachowuje dokładne odpowiedzi i liczniki po odjęciu wyłącznie czasu,
+  metadanych przygotowanej bazy i nowego znacznika źródła rodziny.
+  Wszystkie 259781 wartości rodziny są zgodne z kanonicznym polem.
+  Jedna seria trwa 6,883 s przed zmianą i 6,103 s po niej, bez powtórek.
+  Rebuild trwa 46,481 s i tworzy indeks 142098432 bajtów, o 7262208 większy
+  od kopii v5. Matcher wykonuje tyle samo pracy. Aktywne pliki i usługi
+  pozostają bez zmian. Miernik pamięci naprawiono przed pierwszym rebuild.
+- [ ] Sprawdzić istniejące metody grupowego ładowania rekordów i wąski odczyt
+  znanego zbioru zasobów w Dataset. Zachować błędy brakujących ID, kolejność,
+  pełne rekordy i kontekst akwizycji. Bez przedwczesnego usuwania alternatyw
+  i optymalizacji niezmierzonych zapytań o producentów.
+  Projekt grupuje wyłącznie niezaładowane zasoby jednej rozwiniętej alternatywy
+  lub listy wyjść. SQLite IN ma najwyżej 500 ID i respektuje limit połączenia.
+  Prywatna próba Casing i Wafer zaczyna się dopiero po zakończeniu pomiaru
+  rodziny. Bez zmian produkcyjnych przed wynikiem tej próby.
 - [x] Sprawdzić literaturę o landmarkach i planach zrelaksowanych pod kątem
   kierowania przez gałęzie składników celu. Odróżnić osiągalność pojedynczej
   ścieżki od spełnienia wszystkich wejść receptury i policzyć przygotowanie.

@@ -345,6 +345,9 @@ class FlowIndexTests(unittest.TestCase):
             self.assertEqual(records['alloy-mixing'], recipes['alloy-mixing'])
             self.assertTrue({'carbon', 'tungsten'} <= {row['resource_id'] for row in result['leaves']})
             self.assertEqual(result['search']['hop_reference']['hops'], 4)
+            recovery = result['search']['recovery_preference']
+            self.assertEqual(recovery['recipe_family_source'], 'prepared_process_metadata')
+            self.assertGreater(recovery['penalized_evaluations'], 0)
 
     def test_material_recovery_remains_available_when_required_or_only_route(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -575,10 +578,10 @@ class FlowIndexTests(unittest.TestCase):
             self.assertEqual(before, dataset.path.read_bytes())
             self.assertEqual(prepared['snapshot_id'], dataset.snapshot_id)
             self.assertEqual(dataset.flow_index_status()['status'], 'ready')
-            self.assertEqual(prepared['analysis_version'], 5)
+            self.assertEqual(prepared['analysis_version'], 6)
             path = Path(prepared['database'])
             with closing(sqlite3.connect(path)) as connection, connection:
-                connection.execute("UPDATE metadata SET value='4' WHERE key='analysis_version'")
+                connection.execute("UPDATE metadata SET value='5' WHERE key='analysis_version'")
             self.assertEqual(dataset.flow_index_status()['status'], 'incompatible')
             with self.assertRaisesRegex(DatasetError, 'rebuild'):
                 dataset.trace_processes(start_id='start', target_id='target', path_selection='material')

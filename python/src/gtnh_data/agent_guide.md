@@ -84,8 +84,10 @@ every trace. New imports prepare this data automatically. A rebuild needs
 the imported dump, not a running game. An incompatible index is not silently
 used as if it belonged to the current snapshot or analysis version. Material
 evidence and requirement classes were introduced in analysis version 4.
-The current preparation format is version 5, which also stores item-type
-classification. A process reporting an earlier version has older code loaded.
+Item-type classification was introduced in version 5. The current preparation
+format is version 6, which also stores the exact captured recipe family for
+metadata lookups. This changes no ranking weights or recipe records.
+A process reporting an earlier version has older code loaded.
 Reload the MCP process after
 upgrading, then explicitly rebuild if status is incompatible.
 Rebuilding derived data does not reload running code.
@@ -132,8 +134,9 @@ Recognition uses captured `item_type` class/interface ancestry. Missing or
 failed item evidence is unknown, not a negative classification. Inspect the
 returned recognition diagnostics before claiming the categories were fully
 recognized. Current older captures lack these facts. The public default stays
-`"allow"` until the native evidence is accepted and rolled out. Prepared item-type facts require
-analysis version 5 and the normal explicit rebuild after loading new code.
+`"allow"` until the native evidence is accepted and rolled out. The current
+prepared format requires analysis version 6 and the normal explicit rebuild
+after loading new code.
 
 ## Interpret resource origin separately from planning boundaries
 

@@ -19,7 +19,7 @@ from heapq import heappop, heappush
 
 from .balance import quantity
 
-ANALYSIS_VERSION = 5
+ANALYSIS_VERSION = 6
 
 _RECOVERY_FAMILIES = frozenset(('gregtech:gt.recipe.macerator', 'gregtech:gt.recipe.arcfurnace',
                                 'gregtech:gt.recipe.alloysmelter'))
@@ -131,7 +131,7 @@ def rebuild(dataset):
             prepared.executescript('''
                 CREATE TABLE metadata(key TEXT PRIMARY KEY,value TEXT NOT NULL);
                 CREATE TABLE resources(id TEXT PRIMARY KEY,materials TEXT NOT NULL,material_basis TEXT NOT NULL,terminal_category TEXT NOT NULL);
-                CREATE TABLE processes(id TEXT PRIMARY KEY,representative TEXT NOT NULL,tier INTEGER,tier_status TEXT NOT NULL,eligible INTEGER NOT NULL);
+                CREATE TABLE processes(id TEXT PRIMARY KEY,representative TEXT NOT NULL,tier INTEGER,tier_status TEXT NOT NULL,eligible INTEGER NOT NULL,family TEXT NOT NULL);
                 CREATE TABLE matches(match_id INTEGER,resource_id TEXT,PRIMARY KEY(match_id,resource_id));
                 CREATE TABLE inputs(process_id TEXT,slot INTEGER,match_id INTEGER,PRIMARY KEY(process_id,slot,match_id));
                 CREATE TABLE requirement_classes(id INTEGER PRIMARY KEY,signature TEXT UNIQUE NOT NULL);
@@ -156,7 +156,7 @@ def rebuild(dataset):
             pending_matches = {}
 
             def flush():
-                prepared.executemany('INSERT INTO processes VALUES(?,?,?,?,?)', process_rows)
+                prepared.executemany('INSERT INTO processes VALUES(?,?,?,?,?,?)', process_rows)
                 prepared.executemany('INSERT INTO inputs VALUES(?,?,?)', input_rows)
                 prepared.executemany('INSERT INTO outputs VALUES(?,?,?)', output_rows)
                 prepared.executemany('INSERT INTO matches VALUES(?,?)', match_rows)
@@ -216,7 +216,7 @@ def rebuild(dataset):
                         for slot in record['inputs'] for choice in slot['choices']):
                     unresolved_inputs.add(record['id'])
                 declaration = dataset._recipe_tier(record)
-                process_rows.append((record['id'], representative, declaration['tier'], declaration['status'], int(eligible)))
+                process_rows.append((record['id'], representative, declaration['tier'], declaration['status'], int(eligible), record['family']))
                 counts['processes'] += 1
                 if representative == record['id'] and eligible:
                     for si, slot in enumerate(record['inputs']):
@@ -366,6 +366,7 @@ def find_paths(dataset, canonical, start_id, target_id, max_depth, max_processes
                'retained_candidates': 0, 'peak_retained_candidates': 0}
     search['partial_expansion'] = partial
     recovery = {'policy': 'native_recycling_association_hint', 'weight': _RECOVERY_WEIGHT,
+                'recipe_family_source': 'prepared_process_metadata',
                 'recipe_family_lookups': 0, 'recipe_family_cache_hits': 0,
                 'resource_fact_lookups': 0, 'resource_fact_cache_hits': 0,
                 'penalty_evaluations': 0, 'penalized_evaluations': 0}
@@ -472,7 +473,7 @@ def find_paths(dataset, canonical, start_id, target_id, max_depth, max_processes
                 recovery['recipe_family_cache_hits'] += 1
                 return families[pid]
             recovery['recipe_family_lookups'] += 1
-            families[pid] = canonical.execute("SELECT json_extract(payload,'$.family') FROM records WHERE collection='processes' AND id=?", (pid,)).fetchone()[0]
+            families[pid] = connection.execute('SELECT family FROM processes WHERE id=?', (pid,)).fetchone()[0]
             return families[pid]
 
         def resource_role(rid):

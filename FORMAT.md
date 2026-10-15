@@ -585,9 +585,10 @@ policy. An `incompatible` preflight skips recipe discovery and distance work,
 while charging actual endpoint classification. It adds no fictional recipe edge.
 Missing, failed or malformed item hierarchy
 is unknown. Fluids are not applicable. A partial recognition status cannot
-establish complete category enforcement. Prepared analysis version 5 stores
-these facts in the existing flow sidecar and requires an explicit rebuild for
-an incompatible version. Captured resource identities remain unchanged.
+establish complete category enforcement. Prepared analysis version 6 stores
+these facts and the exact captured process family in the existing flow sidecar.
+An incompatible version requires an explicit rebuild. Captured resource
+identities remain unchanged.
 
 `path_selection` is `diverse` by default, or `shortest` or `material`. Diverse selection
 spreads emitted dependency paths across consumed input-slot branches at the
@@ -597,6 +598,11 @@ For diverse and shortest selection, the primary `route` remains the shortest
 qualifying witness discovered. Material selection prioritizes native material
 evidence and distinct target requirements through prepared analysis. Its primary
 route is the first qualifying material witness, without a yield or energy claim.
+Recovery preference reads the captured family from prepared process metadata,
+with the existing per-query cache. Its `recipe_family_source` is
+`prepared_process_metadata`. The original process record remains complete in
+canonical inspection and trace results. This changes metadata lookup storage,
+not route scores, recipe eligibility or search bounds.
 `branch_coverage` contains `{target_process_id, slot_index,
 candidate_resources, paths, path_indices, status}` for consumed target slots.
 `paths` counts emitted witnesses and `path_indices` points into `paths`.
