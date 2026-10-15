@@ -371,6 +371,16 @@ The catalog includes registered dimensions, not just loaded worlds.
 Generation definitions describe conditional possibility, not observed deposits.
 Saved-world observations are a separate future domain.
 
+Underground-fluid rule environments can preserve the native global numeric
+filter in `properties.dimension_blacklist`. Its `source_api` identifies
+`gregtech.GTMod.proxy.mUndergroundOil.blackList`. A nonnull array has
+`status: captured` and exact ordered `dimension_ids`, including duplicates.
+An observed null remains null with `status: unresolved` and
+`reason: native_array_is_null`. Empty and unavailable are distinct.
+The scope is `native_numeric_filter_not_resolved_availability`. The field does
+not resolve provider rules, change source status or establish deposit/inventory
+availability. Sources reach this shared context through `environment_ids`.
+
 ### Coverage
 
 `{id, domain, status, records, reason, provenance}`

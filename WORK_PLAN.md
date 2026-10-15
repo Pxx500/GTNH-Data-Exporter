@@ -987,6 +987,21 @@ etap. Bieżące pomiary i decyzje są w SEARCH_EXPERIMENTS.md.
   Katalog jest już obsługiwany: 48 definicji i 55 zarejestrowanych ID wymiarów.
   Wagi, zakresy ilości i parametry zużycia są zachowane. Mapowanie providerów,
   blacklist i stan rzeczywistych złóż pozostają jawnie nierozwiązane.
+- [x] Zachować surowy blackList podziemnych płynów jako wspólny kontekst
+  istniejących środowisk reguł. Odczyt i serializacja raz, dokładna kolejność
+  i duplikaty, odrębne null/empty. Bez rozwiązywania światów, zmian statusów
+  źródeł, klasyfikacji dostępności i zapasów. Pokazać istotne wykluczenia
+  w istniejącym GUI. Po testach jeden izolowany capture z jawnym ograniczeniem
+  dowodu natywnego odczytu.
+  Zmiana przechodzi 32 testy Javy, 211 Pythona, 78 GUI, typecheck i build.
+  Audyty zakończone z wcześniej opisaną osobną analizą PMD i zachowanymi
+  niepowiązanymi ostrzeżeniami. Jeden capture/import trwa 192,445 s.
+  Wszystkie 22 środowiska reguł zachowują [-1,1]. Wszystkie 48 źródeł
+  zachowuje dane po rozwiązaniu dokładnych typowanych referencji płynów.
+  Dziewięć lokalnych ID zmieniło się bez zmiany tożsamości. Klasyfikacja
+  przykładu nadal unresolved, bez dowodu dostępnych zapasów. Zgodne 23
+  chronione hashe. Brak niezależnego obserwatora tablicy i natywnych prób
+  null/empty, konfiguracje runtime nie są deklarowane jako identyczne.
 - [x] Wyjaśnić kolejność Scheelite: główna droga ma siedem kroków przez QFT
   i Space Mining, a trzyetapowy przerób chemiczny jest na indeksie 2.
   Sprawdzić właściciela wyboru głównej trasy. Zachować wszystkie legalne

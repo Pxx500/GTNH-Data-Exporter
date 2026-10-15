@@ -182,13 +182,19 @@ final class WorldgenCapture {
               emitSmallMiningSources(sourceId, ore.getName(), generatedBlocks, contexts, generationConditions);
             small++;
         }
+        int[] blacklist = GTMod.proxy.mUndergroundOil.blackList;
+        JsonObject blacklistFacts = object("status", blacklist == null ? "unresolved" : "captured",
+            "source_api", "gregtech.GTMod.proxy.mUndergroundOil.blackList", "dimension_ids", blacklist,
+            "scope", "native_numeric_filter_not_resolved_availability");
+        if (blacklist == null) blacklistFacts.addProperty("reason", "native_array_is_null");
         long fluids = 0;
         for (Map.Entry<String, GTUODimension> entry : GTMod.proxy.mUndergroundOil.getDimensionList().entrySet()) {
             GTUODimension dimension = entry.getValue();
             String context = "underground-rule:" + entry.getKey();
             environments.add(context);
             writer.append("environments", object("id", context, "name", dimension.Dimension,
-                "dimension_id", null, "provider", null, "properties", object("rule", dimension.Dimension, "mapping", "unresolved"),
+                "dimension_id", null, "provider", null, "properties", object("rule", dimension.Dimension, "mapping", "unresolved",
+                    "dimension_blacklist", blacklistFacts),
                 "provenance", object("owner", "GTMod.proxy.mUndergroundOil", "config_key", entry.getKey())));
             for (Map.Entry<String, GTUOFluid> fluid : dimension.getFluids().entrySet()) {
                 GTUOFluid rule = fluid.getValue();
@@ -211,7 +217,7 @@ final class WorldgenCapture {
         capture.coverage("gt.worldgen.small_ores", "partial", small,
               "Active runtime list and stone resource variants captured. Native mining rules are separate conditional acquisition");
         capture.coverage("gt.worldgen.underground_fluids", "partial", fluids,
-            "Native config rules captured. Numeric/provider matching, blacklist, seeded fields and depletion observations unresolved");
+            "Native config rules and raw dimension blacklist context retained. Numeric/provider matching, blacklist applicability, seeded fields and depletion observations unresolved");
         capture.coverage("acquisition.gt_ore_mining_normal", "partial", miningSourceCount,
             "Conditional GT normal ore Fortune 0 plain/silk native base drops. Tool/event modifiers, positive Fortune and observed deposits are not modeled",
             object("native_drop_mode", GTMod.proxy.oreDropSystem.name(), "random_evaluation", "random_draws_rejected",

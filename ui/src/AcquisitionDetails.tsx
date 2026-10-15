@@ -1,7 +1,7 @@
 import {useState} from 'react'
 import type {AcquisitionAnalysis,Resource,Single} from './api'
 import {query,useRequest} from './api'
-import {Badge,ConditionFacts,JsonData,RequestState} from './Details'
+import {Badge,ConditionFacts,EnvironmentFacts,JsonData,RequestState} from './Details'
 
 const sourceLabels:Record<string,string>={captured_inventory_source:'Captured world source',mining_rule_candidate_only:'Mining drop candidate',generated_block_only:'Generated ore block'}
 
@@ -28,6 +28,7 @@ export function AcquisitionDetails({resourceId,profileId}:{resourceId:string;pro
     <p><strong>Production recipes in dump: {analysis.acquisition.eligible_producer_count.toLocaleString()}</strong></p><p>{analysis.acquisition.unresolved_producer_count.toLocaleString()} unresolved production recipes · {analysis.acquisition.source_count.toLocaleString()} source definitions</p><p>{analysis.acquisition.reason}</p>
     <p className="help">Production recipes still require their ingredients and conditions. Open Production recipes to inspect them.</p>
     {provenance && <section><h4>World origin and initial processing</h4><strong>{sourceLabels[provenance.world_source.status]??'No active world source evidence'}</strong><p className="help">A generated ore block is separate from its mining output. Mining-rule candidates are inferred. Captured source definitions do not prove available inventory.</p>
+      <EnvironmentFacts environments={provenance.world_source.evidence.flatMap(evidence=>evidence.environments??[])}/>
       <ul>{provenance.world_source.evidence.map((evidence,index)=><li key={`${evidence.source_id}:${index}`}><strong>{(evidence.resource_semantics??evidence.classification??evidence.kind).replaceAll('_',' ')}</strong> · {evidence.status} · {evidence.confidence.replaceAll('_',' ')}<p>{evidence.kind}</p>{evidence.environments?.length ? <p>Environments: {evidence.environments.map(environment=>`${environment.name} (dimension ${environment.dimension_id??'unknown'})`).join(', ')}</p>:evidence.environment_ids.length>0 && <p>Environment IDs: {evidence.environment_ids.join(', ')}</p>}<ConditionFacts value={evidence.conditions??{}} label="Source conditions"/></li>)}</ul>
       <p>Initial processing: {provenance.initial_processing.status==='inferred'?`inferred within ${provenance.initial_processing.max_steps} steps (${provenance.initial_processing.confidence})`:'no bounded evidence'}</p><p>Renewability: {provenance.renewable.status}. {provenance.renewable.reason}</p>
       {provenance.basic_suggestion.suggested && <p className="help">Suggested basic resource: {provenance.basic_suggestion.reason} Add it to a profile only if you want to assume its supply as your planning boundary.</p>}

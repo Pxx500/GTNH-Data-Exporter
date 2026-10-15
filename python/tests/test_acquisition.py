@@ -189,6 +189,44 @@ class AcquisitionTests(unittest.TestCase):
         self.assertFalse(fact['provenance']['world_source']['inventory_obtainable_proven'])
         self.assertEqual(fact['provenance']['renewable']['status'], 'unknown')
 
+    def test_underground_blacklist_metadata_is_preserved_without_changing_acquisition(self):
+        gas = resource('gas')
+        gas.update(kind='fluid', metadata=None)
+        source = {'id': 'gas_world', 'kind': 'underground_fluid', 'display_name': 'Gas world definition',
+            'status': 'conditional', 'outputs': [{'resource_id': 'gas', 'chance': None}],
+            'environment_ids': ['rule'], 'conditions': {'dimension_rule': '0'},
+            'parameters': {'min_amount': 10, 'max_amount': 350},
+            'provenance': {'owner': 'GTMod.proxy.mUndergroundOil'}}
+        captured = {'status': 'captured', 'source_api': 'gregtech.GTMod.proxy.mUndergroundOil.blackList',
+            'scope': 'native_numeric_filter_not_resolved_availability'}
+        cases = (None, dict(captured, dimension_ids=[-1, 0, 0, 7]), dict(captured, dimension_ids=[]),
+            {'status': 'unresolved', 'source_api': captured['source_api'], 'dimension_ids': None,
+             'reason': 'native_array_is_null', 'scope': captured['scope']})
+        baseline = None
+        for blacklist in cases:
+            with self.subTest(blacklist=blacklist):
+                properties = {'native_rule': '0', 'uninterpreted_optional': None}
+                if blacklist is not None:
+                    properties['dimension_blacklist'] = blacklist
+                environment = {'id': 'rule', 'name': 'Native rule', 'dimension_id': None,
+                    'provider': None, 'properties': properties, 'provenance': {}}
+                dataset = self.dataset(resources=[gas], sources=[source], environments=[environment])
+                result = dataset.inspect_acquisition('gas', max_depth=1, max_processes=1,
+                    max_variants=1, max_resources=1)
+                self.assertEqual(dataset.get_source('gas_world')['item'], source)
+                fact = result['item']
+                world = fact['provenance']['world_source']
+                evidence = world['evidence'][0]
+                self.assertEqual(evidence['environments'], [environment])
+                self.assertEqual(evidence['status'], source['status'])
+                self.assertEqual(evidence['classification'], 'direct_world_source')
+                self.assertEqual(world['status'], 'captured_inventory_source')
+                self.assertFalse(world['inventory_obtainable_proven'])
+                if baseline is None:
+                    baseline = fact['acquisition']
+                self.assertEqual(fact['acquisition'], baseline)
+                self.assertFalse(fact['acquisition']['obtainable_proven'])
+
     def test_initial_processing_rejects_material_changes_and_unproven_world_blocks(self):
         generation = native_mining('block')
         generation.update(id='generation', kind='ore_vein')

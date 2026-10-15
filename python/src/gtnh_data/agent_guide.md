@@ -270,6 +270,15 @@ Follow the returned source ID and generator parent. Inspect `environment_ids`
 and the matching environment record. `dimension_id: null` remains unresolved,
 even when the environment has a familiar name.
 
+For underground fluids, inspect the linked environment's
+`properties.dimension_blacklist` when present. It preserves GT's native numeric
+exclusions with their source API and capture status. Keep empty arrays,
+unresolved null and absent capture distinct. The list does not resolve a named
+provider rule to actual dimensions or prove a current deposit. Acquisition
+inspection includes the full linked environment properties. A conditional
+source remains evidence of a native definition, with inventory availability
+unproved.
+
 ### Discover dependency routes
 
 ```json

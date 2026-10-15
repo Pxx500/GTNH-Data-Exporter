@@ -122,8 +122,25 @@ export function ProcessDetail({process, projectionIssue, onSelect, resources, on
     <ConditionFacts value={process.conditions}/><JsonData label="Technical data: full process record" value={process}/>
   </section>
 }
+export function EnvironmentFacts({environments}:{environments:readonly Environment[]}) {
+  const seen=new Set<string>()
+  return <>{environments.map(environment=>{
+    const properties=environment.properties!==null && typeof environment.properties==='object' ? environment.properties as Record<string,unknown>:undefined
+    const value=properties?.dimension_blacklist
+    if(value===null || typeof value!=='object' || Array.isArray(value))return null
+    const blacklist=value as Record<string,unknown>
+    const unresolved=blacklist.status==='unresolved' && blacklist.dimension_ids===null && blacklist.reason==='native_array_is_null'
+    const ids=blacklist.dimension_ids
+    if(!unresolved && (blacklist.status!=='captured' || blacklist.scope!=='native_numeric_filter_not_resolved_availability' || !Array.isArray(ids) || ids.length===0 || !ids.every(Number.isInteger)))return null
+    const key=JSON.stringify({status:blacklist.status,scope:blacklist.scope,dimension_ids:ids,reason:blacklist.reason})
+    if(seen.has(key))return null
+    seen.add(key)
+    return unresolved ? <p className="help" key={key}>Underground fluid exclusions are unresolved in this capture.</p> : <p className="help" key={key}><strong>Underground fluid exclusions:</strong> {(ids as number[]).join(', ')}. These global native filter IDs don't establish environment or inventory availability.</p>
+  })}</>
+}
+
 export function SourceDetail({source, environments, onSelect}: {source: Source; environments: Environment[]; onSelect?: (id: string) => void}) {
-  return <article className="source-card"><div className="detail-title"><div><p className="eyebrow">{source.kind}</p><h3>{source.display_name || source.id}</h3><code>{source.id}</code></div><Badge tone={source.status === 'active' ? 'good' : 'warning'}>{source.status}</Badge></div><h4>Possible outputs</h4><OutputRows outputs={source.outputs} onSelect={onSelect}/><h4>Environments</h4>{source.environment_ids.length ? <ul className="environment-refs">{source.environment_ids.map(id => {const environment = environments.find(item => item.id === id); return <li key={id}>{environment?.name || id}<small>{environment ? `Dimension ${environment.dimension_id ?? 'unknown'} · Provider ${environment.provider ?? 'unknown'}` : 'Environment record not in the loaded catalog'}</small><code>{id}</code></li>})}</ul> : <p className="empty-inline">No environments captured.</p>}<JsonData label="Source conditions" value={source.conditions}/><JsonData label="Generator parameters and weights" value={source.parameters}/><JsonData label="Full source record" value={source}/></article>
+  return <article className="source-card"><div className="detail-title"><div><p className="eyebrow">{source.kind}</p><h3>{source.display_name || source.id}</h3><code>{source.id}</code></div><Badge tone={source.status === 'active' ? 'good' : 'warning'}>{source.status}</Badge></div><h4>Possible outputs</h4><OutputRows outputs={source.outputs} onSelect={onSelect}/><h4>Environments</h4>{source.environment_ids.length ? <ul className="environment-refs">{source.environment_ids.map(id => {const environment = environments.find(item => item.id === id); return <li key={id}>{environment?.name || id}<small>{environment ? `Dimension ${environment.dimension_id ?? 'unknown'} · Provider ${environment.provider ?? 'unknown'}` : 'Environment record not in the loaded catalog'}</small><code>{id}</code></li>})}</ul> : <p className="empty-inline">No environments captured.</p>}<EnvironmentFacts environments={environments.filter(environment=>source.environment_ids.includes(environment.id))}/><JsonData label="Source conditions" value={source.conditions}/><JsonData label="Generator parameters and weights" value={source.parameters}/><JsonData label="Full source record" value={source}/></article>
 }
 export function CoverageList({records}: {records: Coverage[]}) {
   return <div className="coverage-list">{records.map(record => <article key={record.id}><div><strong>{record.domain}</strong><Badge tone={record.status === 'complete' ? 'good' : record.status === 'error' ? 'danger' : 'warning'}>{record.status}</Badge><span>{record.records.toLocaleString()} records</span></div>{record.reason && <p>{record.reason}</p>}<JsonData label="Coverage evidence" value={record}/></article>)}</div>

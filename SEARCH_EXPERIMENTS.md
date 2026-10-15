@@ -1990,3 +1990,33 @@ without a fixed one-unit yield. Provider matching, raw blacklist, seeded
 deposits and current availability remain explicit partial context. No duplicate
 collector or new supply assumption was added. Exact `.221`/`.225` owners and
 consumer limits are documented in underground-fluid-coverage/REPORT.md.
+
+### Preserve the raw underground-fluid blacklist without resolving worlds
+
+The existing WorldgenCapture now reads and serializes the actual native int
+array once, attaching detached facts to existing underground-rule environments.
+Order, duplicate values, empty arrays and unresolved null remain distinct.
+Source status, class decisions and assumed feeds remain unchanged. Source and
+acquisition views share compact presentation of each distinct filter once per
+view, avoiding repetition across several rule sources of one fluid.
+
+Compilation and 32 Java tests pass. IntelliJ completes without a changed-block
+finding. The combined runner's PMD root check still skips the nested wrapper,
+while supplemental PMD completes with the actual classpath and no processing
+errors. The public preservation characterization and all 211 Python tests pass,
+as do 78 GUI tests, typecheck and the candidate build.
+
+One isolated capture/import takes 192.445 seconds and publishes snapshot
+09961ff8-0679-4db1-83e8-c749753fd96a. All 22 underground-rule environments retain
+the raw [-1,1] list with exact API/scope. All 48 underground-fluid source
+declarations match after resolving typed output references. Across 25228 source
+bodies, 25219 match raw and nine differ only in snapshot-local IDs of four exact
+fluid identities. No cause for those ID differences is asserted.
+
+The actual old/new acquisition sample has min amount 0 and stays unresolved
+with false inventory-proof flags. Metadata does not strengthen its category.
+All 23 protected files, compared databases and producer hashes remain unchanged.
+Ten runtime configuration/script digests differ, so no identical-configuration
+cohort claim follows. Field-read authority remains source-backed, without an
+independent live-array observer. Native null/empty branches are unobserved.
+Evidence is in underground-blacklist-runtime-acceptance/REPORT.md.
