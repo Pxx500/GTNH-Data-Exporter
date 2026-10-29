@@ -602,7 +602,13 @@ def _search_steps(handle, dataset, canonical, start_id, target_id, max_depth, ma
                 if pid not in examined:
                     if len(examined) >= search['limit']:
                         reasons.add('search_process_limit')
-                        break
+                        # Keep scanning known recipes without admitting another identity.
+                        # Rejected rows still spend work, so this scan stays bounded.
+                        if search['expansion_work'] >= search['work_limit']:
+                            reasons.add('search_work_limit')
+                            break
+                        search['expansion_work'] += 1
+                        continue
                     examined.add(pid)
                 if not allowed(pid, tier, tier_status) or input_id in excluded:
                     continue
@@ -786,7 +792,7 @@ def _search_steps(handle, dataset, canonical, start_id, target_id, max_depth, ma
                     partial['peak_deferred_candidates'] = max(partial['peak_deferred_candidates'], partial['deferred_candidates'])
                     job['cursors'][cursor_id] = {'resources': rr, 'processes': pp, 'choices': choices, 'next': 0}
                     enqueue_cursor(job, cursor_id)
-                if reasons & {'search_process_limit', 'search_work_limit', 'search_state_limit'}:
+                if reasons & {'search_work_limit', 'search_state_limit'}:
                     return None
             return None
 
@@ -797,7 +803,7 @@ def _search_steps(handle, dataset, canonical, start_id, target_id, max_depth, ma
         if max_depth < target_distance < 0xffffffff:
             reasons.add('depth')
         before_reference = search['examined_states']
-        while reference['heap'] and not reasons & {'search_process_limit', 'search_work_limit', 'search_state_limit'}:
+        while reference['heap'] and not reasons & {'search_work_limit', 'search_state_limit'}:
             reference_path = yield from advance(reference)
             if reference_path is not None:
                 scope = min(max_depth, len(reference_path['process_ids']) + max_extra_steps)
@@ -932,7 +938,7 @@ def _search_steps(handle, dataset, canonical, start_id, target_id, max_depth, ma
             return available, False
 
         while (any(job['heap'] for job in ordered) and (len(paths) < max_paths or provisional is not None)
-               and not reasons & {'search_process_limit', 'search_work_limit', 'search_state_limit'}):
+               and not reasons & {'search_work_limit', 'search_state_limit'}):
             selected, priority_round = class_round()
             if not selected:
                 break
@@ -958,7 +964,7 @@ def _search_steps(handle, dataset, canonical, start_id, target_id, max_depth, ma
                 if len(paths) >= max_paths and provisional is None:
                     break
             search['peak_queue'] = max(search['peak_queue'], sum(len(job['heap']) for job in ordered))
-            if reasons & {'search_process_limit', 'search_work_limit', 'search_state_limit'}:
+            if reasons & {'search_work_limit', 'search_state_limit'}:
                 break
         if len(paths) >= max_paths:
             reasons.add('path_limit')

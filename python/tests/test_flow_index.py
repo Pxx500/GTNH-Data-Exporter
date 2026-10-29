@@ -5,7 +5,7 @@ import unittest
 from pathlib import Path
 from contextlib import closing
 
-from gtnh_data import Dataset, DatasetError
+from gtnh_data import Dataset, DatasetError, flow_index
 from .artifacts import choice, process, resource, slot, snapshot
 
 
@@ -49,7 +49,56 @@ def recovery_fixture(root, *, explicit=True):
 
 
 class FlowIndexTests(unittest.TestCase):
-    def test_material_keeps_found_reference_when_material_frontier_hits_process_limit(self):
+    def test_material_continues_known_routes_after_distinct_process_limit(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            rows = [material(id, 'Base') for id in
+                    ('start', 'bait', 'poison', 'middle', 'feed', 'target')]
+            rows.append(material('short', 'Other'))
+            recipes = [process('a-poison', [slot(choice('poison'))], ['target']),
+                       process('poison-maker', [slot(choice('bait'))], ['poison']),
+                       process('middle-maker', [slot(choice('start'))], ['middle']),
+                       process('feed-maker', [slot(choice('middle'))], ['feed']),
+                       process('short-maker', [slot(choice('start'))], ['short']),
+                       process('z-finish', [slot(choice('short'), choice('feed'))], ['target'])]
+            recipes += [process(f'bait-{i:05}', [slot(choice('start'))], ['bait'],
+                                conditions={'native_variant': i}) for i in range(10001)]
+            dataset = Dataset.import_snapshot(snapshot(root / 'capture', resources=rows, processes=recipes),
+                                              root / 'index.sqlite')
+            result = dataset.trace_processes(start_id='start', target_id='target', path_selection='material',
+                                             max_paths=3, max_depth=8)
+            self.assertIn('search_process_limit', result['limit_reasons'])
+            self.assertLessEqual(result['search']['examined_processes'], 10000)
+            self.assertIn(['start', 'bait', 'poison', 'target'],
+                          [path['resource_ids'] for path in result['paths']])
+            self.assertIn(['start', 'short', 'target'],
+                          [path['resource_ids'] for path in result['paths']])
+            self.assertNotIn('feed-maker', {pid for path in result['paths'] for pid in path['process_ids']})
+            resumed = Dataset(dataset.path)
+            with resumed._connect() as canonical:
+                handle = flow_index.begin_search(resumed, canonical, 'start', 'target', 8, 300, 3,
+                    set(), set(), 6, resumed._tier_filter(None, None, 'exclude'))
+                try:
+                    previous_work, paused_after_limit = 0, False
+                    for _ in range(1000):
+                        progress = handle.advance(1e-12)
+                        raw = handle.snapshot()
+                        self.assertGreaterEqual(raw[2]['expansion_work'], previous_work)
+                        self.assertLessEqual(raw[2]['examined_processes'], 10000)
+                        self.assertLessEqual(raw[2]['queued_states'], 20000)
+                        previous_work = raw[2]['expansion_work']
+                        paused_after_limit |= (progress['status'] == 'paused'
+                                               and 'search_process_limit' in raw[3])
+                        if progress['status'] == 'finished':
+                            break
+                    else:
+                        self.fail('known-route continuation did not finish')
+                    self.assertTrue(paused_after_limit)
+                    self.assertEqual(raw[1], result['paths'])
+                finally:
+                    handle.close()
+
+    def test_material_improves_reference_using_known_recipes_after_process_limit(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             rows = [material(id, 'Base') for id in ('start', 'bait', 'feed', 'target')]
@@ -66,11 +115,11 @@ class FlowIndexTests(unittest.TestCase):
                                              max_paths=1, view='compact')
             self.assertEqual(result['search']['hop_reference']['hops'], 2)
             self.assertIn('search_process_limit', result['limit_reasons'])
-            self.assertEqual(result['paths'], [{'resource_ids': ['start', 'short', 'target'],
-                                                'process_ids': ['short-maker', 'finish']}])
+            self.assertEqual(result['paths'], [{'resource_ids': ['start', 'bait', 'feed', 'target'],
+                                                'process_ids': ['bait-00000', 'feed-maker', 'finish']}])
             self.assertEqual(result['route']['status'], 'found')
             self.assertEqual({p['id']: p for p in result['processes']},
-                             {p['id']: p for p in (recipes[0], recipes[2])})
+                             {p['id']: p for p in (recipes[1], recipes[2], recipes[3])})
             self.assertEqual(next(r for r in result['resources'] if r['id'] == 'start'), rows[0])
             self.assertEqual(result['search']['requirement_classes']['represented_classes'], 1)
 

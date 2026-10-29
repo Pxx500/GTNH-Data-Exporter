@@ -72,6 +72,11 @@ the process, admission and expansion-work guards, not maximum depth or returned
 path/process limits. A gain from more work is not an algorithmic speedup.
 Time budgets are cooperative and may overrun a single SQL operation or sort.
 
+`search_process_limit` stops admission of new recipe identities. A material
+job can still use known recipes and prepared continuations within its remaining
+work and admission limits. That reason alone does not mean a running or paused
+job is finished. Read the job lifecycle and cumulative counters together.
+
 Close unused jobs with `close_trace_search`. Closing releases retained state,
 so a closed job cannot continue. Wait for a running job to close before starting
 its replacement. Only one job runs per Dataset, at most four are retained, and
