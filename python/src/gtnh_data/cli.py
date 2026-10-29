@@ -17,12 +17,12 @@ def _json(value):
 def parser():
     root = argparse.ArgumentParser(prog="gtnh-data", description="Query one canonical GTNH snapshot offline")
     commands = root.add_subparsers(dest="command", required=True)
-    for name in ("import", "status", "flow-index", "rebuild-flow-index", "resources", "processes", "groups", "sources", "environments", "trace", "recycle", "chemistry", "loops", "boundary-profiles", "save-boundary-profile", "delete-boundary-profile", "resource-groups", "scope-catalog", "plan-to-bases", "audit-energy", "statistics", "acquisition", "serve", "mcp"):
+    for name in ("import", "status", "flow-index", "rebuild-flow-index", "resources", "processes", "groups", "sources", "environments", "trace", "recycle", "material-roles", "chemistry", "loops", "boundary-profiles", "save-boundary-profile", "delete-boundary-profile", "resource-groups", "scope-catalog", "plan-to-bases", "audit-energy", "statistics", "acquisition", "serve", "mcp"):
         command = commands.add_parser(name)
         command.add_argument("--database", required=True, type=Path)
         if name == "import":
             command.add_argument("snapshot", type=Path)
-        if name in ("recycle", "plan-to-bases", "audit-energy", "statistics", "save-boundary-profile"):
+        if name in ("recycle", "material-roles", "plan-to-bases", "audit-energy", "statistics", "save-boundary-profile"):
             command.add_argument("--request-file", type=Path, required=True, help="Structured Dataset operation JSON request")
         if name == "boundary-profiles":
             command.add_argument("profile_id", nargs="?")
@@ -114,12 +114,12 @@ def main(argv=None):
                 from .mcp import run_stdio
                 asyncio.run(run_stdio(dataset))
                 return 0
-            if command in ("recycle", "plan-to-bases", "audit-energy", "statistics", "save-boundary-profile"):
+            if command in ("recycle", "material-roles", "plan-to-bases", "audit-energy", "statistics", "save-boundary-profile"):
                 profile_id = arguments.get("profile_id")
                 arguments = json.loads(arguments["request_file"].read_text(encoding="utf-8"))
                 if not isinstance(arguments, dict):
                     raise DatasetError("Operation request must be a JSON object")
-                operation = {"recycle": "plan_recycling", "plan-to-bases": "plan_to_bases", "audit-energy": "audit_energy", "statistics": "analyze_statistics", "save-boundary-profile": "save_boundary_profile"}[command]
+                operation = {"recycle": "plan_recycling", "material-roles": "plan_material_roles", "plan-to-bases": "plan_to_bases", "audit-energy": "audit_energy", "statistics": "analyze_statistics", "save-boundary-profile": "save_boundary_profile"}[command]
                 result = getattr(dataset, operation)(profile_id, **arguments) if command == "save-boundary-profile" else getattr(dataset, operation)(**arguments)
                 print(_json(result))
                 return 0

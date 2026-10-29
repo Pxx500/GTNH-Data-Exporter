@@ -2,7 +2,7 @@
 
 Use the connected snapshot to answer a specific question. Start with a small
 lookup, select exact identities, then choose the analysis that proves what the
-user asked. This server has 30 tools. It shares one Dataset owner with the GUI
+user asked. This server has 31 tools. It shares one Dataset owner with the GUI
 and CLI. Tool schemas are the authority for current arguments and bounds.
 
 Read this guide once through the MCP resource
@@ -22,6 +22,7 @@ Read this guide once through the MCP resource
 | Can I inspect results while material search is running? | `start_trace_search`, `get_trace_search`, `pause_trace_search`, `continue_trace_search`, `close_trace_search` | A process-local continuation of the same frontier, with validated candidate snapshots and explicit lifecycle |
 | Is material-flow search prepared for this snapshot? | `flow_index_status`, optionally `rebuild_flow_index` | Read derived-index readiness or explicitly rebuild its sidecar offline. Preparation changes search data, not captured recipe facts |
 | What returns a chosen main-path byproduct? | `plan_recycling` | Bounded C-to-D alternatives, exact net recovery and external inputs, tied to a chosen main path |
+| Can several selected recycling paths run together? | `plan_material_roles` | Joint accounting for explicit secondary paths and run counts, sharing the main surplus and one ordered startup witness |
 | What are all required external inputs for a target? | `plan_to_bases` | Whole-recipe balanced plans under an explicit saved base-resource profile, with net imports and separate startup requirements |
 | Is a regenerative network cheaper than this recipe? | `audit_energy` | Exact verified bounded network witnesses that net-consume the primary feed, compared at equal target quantity using nominal recipe EU |
 | Does a resource-return loop gain or lose anything? | `find_loops`, optionally `inspect_chemistry` | Bounded loop witnesses, returned-resource ratios and separate source-backed chemical accounting. Gain is not automatically free or autonomous |
@@ -490,6 +491,45 @@ resource must satisfy the declared predicate. Keep every additional AND input,
 presence requirement and coproduct. Read `recovery`, `external_inputs`,
 `ledger` and `combined_startup`. Returned percentages measure net returned D
 against D consumed by the main plan. They are not overall factory efficiency.
+
+### Account several selected material roles together
+
+Use `plan_recycling` to discover alternatives for one byproduct. Once concrete
+paths are selected, use `plan_material_roles` to account up to eight secondary
+roles together. Each role starts at a net surplus of the main path and returns
+a resource consumed by that main path. Several roles can share the same surplus.
+Do not add independently calculated recovery percentages or grant every role a
+separate copy of the main byproduct supply.
+
+```json
+{"name":"plan_material_roles","arguments":{"main_path":{"resource_ids":["A","B"],"process_ids":["MAIN_RECIPE"]},"main_runs":1,"secondary_roles":[{"role_id":"recover-d","path":{"resource_ids":["C","D"],"process_ids":["RECOVERY_D"]},"runs":2},{"role_id":"recover-e","path":{"resource_ids":["C","E"],"process_ids":["RECOVERY_E"]},"runs":1}],"yield_mode":"guaranteed"}}
+```
+
+These are schematic placeholders, not snapshot IDs. Resolve real resources and
+reuse complete emitted paths. `main_runs` and each role's required `runs` mean
+executions of that phase's first recipe. Quantities accept positive integers or
+`{numerator, denominator}`. Supply concrete `selections` separately for the main
+phase and each role when native OR inputs need resolution. Reusing a native PID
+in two roles does not force both occurrences to choose the same OR input.
+
+For example, a main recipe `A + 4D + 2E → B + 4C`, two runs of
+`C + X → D` and one run of `2C + Y → E` have joint net inputs
+`A + 2D + E + 2X + Y` and output B. The main-first schedule still needs
+4D and 2E before recycling can return anything. Three runs of the first role
+would consume five C across the roles and exceed the four C available.
+
+Read `feed_shortfalls`, `ledger`, `external_inputs`, `returns`, `startup` and
+`integer_batch_scale`. A shortage makes the selected plan unsupported. It is
+not silently filled by an external byproduct import. `start_stock` applies to
+the whole integer batch, with all phases scaled together. Omitted stock leaves
+feasibility unknown, while an empty object explicitly declares no stock.
+Expected mode remains a scenario and does not certify startup availability.
+
+This operation accounts fixed selected quantities in main-then-declared-role
+order. It does not discover combinations, optimize quantities, find a minimum
+startup schedule or certify machine execution. Tier filters apply to nominal
+recipe voltage. Captured heat, special values and amperage do not establish
+that a particular installed machine can execute the plan.
 
 ### Expand a target from explicit basics
 

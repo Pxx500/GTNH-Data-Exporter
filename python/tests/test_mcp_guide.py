@@ -42,7 +42,7 @@ class MCPGuideTests(unittest.TestCase):
                             await session.read_resource('gtnh-data://guide/not-a-file')
                         self.assertEqual(error.exception.code, -32602)
                         tools = {tool.name: tool for tool in (await session.list_tools()).tools}
-                        self.assertEqual(len(tools), 30)
+                        self.assertEqual(len(tools), 31)
                         examples = re.findall(r'```json\n(.*?)\n```', guide.contents[0].text, flags=re.DOTALL)
                         self.assertGreaterEqual(len(examples), 6)
                         for example in examples:

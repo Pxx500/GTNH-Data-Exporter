@@ -605,6 +605,46 @@ class TransportTests(unittest.TestCase):
         self.assertEqual(result, 0)
         self.assertEqual(json.loads(output.getvalue()), expected)
 
+    def test_material_roles_share_exact_results_and_errors_across_all_transports(self):
+        main_recipe = process('main', [slot(choice('a')), slot(choice('d', amount=2))], ['b', 'c'])
+        side = process('side', [slot(choice('c'))], ['d'])
+        database = self.root / 'roles.sqlite'
+        dataset = Dataset.import_snapshot(snapshot(self.root / 'roles-capture',
+            resources=[resource(rid) for rid in 'abcd'], processes=[main_recipe, side]), database)
+        arguments = {'main_path': {'resource_ids': ['a', 'b'], 'process_ids': ['main']},
+            'secondary_roles': [{'role_id': 'recover', 'path': {'resource_ids': ['c', 'd'],
+                'process_ids': ['side']}, 'runs': {'numerator': 1, 'denominator': 2}}], 'start_stock': {}}
+        expected = dataset.plan_material_roles(**arguments)
+        self.assertEqual(expected['status'], 'complete')
+        with TestClient(create_app(dataset)) as client:
+            response = client.post('/api/material-role-plan', json=arguments)
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(response.json(), expected)
+            self.assertEqual(client.post('/api/material-role-plan', json=dict(arguments, secondary_roles=[])).status_code, 400)
+        request = self.root / 'roles-request.json'
+        request.write_text(json.dumps(arguments), encoding='utf-8')
+        output = StringIO()
+        with redirect_stdout(output):
+            code = main(['material-roles', '--database', str(database), '--request-file', str(request)])
+        self.assertEqual(code, 0)
+        self.assertEqual(json.loads(output.getvalue()), expected)
+
+        async def exercise():
+            parameters = StdioServerParameters(command=sys.executable,
+                args=['-m', 'gtnh_data', 'mcp', '--database', str(database)], env=dict(os.environ))
+            async with stdio_client(parameters) as (read_stream, write_stream):
+                async with ClientSession(read_stream, write_stream, read_timeout_seconds=15) as session:
+                    await session.initialize()
+                    declared = {tool.name: tool for tool in (await session.list_tools()).tools}['plan_material_roles']
+                    self.assertTrue(declared.annotations.read_only_hint)
+                    self.assertEqual(declared.input_schema['properties']['secondary_roles']['maxItems'], 8)
+                    answer = await session.call_tool('plan_material_roles', arguments)
+                    self.assertFalse(answer.is_error, answer.content)
+                    self.assertEqual(answer.structured_content, expected)
+                    invalid = await session.call_tool('plan_material_roles', dict(arguments, secondary_roles=[]))
+                    self.assertTrue(invalid.is_error)
+        asyncio.run(exercise())
+
     def test_recycling_structured_http_and_cli_requests_use_the_dataset_owner(self):
         arguments = dict(main_path={'resource_ids':['a','b'], 'process_ids':['convert']},
                          byproduct_id='b', return_id='a', main_runs=2, yield_mode='expected',

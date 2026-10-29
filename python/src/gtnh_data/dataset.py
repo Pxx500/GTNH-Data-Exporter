@@ -2857,11 +2857,165 @@ class Dataset:
         result['unsupported'] = result['ledger']['unsupported']
         return result, records, steps
 
+    @staticmethod
+    def _path_witness(phases, yield_mode, *, start_stock=None, scale=1):
+        from .balance import witness_ledger
+        records, steps, occurrences = {}, [], {}
+        for phase, phase_records, phase_steps in phases:
+            for step in phase_steps:
+                key = str(len(steps))
+                occurrences[key] = (step['process_id'], phase)
+                records[key] = dict(phase_records[step['process_id']], id=key)
+                steps.append(dict(step, process_id=key, runs=step['runs'] * scale))
+        combined = witness_ledger(records, steps, start_stock=start_stock, yield_mode=yield_mode)
+
+        def restore(value):
+            if isinstance(value, dict):
+                if value.get('process_id') in occurrences:
+                    value['process_id'], value['phase'] = occurrences[value['process_id']]
+                for nested in value.values():
+                    restore(nested)
+            elif isinstance(value, list):
+                for nested in value:
+                    restore(nested)
+
+        restore(combined)
+        return combined
+
+    def plan_material_roles(self, *, main_path, secondary_roles, main_runs=1, selections=None,
+                            yield_mode='guaranteed', start_stock=None, min_tier=None,
+                            max_tier=None, unknown_tier_policy='exclude', max_processes=128):
+        """Account fixed selected roles against shared main surplus and ordered startup."""
+        from .balance import quantity, ledger_json
+
+        def runs(value):
+            try:
+                amount = quantity(value)
+                if amount <= 0:
+                    raise ValueError('Role and main runs must be positive')
+                return amount
+            except (ValueError, TypeError) as exc:
+                raise DatasetError(str(exc)) from exc
+
+        def choices(value):
+            if value is None:
+                return {}
+            if not isinstance(value, dict) or any(not isinstance(pid, str) or not isinstance(slots, dict)
+                                                 for pid, slots in value.items()):
+                raise DatasetError('selections must map process IDs to input-slot selections')
+            return value
+
+        if not isinstance(secondary_roles, list) or not 1 <= len(secondary_roles) <= 8:
+            raise DatasetError('secondary_roles must contain 1 to 8 selected roles')
+        if type(max_processes) is not int or not 1 <= max_processes <= 576:
+            raise DatasetError('max_processes must be between 1 and 576')
+        if yield_mode not in ('guaranteed', 'expected'):
+            raise DatasetError('yield_mode must be guaranteed or expected')
+        filters = self._tier_filter(min_tier, max_tier, unknown_tier_policy)
+        definitions = [('main', main_path, runs(main_runs), choices(selections))]
+        labels = {'main'}
+        for role in secondary_roles:
+            if (not isinstance(role, dict) or set(role) - {'role_id', 'path', 'runs', 'selections'}
+                    or not {'role_id', 'path', 'runs'} <= set(role)):
+                raise DatasetError('Each role needs role_id, path and runs, with optional selections')
+            label = role['role_id']
+            if not isinstance(label, str) or not label.strip() or label in labels:
+                raise DatasetError('role_id must be nonempty, distinct and different from main')
+            labels.add(label)
+            definitions.append((label, role['path'], runs(role['runs']), choices(role.get('selections'))))
+        count = 0
+        for _, path, _, _ in definitions:
+            if not isinstance(path, dict) or not isinstance(path.get('process_ids'), list):
+                raise DatasetError('Selected paths must contain process_ids and resource_ids')
+            count += len(path['process_ids'])
+        if count > max_processes:
+            raise DatasetError('Selected recipe occurrences exceed max_processes')
+        if start_stock is not None:
+            if not isinstance(start_stock, dict):
+                raise DatasetError('start_stock must map resource IDs to quantities')
+            try:
+                if any(quantity(v) < 0 for v in start_stock.values()):
+                    raise ValueError('start_stock must contain nonnegative quantities')
+            except (ValueError, TypeError) as exc:
+                raise DatasetError(str(exc)) from exc
+        result = {'snapshot_id': self.snapshot_id, 'status': 'unsupported', 'yield_mode': yield_mode,
+                  'main_path': main_path, 'main_plan': None, 'roles': [], 'processes': {},
+                  'ledger': None, 'startup': None, 'feed_shortfalls': [], 'returns': {},
+                  'external_inputs': {}, 'unsupported': [], 'integer_batch_scale': None,
+                  'bounds': {'roles': len(secondary_roles), 'process_occurrences': count,
+                             'max_roles': 8, 'max_processes': max_processes},
+                  'ordering': 'main_then_declared_roles', 'global_optimum_proven': False,
+                  'execution_scope': 'selected_material_accounting_not_machine_execution'}
+        phases = []
+        with self._connect() as connection:
+            if start_stock is not None:
+                self._resource_ids(connection, list(start_stock), 'start_stock')
+            for label, path, amount, selected in definitions:
+                pids = path['process_ids']
+                for pid, slots in selected.items():
+                    if pid not in pids:
+                        raise DatasetError(f'Selection process {pid} is outside phase {label}')
+                    raw = self._record(connection, 'processes', pid)
+                    if any(isinstance(index, bool) or not isinstance(index, (str, int))
+                           or str(index) not in {str(i) for i in range(len(raw['inputs']))} for index in slots):
+                        raise DatasetError(f'Invalid input slot selection for {pid}')
+                plan, records, steps = self._path_plan(connection, path, amount, selected, yield_mode)
+                if any(not self._tier_allowed(record, filters) for record in records.values()):
+                    raise DatasetError('A selected path violates the recipe tier filter')
+                result['processes'].update({pid: self._record(connection, 'processes', pid) for pid in records})
+                if label == 'main':
+                    result['main_plan'] = plan
+                else:
+                    result['roles'].append({'role_id': label, 'path': path, 'runs': amount, **plan})
+                result['unsupported'].extend({'phase': label, **issue} for issue in plan['unsupported'])
+                phases.append((label, records, steps))
+            if result['unsupported']:
+                return ledger_json(result)
+            main = result['main_plan']
+            feeds, returns = set(), set()
+            for role in result['roles']:
+                feed, returned = role['path']['resource_ids'][0], role['path']['resource_ids'][-1]
+                if (feed == returned or main['ledger']['net'].get(feed, Fraction()) <= 0
+                        or main['ledger']['consumed'].get(returned, Fraction()) <= 0):
+                    raise DatasetError('Each role must return a consumed main input from a distinct net surplus main output')
+                feeds.add(feed)
+                returns.add(returned)
+                role['byproduct_id'], role['return_id'] = feed, returned
+                role['net_returned'] = role['ledger']['net'].get(returned, Fraction())
+            normalized = self._path_witness(phases, yield_mode)
+            scale = math.lcm(*(step['runs'].denominator for _, _, steps in phases for step in steps))
+            startup = self._path_witness(phases, yield_mode, start_stock=start_stock, scale=scale)
+            main_startup = self._path_witness(phases[:1], yield_mode, scale=scale)
+            startup.update(batch_scale=scale, ordering='main_then_declared_roles')
+            ledger = {key: normalized[key] for key in ('status', 'yield_mode', 'consumed', 'produced',
+                'net', 'presence', 'requirements', 'unsupported', 'uncertainty', 'assumptions')}
+            for feed in sorted(feeds):
+                supply = main['ledger']['net'][feed]
+                side_demand = -sum((role['ledger']['net'].get(feed, Fraction()) for role in result['roles']), Fraction())
+                # Presence is fixed per batch, so compare both prefixes at the common integer scale.
+                extra_start = (startup['required_start_stock'].get(feed, Fraction())
+                    - main_startup['required_start_stock'].get(feed, Fraction())) / scale
+                shortage = max(side_demand - supply, extra_start, Fraction())
+                if shortage > 0:
+                    result['feed_shortfalls'].append({'resource_id': feed, 'amount': shortage,
+                        'main_surplus': supply, 'secondary_net_demand': side_demand,
+                        'additional_ordered_start_stock': max(extra_start, Fraction())})
+            for returned in sorted(returns):
+                demand = main['ledger']['consumed'][returned]
+                recovered = max(ledger['net'].get(returned, Fraction()) - main['ledger']['net'].get(returned, Fraction()), Fraction())
+                result['returns'][returned] = {'main_consumed': demand, 'net_returned': recovered,
+                    'usable_returned': min(recovered, demand), 'surplus_returned': max(recovered - demand, Fraction()),
+                    'main_input_returned_percent': recovered * 100 / demand}
+            result.update(ledger=ledger, startup=startup, integer_batch_scale=scale,
+                external_inputs={rid: -amount for rid, amount in ledger['net'].items() if amount < 0 and rid not in feeds},
+                status='unsupported' if result['feed_shortfalls'] else 'complete')
+            return ledger_json(result)
+
     def plan_recycling(self, *, main_path, byproduct_id, return_id, main_runs=1, selections=None,
                        yield_mode='guaranteed', max_depth=12, max_processes=300, max_paths=8,
                        max_extra_steps=2, min_tier=None, max_tier=None, unknown_tier_policy='exclude'):
         """Account bounded selected paths, with external supplies and startup stock explicit."""
-        from .balance import quantity, witness_ledger, ledger_json
+        from .balance import quantity, ledger_json
         try:
             runs = quantity(main_runs)
         except ValueError as exc:
@@ -2922,24 +3076,8 @@ class Dataset:
                 side, side_records, side_steps = self._path_plan(connection, path, surplus / required_feed, selections, yield_mode)
                 alternative.update(side)
                 # Distinct occurrences may resolve the same raw recipe to different OR inputs.
-                ordered_records, ordered_steps, occurrence_ids = {}, [], {}
-                for phase, records, steps in (('main', main_records, main_steps), ('side', side_records, side_steps)):
-                    for step in steps:
-                        key = f'{phase}:{step["process_id"]}'
-                        occurrence_ids[key] = (step['process_id'], phase)
-                        ordered_records[key] = dict(records[step['process_id']], id=key)
-                        ordered_steps.append(dict(step, process_id=key))
-                combined = witness_ledger(ordered_records, ordered_steps, yield_mode=yield_mode)
-                def restore_occurrences(value):
-                    if isinstance(value, dict):
-                        if value.get('process_id') in occurrence_ids:
-                            value['process_id'], value['phase'] = occurrence_ids[value['process_id']]
-                        for nested in value.values():
-                            restore_occurrences(nested)
-                    elif isinstance(value, list):
-                        for nested in value:
-                            restore_occurrences(nested)
-                restore_occurrences(combined)
+                combined = self._path_witness((('main', main_records, main_steps),
+                    ('side', side_records, side_steps)), yield_mode)
                 alternative['combined_startup'] = combined
                 alternative['combined_ledger'] = {k: v for k, v in combined.items()
                                                   if k not in ('steps', 'required_start_stock', 'final_stock', 'feasible', 'feasibility_scope')}

@@ -53,7 +53,17 @@ NETWORK = {"target_amount": AMOUNT, "profile_id": OPTIONAL_STRING, "yield_mode":
            "timeout_seconds": {"type": "number", "exclusiveMinimum": 0, "maximum": 30, "default": 10},
            "max_columns": {"type": "integer", "minimum": 1, "maximum": 512, "default": 128}, "max_rows": {"type": "integer", "minimum": 1, "maximum": 4096, "default": 512},
            "start_stock": {"type": ["object", "null"]}, "selections": {"type": ["object", "null"]}, **TIERS}
+SELECTED_PATH = _schema({'resource_ids': IDS, 'process_ids': IDS}, ('resource_ids', 'process_ids'))
+MATERIAL_ROLE = _schema({'role_id': STRING, 'path': SELECTED_PATH, 'runs': AMOUNT,
+                        'selections': {'type': ['object', 'null']}}, ('role_id', 'path', 'runs'))
 OPERATIONS = {
+    'plan_material_roles': ('Account a selected main path and 1 to 8 selected secondary C-to-D roles with explicit first-process runs. Roles share main byproduct supply, all AND cofeeds, native OR choices and one ordered integer-batch startup witness. No discovery or optimization. Machine conditions are retained, not certified', _schema({
+        'main_path': SELECTED_PATH, 'main_runs': AMOUNT,
+        'secondary_roles': {'type': 'array', 'items': MATERIAL_ROLE, 'minItems': 1, 'maxItems': 8},
+        'selections': {'type': ['object', 'null']}, 'start_stock': {'type': ['object', 'null']},
+        'yield_mode': {'enum': ['guaranteed', 'expected'], 'default': 'guaranteed'},
+        'max_processes': {'type': 'integer', 'minimum': 1, 'maximum': 576, 'default': 128},
+        **TIERS}, ('main_path', 'secondary_roles'))),
     "flow_index_status": ('Read prepared material-flow index readiness, snapshot binding and analysis version. A missing or incompatible index requires an explicit rebuild before material route selection. This does not change captured data', _schema()),
     "rebuild_flow_index": ('Prepare material-flow search data offline for this snapshot. Writes a replaceable derived sidecar, leaving captured resources and recipes unchanged. Run when readiness reports missing or incompatible, not before every query. Preparation may take longer than a lookup', _schema()),
     "analyze_statistics": ('Describe scoped catalog distributions and comparable captured-recipe cost spreads. Findings are candidates, not bugs. max_records scans resources/groups before recipes. max_findings does not cap distributions. Read overview/search limits and inspect selected process IDs', _schema({"profile_id": OPTIONAL_STRING, "scope": SCOPE, "max_records": {"type": "integer", "minimum": 1, "maximum": 2000000, "default": 600000}, "max_findings": {"type": "integer", "minimum": 1, "maximum": 500, "default": 50}, "max_signature_buckets": {"type": "integer", "minimum": 1, "maximum": 200000, "default": 50000}, "timeout_seconds": {"type": "number", "exclusiveMinimum": 0, "maximum": 60, "default": 15}})),

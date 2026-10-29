@@ -721,6 +721,29 @@ alternatives retain their records and reasons. Quantitative amounts are JSON
 `{numerator, denominator}` with positive denominator. Native facts can retain
 decimal strings, while query arithmetic uses exact rational values.
 
+`plan_material_roles` accounts one selected `main_path` with positive
+`main_runs` and 1 to 8 `secondary_roles`. Each role supplies a unique `role_id`,
+a selected `path`, required positive first-process `runs` and optional native
+slot `selections`. Main selections are separate. Endpoints identify a main
+net-surplus byproduct C and a distinct consumed main input D. The operation
+does not discover or optimize combinations. It validates all selected recipe
+occurrences together, with `max_processes` defaulting to 128 and bounded at 576.
+
+The result retains phase-specific plans and canonical `processes`, a joint
+`ledger`, explicit `external_inputs`, aggregate `returns` and protected
+byproduct `feed_shortfalls`. Secondary roles share the main surplus. An
+insufficient net supply or additional ordered starting stock of C makes the
+selected plan unsupported instead of granting an implicit C import. Repeated
+native recipes in different phases retain their own resolved ingredient choices.
+
+`startup` uses main-first, then declared-role order. One
+`integer_batch_scale` scales every occurrence together before applying optional
+`start_stock`. It is separate from normalized rational net quantities. Missing
+stock and explicitly empty stock are different assumptions. `complete` describes
+selected material accounting, not machine feasibility, minimal startup or a
+global optimum. The CLI command is `material-roles --request-file FILE`, HTTP
+uses `POST /api/material-role-plan`, and MCP exposes `plan_material_roles`.
+
 `find_loops` accepts `start_id`, returned-resource `kind`, independent
 `chemical_kind`, yield mode, selections, tier bounds and finite search limits.
 Maximum depth/process/state bounds are 20/1,000/50,000. Filters apply before

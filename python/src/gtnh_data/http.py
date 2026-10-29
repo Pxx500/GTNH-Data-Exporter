@@ -156,6 +156,10 @@ def create_app(dataset: Dataset, ui_dist: str | Path | None = None) -> FastAPI:
     def recycling_plan(arguments: dict = Body(...)):
         return structured('plan_recycling', arguments)
 
+    @app.post('/api/material-role-plan')
+    def material_role_plan(arguments: dict = Body(...)):
+        return structured('plan_material_roles', arguments)
+
     @app.get('/api/chemistry/{resource_id:path}')
     def chemistry(resource_id: str):
         return dataset.inspect_chemistry(resource_id=resource_id)

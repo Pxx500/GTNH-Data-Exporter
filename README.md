@@ -116,6 +116,10 @@ can contribute to a target. Inspect side inputs before treating it as a full
 production plan. Network planning uses an explicit profile of permitted
 external resources and reports its actual imports and startup requirements.
 
+Agents and CLI users can also combine several selected recycling paths with
+`plan_material_roles`. It checks their shared byproduct supply and startup
+stock together. See the MCP guide for a worked example and the current bounds.
+
 Trace groups matching material transformations into one tile and equivalent
 retained paths into one route family. Expand machine variants to compare their
 costs, tools and other requirements, or inspect an exact recipe. Different

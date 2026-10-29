@@ -16,6 +16,121 @@ class PlanningTests(unittest.TestCase):
         return Dataset.import_snapshot(snapshot(self.root / 'snapshot',
             resources=[resource(id) for id in ids], processes=records), self.root / 'index.sqlite')
 
+    def test_material_roles_share_surplus_and_keep_main_startup(self):
+        main = process('main', [slot(choice('a')), slot(choice('d', amount=4)),
+            slot(choice('e', amount=2))], ['b', 'c'])
+        main['outputs'][1]['amount'] = 4
+        first = process('first', [slot(choice('c')), slot(choice('x'))], ['d'])
+        second = process('second', [slot(choice('c', amount=2)), slot(choice('y'))], ['e'])
+        dataset = self.dataset([main, first, second], list('abcdexy'))
+        arguments = dict(main_path={'resource_ids': ['a', 'b'], 'process_ids': ['main']},
+            secondary_roles=[{'role_id': 'd-return', 'path': {'resource_ids': ['c', 'd'],
+                'process_ids': ['first']}, 'runs': 2}, {'role_id': 'e-return',
+                'path': {'resource_ids': ['c', 'e'], 'process_ids': ['second']}, 'runs': 1}])
+        result = dataset.plan_material_roles(**arguments)
+        rational = lambda n: {'numerator': n, 'denominator': 1}
+        self.assertEqual(result['status'], 'complete')
+        self.assertEqual(result['ledger']['net'], {k: rational(v) for k, v in
+            {'a': -1, 'b': 1, 'd': -2, 'e': -1, 'x': -2, 'y': -1}.items()})
+        self.assertEqual(result['startup']['required_start_stock']['d'], rational(4))
+        self.assertEqual(result['startup']['required_start_stock']['e'], rational(2))
+        self.assertEqual(result['returns']['d']['usable_returned'], rational(2))
+        self.assertIsNone(result['startup']['feasible'])
+        self.assertFalse(dataset.plan_material_roles(**arguments, start_stock={})['startup']['feasible'])
+        arguments['secondary_roles'][0]['runs'] = 3
+        overspent = dataset.plan_material_roles(**arguments)
+        self.assertEqual(overspent['status'], 'unsupported')
+        self.assertEqual(overspent['feed_shortfalls'][0]['resource_id'], 'c')
+        self.assertEqual(overspent['feed_shortfalls'][0]['amount'], rational(1))
+
+    def test_material_roles_keep_occurrence_choices_and_scale_one_startup_batch(self):
+        main = process('main', [slot(choice('a')), slot(choice('d', amount=4))], ['b', 'c'])
+        main['outputs'][1]['amount'] = 2
+        side = process('side', [slot(choice('c')), slot(choice('x'), choice('z')),
+            slot(choice('tool'), role='presence')], ['d'])
+        side['conditions']['native_special_value'] = 1800
+        dataset = self.dataset([main, side], ['a', 'b', 'c', 'd', 'x', 'z', 'tool'])
+        roles = [{'role_id': label, 'path': {'resource_ids': ['c', 'd'], 'process_ids': ['side']},
+            'runs': {'numerator': 1, 'denominator': 2}, 'selections': {'side': {'1':
+                {'choice_index': index, 'resource_id': rid}}}} for label, index, rid in [('one', 0, 'x'), ('two', 1, 'z')]]
+        arguments = dict(main_path={'resource_ids': ['a', 'b'], 'process_ids': ['main']}, secondary_roles=roles)
+        result = dataset.plan_material_roles(**arguments)
+        self.assertEqual(result['status'], 'complete')
+        self.assertEqual(result['integer_batch_scale'], 2)
+        self.assertEqual(result['startup']['required_start_stock']['d'], {'numerator': 8, 'denominator': 1})
+        self.assertEqual([(s['phase'], s['process_id'], s['runs']) for s in result['startup']['steps']],
+            [('main', 'main', {'numerator': 2, 'denominator': 1}),
+             ('one', 'side', {'numerator': 1, 'denominator': 1}),
+             ('two', 'side', {'numerator': 1, 'denominator': 1})])
+        self.assertEqual(result['ledger']['net']['x'], {'numerator': -1, 'denominator': 2})
+        self.assertEqual(result['ledger']['net']['z'], {'numerator': -1, 'denominator': 2})
+        self.assertEqual(result['roles'][1]['selected_inputs']['side']['1']['choice_index'], 1)
+        self.assertEqual(result['roles'][0]['machine_conditions']['side']['native_special_value'], 1800)
+        self.assertEqual(len(result['processes']['side']['inputs'][1]['choices']), 2)
+        stock = {'a': 2, 'd': 8, 'x': 1, 'z': 1, 'tool': 1}
+        self.assertTrue(dataset.plan_material_roles(**arguments, start_stock=stock)['startup']['feasible'])
+        missing = [{**roles[0], 'selections': None}]
+        self.assertEqual(dataset.plan_material_roles(**dict(arguments, secondary_roles=missing))['status'], 'unsupported')
+        for invalid in (roles * 5, [roles[0], roles[0]], [{**roles[0], 'role_id': 'main'}]):
+            with self.assertRaises(DatasetError):
+                dataset.plan_material_roles(**dict(arguments, secondary_roles=invalid))
+        with self.assertRaises(DatasetError):
+            dataset.plan_material_roles(**arguments, max_processes=2)
+
+    def test_material_roles_expected_returns_never_prove_stock(self):
+        main = process('main', [slot(choice('a')), slot(choice('d'))], ['b', 'c'])
+        side = process('side', [slot(choice('c'))], ['d'])
+        side['outputs'][0]['chance'] = {'numerator': 1, 'denominator': 2}
+        dataset = self.dataset([main, side], list('abcd'))
+        arguments = dict(main_path={'resource_ids': ['a', 'b'], 'process_ids': ['main']},
+            secondary_roles=[{'role_id': 'return', 'path': {'resource_ids': ['c', 'd'],
+                'process_ids': ['side']}, 'runs': 1}], start_stock={'a': 1, 'd': 1})
+        self.assertEqual(dataset.plan_material_roles(**arguments)['status'], 'unsupported')
+        result = dataset.plan_material_roles(**arguments, yield_mode='expected')
+        self.assertEqual(result['status'], 'complete')
+        self.assertIsNone(result['startup']['feasible'])
+        self.assertEqual(result['returns']['d']['net_returned'], {'numerator': 1, 'denominator': 2})
+        self.assertTrue(result['ledger']['uncertainty'])
+
+    def test_material_roles_protected_feed_presence_uses_common_integer_batch(self):
+        main = process('main', [slot(choice('a')), slot(choice('d'))], ['b', 'c'])
+        main['outputs'][1]['amount'] = 2
+        side = process('side', [slot(choice('c')), slot(choice('c'), role='presence')], ['d'])
+        dataset = self.dataset([main, side], list('abcd'))
+        result = dataset.plan_material_roles(
+            main_path={'resource_ids': ['a', 'b'], 'process_ids': ['main']},
+            main_runs={'numerator': 1, 'denominator': 2}, start_stock={'a': 1, 'd': 1},
+            secondary_roles=[{'role_id': 'recover', 'path': {'resource_ids': ['c', 'd'],
+                'process_ids': ['side']}, 'runs': {'numerator': 1, 'denominator': 2}}])
+        self.assertEqual(result['integer_batch_scale'], 2)
+        self.assertTrue(result['startup']['feasible'])
+        self.assertEqual(result['status'], 'complete')
+        self.assertEqual(result['feed_shortfalls'], [])
+        self.assertNotIn('c', result['external_inputs'])
+        self.assertNotIn('c', result['startup']['required_start_stock'])
+
+    def test_material_roles_reject_unfunded_prefix_and_preserve_gross_net_returns(self):
+        main = process('main', [slot(choice('a')), slot(choice('d', amount=4))], ['b', 'c'])
+        main['outputs'][1]['amount'] = 4
+        side = process('side', [slot(choice('c', amount=5)), slot(choice('d'))], ['d', 'c'])
+        side['outputs'][0]['amount'] = 3
+        dataset = self.dataset([main, side], list('abcd'))
+        arguments = dict(main_path={'resource_ids': ['a', 'b'], 'process_ids': ['main']},
+            secondary_roles=[{'role_id': 'recover', 'path': {'resource_ids': ['c', 'd'],
+                'process_ids': ['side']}, 'runs': 1}])
+        result = dataset.plan_material_roles(**arguments)
+        self.assertEqual(result['status'], 'unsupported')
+        self.assertEqual(result['feed_shortfalls'][0]['secondary_net_demand'], {'numerator': 4, 'denominator': 1})
+        self.assertEqual(result['feed_shortfalls'][0]['additional_ordered_start_stock'], {'numerator': 1, 'denominator': 1})
+        self.assertEqual(result['roles'][0]['ledger']['produced']['d'], {'numerator': 3, 'denominator': 1})
+        self.assertEqual(result['returns']['d']['net_returned'], {'numerator': 2, 'denominator': 1})
+        self.assertEqual(result['returns']['d']['main_input_returned_percent'], {'numerator': 50, 'denominator': 1})
+        fractional = dataset.plan_material_roles(**arguments, start_stock={'a': {'numerator': 1, 'denominator': 2}})
+        self.assertFalse(fractional['startup']['feasible'])
+        for stock in ({'a': -1}, {'a': True}, {'a': {'numerator': 1, 'denominator': 0}}, {'missing': 1}):
+            with self.assertRaises(DatasetError):
+                dataset.plan_material_roles(**arguments, start_stock=stock)
+
     def test_recipe_voltage_bounds_are_exact_and_unknown_policy_is_explicit(self):
         records = []
         for id, voltage in [('zero', 0), ('ulv', 8), ('lv_min', 9), ('lv_max', 32), ('mv', 33), ('generator', None)]:
