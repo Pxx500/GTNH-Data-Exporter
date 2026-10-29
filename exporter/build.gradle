@@ -37,12 +37,12 @@ tasks.named('runFullPack') {
     }
     if (providers.gradleProperty('dataNeiReference').getOrElse('false').toBoolean()) {
         def referenceScope = providers.gradleProperty('dataNeiReferenceScope').getOrElse('all')
-        if (!(referenceScope in ['all', 'forestry_still'])) {
-            throw new GradleException('dataNeiReferenceScope must be all or forestry_still')
+        if (!(referenceScope in ['all', 'forestry_still', 'inventory'])) {
+            throw new GradleException('dataNeiReferenceScope must be all, forestry_still or inventory')
         }
         extraJvmArgs.add('-Dgtnh.data.neiReference=true')
-        if (referenceScope == 'forestry_still') {
-            extraJvmArgs.add('-Dgtnh.data.neiReferenceScope=forestry_still')
+        if (referenceScope != 'all') {
+            extraJvmArgs.add('-Dgtnh.data.neiReferenceScope=' + referenceScope)
         }
     }
     if (providers.gradleProperty('dataNativeRecipeCallsites').getOrElse('false').toBoolean()) {

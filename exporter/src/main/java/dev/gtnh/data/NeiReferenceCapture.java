@@ -6,6 +6,7 @@ import codechicken.nei.ItemList;
 import codechicken.nei.NEIClientConfig;
 import codechicken.nei.PositionedStack;
 import codechicken.nei.recipe.GuiCraftingRecipe;
+import codechicken.nei.recipe.GuiUsageRecipe;
 import codechicken.nei.recipe.ICraftingHandler;
 import codechicken.nei.recipe.Recipe;
 import codechicken.nei.recipe.StackInfo;
@@ -15,6 +16,8 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonNull;
 import com.google.gson.JsonObject;
+import com.google.gson.JsonPrimitive;
+import com.google.common.hash.Hashing;
 import forestry.api.recipes.IStillRecipe;
 import forestry.api.recipes.RecipeManagers;
 import forestry.core.recipes.nei.PositionedFluidTank;
@@ -32,11 +35,24 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
+import java.nio.file.Paths;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.IdentityHashMap;
+import java.util.Set;
+import java.util.LinkedHashSet;
+import java.util.Collections;
+import java.util.Arrays;
+import java.util.function.Supplier;
+import java.net.JarURLConnection;
+import java.net.URL;
+import java.net.URI;
+import java.util.Enumeration;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.zip.GZIPOutputStream;
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NBTTagCompound;
@@ -91,10 +107,14 @@ final class NeiReferenceCapture implements Closeable {
     /** Must run on the client thread after native NEI readiness gates. */
     static void capture(Path directory, JsonObject manifest) throws IOException {
         String scope = System.getProperty("gtnh.data.neiReferenceScope", "all");
-        if (!"all".equals(scope) && !"forestry_still".equals(scope)) {
+        if (!"all".equals(scope) && !"forestry_still".equals(scope) && !"inventory".equals(scope)) {
             throw new IllegalArgumentException("Unsupported NEI reference scope: " + scope);
         }
         if (!isReady()) throw new IllegalStateException("NEI reference capture requested before NEI/item readiness");
+        if ("inventory".equals(scope)) {
+            captureInventory(directory, manifest);
+            return;
+        }
         try (NeiReferenceCapture reference = new NeiReferenceCapture(directory, "forestry_still".equals(scope))) {
             if (!reference.stillOnly) reference.presentationContext = NeiPresentationContext.capture(directory, manifest);
             List<ICraftingHandler> handlers = new ArrayList<>(GuiCraftingRecipe.craftinghandlers);
@@ -111,6 +131,285 @@ final class NeiReferenceCapture implements Closeable {
                     index < parallelCount ? "craftinghandlers" : "serialCraftingHandlers");
             }
             reference.publish(manifest);
+        }
+    }
+
+    /** Records retained registrations without invoking handler presentation or recipe methods. */
+    static void captureInventory(Path directory, JsonObject manifest) throws IOException {
+        captureInventory(directory, manifest, () -> Arrays.<List<?>>asList(GuiCraftingRecipe.craftinghandlers,
+            GuiCraftingRecipe.serialCraftingHandlers, GuiUsageRecipe.usagehandlers, GuiUsageRecipe.serialUsageHandlers));
+    }
+
+    static void captureInventory(Path directory, JsonObject manifest, Supplier<List<List<?>>> rosterSource) throws IOException {
+        String[] names = {"craftinghandlers", "serialCraftingHandlers", "usagehandlers", "serialUsageHandlers"};
+        List<List<?>> originals = new ArrayList<>(rosterSource.get());
+        if (originals.size() != names.length) throw new IllegalArgumentException("Inventory requires all four native rosters");
+        List<List<?>> snapshots = new ArrayList<>();
+        for (List<?> roster : originals) synchronized (roster) { snapshots.add(new ArrayList<>(roster)); }
+        Inventory inventory = new Inventory(manifest);
+        try (NeiReferenceCapture reference = new NeiReferenceCapture(directory, false)) {
+            int global = 0;
+            JsonObject rosters = new JsonObject();
+            for (int roster = 0; roster < names.length; roster++) {
+                List<?> snapshot = snapshots.get(roster);
+                rosters.addProperty(names[roster], snapshot.size());
+                for (int index = 0; index < snapshot.size(); index++)
+                    reference.append("handlers", inventory.registration(snapshot.get(index), names[roster], index, global++));
+            }
+            List<List<?>> current = rosterSource.get();
+            boolean references = current.size() == originals.size();
+            boolean stable = true;
+            for (int roster = 0; roster < names.length; roster++) {
+                references &= roster < current.size() && originals.get(roster) == current.get(roster);
+                stable &= sameRoster(originals.get(roster), snapshots.get(roster));
+            }
+            rosters.addProperty("stable", stable);
+            rosters.addProperty("references_unchanged", references);
+            reference.close();
+            JsonObject summary = object("schema_version", 1, "profile", "handler_inventory",
+                "canonical_snapshot_id", manifest.get("snapshot_id"), "canonical_pack", manifest.get("pack"),
+                "canonical_pack_sha256", Hashing.sha256().hashString(SnapshotWriter.JSON.toJson(manifest.get("pack")), StandardCharsets.UTF_8).toString(),
+                "canonical_files", manifest.get("files"), "created_at", Instant.now().toString(),
+                "scope", "current retained crafting and usage registration entries, including serial rosters",
+                "counts", object("handlers", global, "signatures", 0, "handler_views", 0),
+                "rosters", rosters,
+                "authority", inventory.authority, "source_census", inventory.sourceCensus,
+                "class_counts", inventory.classCounts, "native_files", inventory.nativeFiles(),
+                "failed_handlers", inventory.failedRows, "files", reference.fileDeclarations(),
+                "signature_projection", "not_applicable", "view_projection", "not_applicable",
+                "item_presentation_context", object("status", "not_applicable", "reason", "inventory_only"),
+                "complete", references && stable && inventory.failedRows == 0
+                    && inventory.authority.get("nei_artifact_verified").getAsBoolean());
+            reference.writeSummary(summary);
+        }
+    }
+
+    private static boolean sameRoster(List<?> actual, List<?> snapshot) {
+        synchronized (actual) {
+            if (actual.size() != snapshot.size()) return false;
+            for (int index = 0; index < actual.size(); index++) if (actual.get(index) != snapshot.get(index)) return false;
+            return true;
+        }
+    }
+
+    /** Resolves one actual class-resource origin without relying on FML protection domains. */
+    static JsonObject classResourceOrigin(ClassLoader loader, String resourcePath) {
+        JsonObject result = object("status", "unavailable", "basis", "unique_class_resource", "file", null,
+            "sha256", null, "owner_candidates", new JsonArray(), "origins", new JsonArray());
+        if (loader == null) {
+            result.addProperty("reason", "bootstrap_class_loader");
+            return result;
+        }
+        try {
+            Set<String> origins = new LinkedHashSet<>();
+            Enumeration<URL> resources = loader.getResources(resourcePath);
+            while (resources.hasMoreElements()) {
+                URL resource = resources.nextElement();
+                URI origin;
+                if ("jar".equals(resource.getProtocol())) {
+                    JarURLConnection connection = (JarURLConnection) resource.openConnection();
+                    if (!matchesJarClassResource(connection, resourcePath))
+                        throw new IOException("Class resource entry does not match the requested binary name");
+                    origin = connection.getJarFileURL().toURI().normalize();
+                    if ("file".equals(origin.getScheme())) origin = Paths.get(origin).toRealPath().toUri();
+                } else if ("file".equals(resource.getProtocol())) {
+                    Path classFile = Paths.get(resource.toURI()).toRealPath();
+                    if (!classFile.endsWith(Paths.get(resourcePath)))
+                        throw new IOException("Class resource path does not match the requested binary name");
+                    Path root = classFile;
+                    for (int part = 0; part < Paths.get(resourcePath).getNameCount(); part++) root = root.getParent();
+                    origin = root.toRealPath().toUri();
+                } else origin = resource.toURI().normalize();
+                origins.add(origin.toString());
+            }
+            result.add("origins", SnapshotWriter.JSON.toJsonTree(origins));
+            if (origins.size() != 1) {
+                result.addProperty("reason", origins.isEmpty() ? "class_resource_missing" : "ambiguous_class_origins");
+                return result;
+            }
+            URI origin = URI.create(origins.iterator().next());
+            if (!"file".equals(origin.getScheme())) {
+                result.addProperty("reason", "unsupported_resource_origin");
+                return result;
+            }
+            Path path = Paths.get(origin);
+            result.addProperty("file", path.getFileName() == null ? null : path.getFileName().toString());
+            if (Files.isRegularFile(path)) result.addProperty("status", "jar");
+            else if (Files.isDirectory(path)) result.addProperty("status", "directory");
+            else result.addProperty("reason", "resource_origin_unavailable");
+        } catch (Exception | LinkageError error) {
+            result.addProperty("status", "failed");
+            result.add("failure", failure("class_resource_origin", error));
+        }
+        return result;
+    }
+
+    static boolean matchesJarClassResource(JarURLConnection connection, String resourcePath) throws IOException {
+        String entry = connection.getEntryName();
+        if (resourcePath.equals(entry)) return true;
+        Matcher versioned = Pattern.compile("META-INF/versions/([1-9][0-9]*)/" + Pattern.quote(resourcePath)).matcher(entry);
+        if (!versioned.matches()) return false;
+        try {
+            if (Integer.parseInt(versioned.group(1)) < 9) return false;
+        } catch (NumberFormatException invalidVersion) {
+            return false;
+        }
+        java.util.jar.Manifest manifest = connection.getManifest();
+        return manifest != null && Boolean.parseBoolean(manifest.getMainAttributes().getValue("Multi-Release"));
+    }
+
+    /** Reflection facts and verified native field bindings, separate from handler execution. */
+    private static final class Inventory {
+        private final JsonObject manifest;
+        private final Map<String, JsonObject> artifacts = new LinkedHashMap<>();
+        private final IdentityHashMap<Object, String> objects = new IdentityHashMap<>();
+        private final IdentityHashMap<Object, String> firstRegistrations = new IdentityHashMap<>();
+        private final JsonObject authority;
+        private final JsonObject classCounts = new JsonObject();
+        private final JsonObject sourceCensus = object("mapped", 0, "unresolved", 0, "unsupported_profile", 0, "failed", 0);
+        private int failedRows;
+
+        Inventory(JsonObject manifest) {
+            this.manifest = manifest;
+            JsonObject nei = component("NotEnoughItems");
+            JsonObject gt = component("gregtech");
+            JsonObject neiSource = source(GuiCraftingRecipe.class);
+            JsonObject gtSource = source(GTNEIDefaultHandler.class);
+            boolean neiVerified = verified(nei, neiSource, "2.8.170-GTNH",
+                "1086201a90bbfae020a42c6bce86d67d82fd0febbcccb72acc430694e978860a");
+            boolean gtVerified = verified(gt, gtSource, "5.09.54.256",
+                "b4f8d38ef734e08564e3ddb793c411a23a7d7df6b86de4994fa3d8f9afe947c3");
+            JsonArray failures = new JsonArray();
+            if (neiSource.has("failure")) failures.add(neiSource.get("failure"));
+            if (gtSource.has("failure")) failures.add(gtSource.get("failure"));
+            authority = object("status", neiVerified ? "verified" : "unsupported", "nei", nei, "gt", gt,
+                "nei_artifact_verified", neiVerified, "gt_artifact_verified", gtVerified, "failures", failures,
+                "class_origin_basis", "unique_class_resource");
+        }
+
+        private JsonObject component(String id) {
+            for (JsonElement value : manifest.getAsJsonObject("pack").getAsJsonArray("mods")) {
+                JsonObject mod = value.getAsJsonObject();
+                if (id.equals(mod.get("id").getAsString())) return mod;
+            }
+            return null;
+        }
+
+        private static boolean verified(JsonObject mod, JsonObject source, String version, String digest) {
+            return mod != null && version.equals(mod.get("version").getAsString())
+                && !mod.get("sha256").isJsonNull() && digest.equals(mod.get("sha256").getAsString())
+                && !source.get("sha256").isJsonNull() && digest.equals(source.get("sha256").getAsString());
+        }
+
+        private JsonObject source(Class<?> type) {
+            JsonObject result = classResourceOrigin(type.getClassLoader(), type.getName().replace('.', '/') + ".class");
+            if (!"jar".equals(result.get("status").getAsString()) && !"directory".equals(result.get("status").getAsString()))
+                return result;
+            String location = result.getAsJsonArray("origins").get(0).getAsString();
+            JsonObject cached = artifacts.get(location);
+            if (cached != null) return cached;
+            try {
+                if ("jar".equals(result.get("status").getAsString())) {
+                    String digest = SnapshotWriter.sha256(Paths.get(URI.create(location)));
+                    result.addProperty("sha256", digest);
+                    for (JsonElement value : manifest.getAsJsonObject("pack").getAsJsonArray("mods")) {
+                        JsonObject mod = value.getAsJsonObject();
+                        if (!mod.get("sha256").isJsonNull() && digest.equals(mod.get("sha256").getAsString()))
+                            result.getAsJsonArray("owner_candidates").add(mod);
+                    }
+                }
+            } catch (Exception | LinkageError error) {
+                result.addProperty("status", "failed");
+                result.add("failure", failure("class_source", error));
+            }
+            artifacts.put(location, result);
+            return result;
+        }
+
+        JsonObject registration(Object handler, String roster, int index, int global) {
+            String key = "h" + global;
+            JsonArray failures = new JsonArray();
+            JsonArray hierarchy = new JsonArray();
+            Set<String> interfaces = new LinkedHashSet<>();
+            JsonObject binding = object("status", "unresolved", "profile", null, "api", null,
+                "source_ids", new JsonArray(), "map_name", null, "map_registry_keys", new JsonArray(), "map_class", null);
+            JsonObject row = object("registration_key", key, "registration", roster, "registration_index", index,
+                "global_index", global, "object_key", null, "same_instance_as", null,
+                "native_class", null, "hierarchy", hierarchy, "interfaces", interfaces, "native_source", binding, "failures", failures);
+            if (handler == null) {
+                binding.addProperty("status", "failed");
+                failures.add(object("phase", "registration", "class", "null", "message", "Null retained handler"));
+            } else {
+                if (!objects.containsKey(handler)) {
+                    objects.put(handler, "o" + objects.size());
+                    firstRegistrations.put(handler, key);
+                } else row.addProperty("same_instance_as", firstRegistrations.get(handler));
+                row.addProperty("object_key", objects.get(handler));
+                Class<?> type = handler.getClass();
+                row.addProperty("native_class", type.getName());
+                increment(classCounts, type.getName());
+                try {
+                    for (Class<?> owner = type; owner != null; owner = owner.getSuperclass()) {
+                        JsonObject source = source(owner);
+                        hierarchy.add(object("class", owner.getName(), "source", source));
+                        if (source.has("failure")) failures.add(source.get("failure"));
+                        interfaces(owner, interfaces);
+                    }
+                    row.add("interfaces", SnapshotWriter.JSON.toJsonTree(interfaces));
+                    bind(handler, binding, failures);
+                } catch (Exception | LinkageError error) {
+                    failures.add(failure("class_hierarchy", error));
+                }
+            }
+            if (failures.size() != 0) failedRows++;
+            increment(sourceCensus, binding.get("status").getAsString());
+            return row;
+        }
+
+        private static void interfaces(Class<?> type, Set<String> names) {
+            for (Class<?> contract : type.getInterfaces()) {
+                if (names.add(contract.getName())) interfaces(contract, names);
+            }
+        }
+
+        private void bind(Object handler, JsonObject binding, JsonArray failures) {
+            if (!(handler instanceof GTNEIDefaultHandler)) return;
+            binding.addProperty("profile", "gt_nei_recipe_map_field_v1");
+            binding.addProperty("api", "gregtech.nei.GTNEIDefaultHandler.recipeMap");
+            if (!authority.get("gt_artifact_verified").getAsBoolean()) {
+                binding.addProperty("status", "unsupported_profile");
+                return;
+            }
+            try {
+                java.lang.reflect.Field field = GTNEIDefaultHandler.class.getDeclaredField("recipeMap");
+                field.setAccessible(true);
+                RecipeMap<?> map = (RecipeMap<?>) field.get(handler);
+                if (map == null) return;
+                binding.addProperty("map_name", map.unlocalizedName);
+                binding.addProperty("map_class", map.getClass().getName());
+                List<String> keys = new ArrayList<>();
+                for (Map.Entry<String, RecipeMap<?>> entry : RecipeMap.ALL_RECIPE_MAPS.entrySet())
+                    if (entry.getValue() == map) keys.add(entry.getKey());
+                Collections.sort(keys);
+                for (String registryKey : keys) {
+                    binding.getAsJsonArray("map_registry_keys").add(new JsonPrimitive(registryKey));
+                    binding.getAsJsonArray("source_ids").add(new JsonPrimitive("gregtech:" + registryKey));
+                }
+                if (!keys.isEmpty()) binding.addProperty("status", "mapped");
+            } catch (Exception | LinkageError error) {
+                binding.addProperty("status", "failed");
+                failures.add(failure("native_source", error));
+            }
+        }
+
+        private static void increment(JsonObject counts, String key) {
+            counts.addProperty(key, counts.has(key) ? counts.get(key).getAsInt() + 1 : 1);
+        }
+
+        JsonArray nativeFiles() {
+            JsonArray files = new JsonArray();
+            for (JsonObject artifact : artifacts.values()) files.add(artifact);
+            return files;
         }
     }
 
@@ -388,7 +687,7 @@ final class NeiReferenceCapture implements Closeable {
         return result;
     }
 
-    private JsonObject failure(String phase, Throwable error) {
+    private static JsonObject failure(String phase, Throwable error) {
         LOG.warn("NEI reference {} failed: {}", phase, error.toString());
         return object("phase", phase, "class", error.getClass().getName(), "message", error.getMessage());
     }
@@ -400,13 +699,18 @@ final class NeiReferenceCapture implements Closeable {
         counts.put(stream, counts.get(stream) + 1L);
     }
 
-    private void publish(JsonObject manifest) throws IOException {
-        close();
+    private JsonObject fileDeclarations() throws IOException {
         JsonObject files = new JsonObject();
         for (String name : STREAMS) {
             String filename = name + ".jsonl.gz";
             files.add(filename, object("records", counts.get(name), "sha256", SnapshotWriter.sha256(directory.resolve(filename))));
         }
+        return files;
+    }
+
+    private void publish(JsonObject manifest) throws IOException {
+        close();
+        JsonObject files = fileDeclarations();
         if (!stillOnly) files.add("presentation-context.json", presentationContext);
         JsonObject summary = object("schema_version", 2, "canonical_snapshot_id", manifest.get("snapshot_id"),
             "canonical_pack", manifest.get("pack"), "created_at", Instant.now().toString(),
@@ -449,6 +753,10 @@ final class NeiReferenceCapture implements Closeable {
             if ("NotEnoughItems".equalsIgnoreCase(mod.getAsJsonObject().get("id").getAsString())) nei = mod;
         }
         summary.add("native_nei", nei);
+        writeSummary(summary);
+    }
+
+    private void writeSummary(JsonObject summary) throws IOException {
         Path temporary = directory.resolve("summary.json.tmp");
         Files.write(temporary, SnapshotWriter.JSON.toJson(summary).getBytes(StandardCharsets.UTF_8), StandardOpenOption.CREATE_NEW);
         Files.move(temporary, directory.resolve("summary.json"), StandardCopyOption.ATOMIC_MOVE);
