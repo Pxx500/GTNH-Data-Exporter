@@ -217,7 +217,7 @@ final class BotaniaCapture {
                 null, null, null, null, conditions, object("owner", "BotaniaAPI.petalRecipes", "index", index++,
                     "native_class", nativeClass, "native_version", version, "selection", "active_list_order"));
         }
-        capture.coverage("botania:petal_apothecary", "1.13.39-GTNH".equals(version) ? "partial" : "unsupported", index,
+        capture.coverage("botania:petal_apothecary", petalVersionKnown(version) ? "partial" : "unsupported", index,
             "Exact base ingredient and fixed-output declarations only. Seed admission and consumed water/refill state do not form an interpreted material operation",
             object("native_version", version, "native_recipe_classes", classes, "declared_records", declared,
                 "interpreted_records", 0, "unresolved_input_records", index, "unresolved_completion_records", declared,
@@ -265,7 +265,11 @@ final class BotaniaCapture {
     }
 
     private static boolean runeVersionKnown(String version) {
-        return "1.13.38-GTNH".equals(version) || "1.13.39-GTNH".equals(version);
+        return "1.13.38-GTNH".equals(version) || petalVersionKnown(version);
+    }
+
+    private static boolean petalVersionKnown(String version) {
+        return "1.13.39-GTNH".equals(version) || "1.13.41-GTNH".equals(version);
     }
 
     /** Reads only verified passive base getters. Custom matchers and outputs may mutate live state. */
@@ -279,7 +283,7 @@ final class BotaniaCapture {
             return new CatalogDeclaration(false, Collections.emptyList(), null, conditions);
         }
         int mana = recipe.getManaUsage();
-        conditions.addProperty("native_semantics_basis", "verified_1.13.38_1.13.39_narrow_class_equivalence");
+        conditions.addProperty("native_semantics_basis", "verified_1.13.38_1.13.39_1.13.41_narrow_class_equivalence");
         conditions.addProperty("total_mana", mana);
         conditions.addProperty("energy_unit", "mana");
         conditions.addProperty("effective_duration", "mana_delivery_and_activation_runtime_unknown");
@@ -297,14 +301,14 @@ final class BotaniaCapture {
     /** Keeps the controller-only seed and water transaction outside the declared ingredient list. */
     static CatalogDeclaration petalDeclaration(RecipePetals recipe, String version) {
         JsonObject conditions = object("native_class", recipe == null ? null : recipe.getClass().getName(), "native_version", version);
-        String reason = !"1.13.39-GTNH".equals(version) ? "unsupported_native_version" : recipe == null ? "null_native_recipe"
+        String reason = !petalVersionKnown(version) ? "unsupported_native_version" : recipe == null ? "null_native_recipe"
             : recipe.getClass() != RecipePetals.class ? "uninterpreted_native_subclass" : null;
         if (reason != null) {
             conditions.addProperty("dynamic_inputs", reason);
             conditions.addProperty("dynamic_output", reason);
             return new CatalogDeclaration(false, Collections.emptyList(), null, conditions);
         }
-        conditions.addProperty("native_semantics_basis", "source_and_bytecode_verified_1.13.39_GTNH");
+        conditions.addProperty("native_semantics_basis", "verified_1.13.39_1.13.41_narrow_class_equivalence");
         conditions.addProperty("dynamic_inputs", "seed_trigger_and_water_refill_accounting_unmodeled");
         conditions.addProperty("completion_accounting", "seed_trigger_and_water_refill_accounting_unmodeled");
         conditions.addProperty("native_inputs_scope", "catalog_ingredient_occurrences_excludes_seed_and_refill");

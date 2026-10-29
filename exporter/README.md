@@ -109,6 +109,13 @@ static analysis, not runtime NEI coverage or equivalence.
 - The live GT recipe-map catalog and all entries are visited, including fake,
   hidden and disabled recipes. Fake/disabled entries are non-executable
 - The real Assembly Line registry carries research as a structured condition
+- Avaritia 1.100 Extreme Crafting declarations are read from its separate
+  registry. Exact shaped and shapeless classes retain ingredient occurrences,
+  grid shape, mirroring, quantities and matching predicates. Precedence,
+  repair and container returns remain unresolved, so these records have
+  unknown executability. Other versions have explicit unsupported coverage
+- Exact GT shapeless recipes retain output-transformation evidence. A verified
+  static output supports lookup while custom input validation remains unresolved
 - Native EnderIO Sag Mill no-ball and ordinary Alloy Smelter manager records
   retain ordered AND slots, OR alternatives, quantities, all products and total
   RF. Duration and EU/t stay unknown. Machine modes and native first-match

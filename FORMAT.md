@@ -162,7 +162,8 @@ This links the fluid object, not stack-specific NBT behavior. Tagged resource
 identities and native recipe predicates remain separate.
 
 The unchanged native GT quantity profile is identified by `5.09.54.221` and
-explicitly supports runtime versions `5.09.54.221`, `5.09.54.223` and `5.09.54.225`.
+explicitly supports runtime versions `5.09.54.221`, `5.09.54.223`, `5.09.54.225`
+and `5.09.54.256`.
 The relevant native source implementations and runtime classes were compared
 before extending this exact allowlist. `profile_version` identifies the
 interpretation, while `native_version` records the actual captured runtime.
@@ -222,6 +223,29 @@ measured in Forestry work ticks, with a five-game-tick work interval. Effective
 duration and energy stay unknown because machine state and scaling affect them.
 Recipe-side wildcard metadata and asymmetric NBT matching remain explicit.
 Native HashSet selection order describes the captured run, not a stable priority.
+
+`avaritia:extreme_crafting` catalogues the separate Avaritia 1.100 registry.
+Verified exact ExtremeShapedRecipe, ExtremeShapedOreRecipe,
+ExtremeShapelessRecipe and Forge ShapelessOreRecipe declarations retain their
+native class and registry index. Shaped records preserve width, height,
+mirroring and original slot indexes, including gaps. Every occupied slot
+consumes one item, with its original stack size in `declared_stack_size` on
+the choice. Ore alternatives and Forge shapeless ore inputs ignore NBT.
+Direct Avaritia stack predicates require declared NBT only when present.
+Wildcard metadata remains explicit. All declared output quantities and NBT
+identities are retained. Unknown classes are unresolved without probing their
+output getters. Other versions have unsupported coverage. Precedence, repair
+and container returns are unresolved, so executability remains null and these
+declarations cannot establish a supported accounting plan.
+
+Exact GT shapeless recipes can also have resolved static outputs without
+resolved matching. The shared GT output classifier checks NBT copying,
+overwrite behavior, configured enchantments, electric transfer and native
+item-update behavior. Its observational flags and decision reason are retained
+in `conditions.native_output_evidence`, separate from the existing
+`output_transformations` certificate. The private shapeless validator is not
+executed or guessed. Its input predicates and executability remain unresolved,
+even when a fixed output supports lookup.
 
 `forestry:squeezer` captures static declarations from the verified Forestry
 4.11.39 manager. Each declared stack is a separate AND requirement with its

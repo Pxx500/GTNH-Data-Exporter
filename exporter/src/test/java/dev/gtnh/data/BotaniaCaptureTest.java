@@ -19,7 +19,7 @@ public class BotaniaCaptureTest {
     @Test
     public void runicDeclarationsPreserveOccurrencesAndNativeRuntimeRequirements() {
         RecipeRuneAltar recipe = new RecipeRuneAltar(null, 8000, "treeSapling", "treeSapling", "runeWater");
-        for (String version : Arrays.asList("1.13.38-GTNH", "1.13.39-GTNH")) {
+        for (String version : Arrays.asList("1.13.38-GTNH", "1.13.39-GTNH", "1.13.41-GTNH")) {
             BotaniaCapture.CatalogDeclaration declaration = BotaniaCapture.runeDeclaration(recipe, version);
             assertTrue(declaration.known);
             assertEquals(Arrays.asList("treeSapling", "treeSapling", "runeWater"), declaration.inputs);
@@ -29,6 +29,18 @@ public class BotaniaCaptureTest {
             assertEquals(60, declaration.conditions.get("post_success_cooldown_ticks").getAsInt());
             assertFalse(declaration.conditions.getAsJsonObject("runtime_gates").get("wand_consumed").getAsBoolean());
         }
+    }
+
+    @Test
+    public void currentPetalProfileRetainsDeclaredOccurrencesAndUnresolvedControllerCosts() {
+        RecipePetals recipe = new RecipePetals(null, "petalWhite", "petalWhite", "runeWater");
+        BotaniaCapture.CatalogDeclaration declaration = BotaniaCapture.petalDeclaration(recipe, "1.13.41-GTNH");
+        assertTrue(declaration.known);
+        assertEquals(Arrays.asList("petalWhite", "petalWhite", "runeWater"), declaration.inputs);
+        assertEquals("1.13.41-GTNH", declaration.conditions.get("native_version").getAsString());
+        assertEquals("seed_trigger_and_water_refill_accounting_unmodeled",
+            declaration.conditions.get("dynamic_inputs").getAsString());
+        assertFalse(BotaniaCapture.petalDeclaration(recipe, "1.13.42-GTNH").known);
     }
 
     @Test

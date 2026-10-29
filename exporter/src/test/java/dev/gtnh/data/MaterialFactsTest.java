@@ -39,21 +39,38 @@ public class MaterialFactsTest {
 
     @Test
     public void moltenAndOrdinaryFluidUseDifferentNativeAccountingBases() {
-        assertQuantity(MaterialFacts.fluidAccounting("molten", false, true),
+        assertQuantity(MaterialFacts.fluidAccounting("5.09.54.221", "molten", false, true),
             "gt_material_units", "144", "native_top_level_component_parts");
-        assertQuantity(MaterialFacts.fluidAccounting("fluid", false, true),
+        assertQuantity(MaterialFacts.fluidAccounting("5.09.54.221", "fluid", false, true),
             "formula_units", "1000", "native_formula_unit");
-        assertQuantity(MaterialFacts.fluidAccounting("gas", false, true),
+        assertQuantity(MaterialFacts.fluidAccounting("5.09.54.221", "gas", false, true),
             "formula_units", "1000", "native_formula_unit");
     }
 
     @Test
+    public void exactVerifiedRuntimeVersionsRetainNativeQuantityBases() {
+        for (String version : Arrays.asList("5.09.54.221", "5.09.54.223", "5.09.54.225", "5.09.54.256")) {
+            assertQuantity(MaterialFacts.fluidAccounting(version, "molten", false, true),
+                "gt_material_units", "144", "native_top_level_component_parts");
+            assertQuantity(MaterialFacts.fluidAccounting(version, "fluid", false, true),
+                "formula_units", "1000", "native_formula_unit");
+            assertUnresolved(MaterialFacts.fluidAccounting(version, "plasma", false, true));
+            assertUnresolved(MaterialFacts.fluidAccounting(version, "fluid", true, true));
+            assertUnresolved(MaterialFacts.fluidAccounting(version, "fluid", false, false));
+        }
+        for (String version : Arrays.asList("5.09.54.255", "5.09.54.256-dev", "5.09.54.257", "6.0")) {
+            assertUnresolved(MaterialFacts.fluidAccounting(version, "molten", false, true));
+            assertUnresolved(MaterialFacts.fluidAccounting(version, "gas", false, true));
+        }
+    }
+
+    @Test
     public void taggedUnknownCompositionAndUnsupportedPhasesCannotClaimAccounting() {
-        assertUnresolved(MaterialFacts.fluidAccounting("molten", true, true));
-        assertUnresolved(MaterialFacts.fluidAccounting("fluid", false, false));
-        assertUnresolved(MaterialFacts.fluidAccounting("plasma", false, true));
-        assertUnresolved(MaterialFacts.fluidAccounting("slurry", false, true));
-        assertUnresolved(MaterialFacts.fluidAccounting("unresolved", false, true));
+        assertUnresolved(MaterialFacts.fluidAccounting("5.09.54.221", "molten", true, true));
+        assertUnresolved(MaterialFacts.fluidAccounting("5.09.54.221", "fluid", false, false));
+        assertUnresolved(MaterialFacts.fluidAccounting("5.09.54.221", "plasma", false, true));
+        assertUnresolved(MaterialFacts.fluidAccounting("5.09.54.221", "slurry", false, true));
+        assertUnresolved(MaterialFacts.fluidAccounting("5.09.54.221", "unresolved", false, true));
     }
 
     private void assertQuantity(JsonObject facts, String basis, String denominator, String normalization) {

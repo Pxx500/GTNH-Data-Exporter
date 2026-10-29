@@ -2530,7 +2530,7 @@ class Dataset:
         neutral = {'enabled', 'fake', 'hidden', 'machine_behavior', 'native_description',
             'nbt_sensitive', 'recipe_voltage_tier', 'recipe_voltage_tier_name',
             'recipe_voltage_tier_semantics', 'recipe_voltage_tier_source', 'requires_empty_outputs',
-            'native_class', 'container_returns', 'tool_accounting', 'input_accounting',
+            'native_class', 'container_returns', 'tool_accounting', 'input_accounting', 'native_output_evidence',
             'recipe_voltage_applicability', 'removable_by_gt', 'dimension', 'dimension_id',
             'biome', 'temperature', 'pressure', 'cleanroom', 'low_gravity', 'research', 'total_rf'}
         checked = {'declared_inputs', 'dynamic_inputs', 'dynamic_output', 'keeping_nbt',

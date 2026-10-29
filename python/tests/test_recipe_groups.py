@@ -32,6 +32,12 @@ class RecipeGroupTests(unittest.TestCase):
             'declared_inputs': 'captured', 'dynamic_output': 'resolved_static',
             'container_returns': 'native_unknown', 'tool_accounting': 'container_damage_and_breakage_unresolved',
             'input_accounting': 'declared_consumption_without_container_return_credit', 'keeping_nbt': False,
+            'native_output_evidence': {'reason': 'verified_no_output_transformations', 'native_flags': {
+                'native_class': 'gregtech.api.util.GTShapedRecipe', 'keeping_nbt': False,
+                'overwrite_nbt': False, 'configured_enchantments_present': False,
+                'configured_enchantment_count': 0, 'declared_output_present': True,
+                'declared_output_stack_size': 1, 'declared_output_has_nbt': False,
+                'validator_interpretation': 'not_applicable'}},
             'output_transformations': {'status': 'static', 'configured_enchantments': 'none',
                 'electric_charge_transfer': 'not_applicable', 'native_item_update': 'verified_no_op'}}
         assembler = process('assembler', [slot(choice('start', amount=2)),
@@ -80,6 +86,11 @@ class RecipeGroupTests(unittest.TestCase):
         changed = deepcopy(base)
         changed['conditions']['native_metadata'] = {'material_multiplier': 2}
         cases['native_effect'] = changed
+        changed = deepcopy(base)
+        changed['conditions']['output_transformations'] = {'status': 'static',
+            'configured_enchantments': 'none', 'electric_charge_transfer': 'not_applicable',
+            'native_item_update': 'verified_no_op', 'extra_material_effect': 'unknown'}
+        cases['unknown_output_transformation'] = changed
         changed = deepcopy(base)
         changed['outputs'][1]['native_effect'] = 'unknown'
         cases['output_effect'] = changed

@@ -19,28 +19,29 @@ import java.util.Map;
 /** Observes the native CoreMod login policy being applied before a canonical capture. */
 final class NativeLoginReadiness extends ChannelInboundHandlerAdapter {
     private static final String OWNER = "dreamcraft";
-    private static final String VERSION = "2.9.89";
     private static final String MESSAGE_TYPE = "com.dreammaster.network.msg.ZZClientOnlySyncMessage";
     private static final String NATIVE_HANDLER_TYPE = MESSAGE_TYPE + "$ZZClientOnlySyncMessageHandler";
     private final SimpleChannelHandlerWrapper<?, ?> nativeHandler;
     private final String pipelineHandlerName;
+    private final String nativeVersion;
     private volatile boolean completed;
     private volatile Throwable failure;
 
-    private NativeLoginReadiness(SimpleChannelHandlerWrapper<?, ?> nativeHandler, String pipelineHandlerName) {
+    private NativeLoginReadiness(SimpleChannelHandlerWrapper<?, ?> nativeHandler, String pipelineHandlerName,
+        String nativeVersion) {
         this.nativeHandler = nativeHandler;
         this.pipelineHandlerName = pipelineHandlerName;
+        this.nativeVersion = nativeVersion;
     }
 
     static NativeLoginReadiness install() {
         ModContainer owner = Loader.instance().getIndexedModList().get(OWNER);
-        if (owner == null || !VERSION.equals(owner.getVersion()))
-            throw new IllegalStateException("Native login readiness requires CoreMod " + VERSION);
+        String version = requireSupportedVersion(owner == null ? null : owner.getVersion());
         FMLEmbeddedChannel channel = NetworkRegistry.INSTANCE.getChannel(OWNER, Side.CLIENT);
         if (channel == null || channel.attr(NetworkRegistry.CHANNEL_SOURCE).get() != Side.CLIENT
             || !OWNER.equals(channel.attr(NetworkRegistry.FML_CHANNEL).get()))
             throw new IllegalStateException("Native CoreMod client channel is unavailable");
-        // CoreMod 2.9.89 registers only this one client message on its channel.
+        // Both verified CoreMod versions register only this one client message on their channel.
         // ModularUI2 generates wrapper names, so protocol ownership identifies the target.
         String handlerName = null;
         SimpleChannelHandlerWrapper<?, ?> wrapper = null;
@@ -56,9 +57,15 @@ final class NativeLoginReadiness extends ChannelInboundHandlerAdapter {
         if (wrapperCount != 1 || codec == null
             || channel.pipeline().names().indexOf(codec.name()) >= channel.pipeline().names().indexOf(handlerName))
             throw unsupportedRegistration(channel, codec, handlerName, wrapper, wrapperCount);
-        NativeLoginReadiness readiness = new NativeLoginReadiness(wrapper, handlerName);
+        NativeLoginReadiness readiness = new NativeLoginReadiness(wrapper, handlerName, version);
         channel.pipeline().replace(handlerName, handlerName, readiness);
         return readiness;
+    }
+
+    static String requireSupportedVersion(String version) {
+        if (!"2.9.89".equals(version) && !"2.9.98".equals(version))
+            throw new IllegalStateException("Native login readiness requires CoreMod 2.9.89 or 2.9.98");
+        return version;
     }
 
     private static IllegalStateException unsupportedRegistration(FMLEmbeddedChannel channel,
@@ -109,12 +116,12 @@ final class NativeLoginReadiness extends ChannelInboundHandlerAdapter {
     }
 
     JsonObject evidence() {
-        return object("owner", OWNER, "version", VERSION, "channel", OWNER,
+        return object("owner", OWNER, "version", nativeVersion, "channel", OWNER,
             "method", "native_client_message_handler_returned",
             "message_type", MESSAGE_TYPE, "native_handler_type", NATIVE_HANDLER_TYPE,
             "pipeline_handler_name", pipelineHandlerName,
-            "registration_basis", "CoreMod 2.9.89 single client message wrapper",
-            "runtime_layout", "ModularUI2 2.3.92 generates pipeline wrapper names",
+            "registration_basis", "CoreMod " + nativeVersion + " single client message wrapper",
+            "runtime_layout", "native runtime-generated wrapper name selected by channel ownership and exact wrapper type",
             "policy_application", "native_owner_handled_actual_message", "completed", completed,
             "status", failure != null ? "error" : completed ? "complete" : "pending",
             "failure", failure == null ? null : failure.toString());

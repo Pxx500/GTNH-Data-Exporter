@@ -95,6 +95,7 @@ final class NativeCapture {
         gregTech();
         assemblyLine();
         new CraftingCapture(this).capture();
+        if (Loader.isModLoaded("Avaritia")) new AvaritiaCapture(this).capture();
         smelting();
         new EnderIoCapture(this).capture();
         new ForestryCapture(this).capture();
@@ -108,16 +109,17 @@ final class NativeCapture {
         coverage("recipe-semantics", "partial", writer.count("processes"),
             "Dynamic native matching, machine-specific metadata and custom crafting remain unresolved. Uninterpreted metadata: " + unknownMetadata);
         coverage("other-mod-recipes", "unsupported", 0,
-            "Other non-GT machine recipes beyond bounded EnderIO, Forestry Centrifuge and static Squeezer/Carpenter/Still declarations, Botania Mana Infusion/Runic Altar and Petal Apothecary declarations, and Space Pumping catalog adapters remain unsupported");
+            "Other non-GT machine recipes beyond bounded EnderIO, Forestry Centrifuge and static Squeezer/Carpenter/Still declarations, Botania Mana Infusion/Runic Altar and Petal Apothecary declarations, Avaritia Extreme Crafting declarations, and Space Pumping catalog adapters remain unsupported");
         coverage("other-acquisition", "unsupported", 0,
-            "Mob drops, trades, other-mod worldgen, mining drop distributions and saved deposits are not captured");
+            "Mob drops, trades, other-mod worldgen, mining distributions beyond the captured GT small-ore baseline rules, and saved deposits are not captured");
     }
 
     private void spacePumping() throws IOException {
         String sourceApi = "gtnhintergalactic.recipe.SpacePumpingRecipes.RECIPES";
         ModContainer owner = Loader.instance().getIndexedModList().get("gtnhintergalactic");
         String version = owner == null ? null : owner.getVersion();
-        if (!"5.09.54.221".equals(version) && !"5.09.54.223".equals(version) && !"5.09.54.225".equals(version)) {
+        if (!"5.09.54.221".equals(version) && !"5.09.54.223".equals(version)
+            && !"5.09.54.225".equals(version) && !"5.09.54.256".equals(version)) {
             coverage("gtnhintergalactic.space_pumping", "unsupported", 0,
                 "No verified native Space Pumping contract for this version",
                 object("source_api", sourceApi, "native_version", version));

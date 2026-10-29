@@ -639,7 +639,7 @@ explanations, not search filters or penalties. Literal group exclusions and
 the full selected recipe witnesses retain their existing semantics.
 
 The native quantity profile explicitly supports GT `5.09.54.221`,
-`5.09.54.223` and `5.09.54.225`, with the same `.221` interpretation profile. Read the actual
+`5.09.54.223`, `5.09.54.225` and `5.09.54.256`, with the same `.221` interpretation profile. Read the actual
 snapshot and resource accounting status. A supported runtime version alone
 does not resolve persisted unknown facts, GT++ declarations, fluid-phase
 ambiguity or unsupported quantity bases. Use `inspect_chemistry` for the

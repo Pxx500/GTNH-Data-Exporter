@@ -16,6 +16,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import net.minecraft.enchantment.Enchantment;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.crafting.CraftingManager;
@@ -37,32 +38,82 @@ final class CraftingCapture {
 
     /** Resolves only declarations whose native output transformations are proven no-ops. */
     static boolean hasStaticOutput(IRecipe recipe) {
-        if (recipe.getClass() != GTShapedRecipe.class || ((GTShapedRecipe) recipe).mKeepingNBT) return false;
+        return "static".equals(outputDecision(recipe).get("status").getAsString());
+    }
+
+    private static JsonObject outputDecision(IRecipe recipe) {
+        JsonObject decision = object("status", "uninterpreted", "native_item_update", "unresolved",
+            "electric_charge_transfer", "unresolved", "configured_enchantments", "unresolved");
+        String reason = outputRejection(recipe, decision);
+        if (reason == null) {
+            decision.addProperty("status", "static");
+            decision.addProperty("native_item_update", "verified_no_op");
+            decision.addProperty("electric_charge_transfer", "not_applicable");
+            decision.addProperty("configured_enchantments", "none");
+        }
+        decision.addProperty("reason", reason == null ? "verified_no_output_transformations" : reason);
+        return decision;
+    }
+
+    private static String outputRejection(IRecipe recipe, JsonObject decision) {
+        boolean keepingNBT;
+        boolean overwriteNBT = false;
+        Enchantment[] enchantments;
+        JsonObject flags = object("native_class", recipe.getClass().getName());
+        decision.add("native_flags", flags);
+        if (recipe.getClass() == GTShapedRecipe.class) {
+            GTShapedRecipe shaped = (GTShapedRecipe) recipe;
+            keepingNBT = shaped.mKeepingNBT;
+            enchantments = ReflectionHelper.getPrivateValue(GTShapedRecipe.class, shaped, "mEnchantmentsAdded");
+            flags.addProperty("validator_interpretation", "not_applicable");
+        } else if (recipe.getClass() == GTShapelessRecipe.class) {
+            GTShapelessRecipe shapeless = (GTShapelessRecipe) recipe;
+            keepingNBT = shapeless.mKeepingNBT;
+            overwriteNBT = shapeless.overwriteNBT;
+            enchantments = ReflectionHelper.getPrivateValue(GTShapelessRecipe.class, shapeless, "mEnchantmentsAdded");
+            flags.addProperty("validator_present",
+                ReflectionHelper.getPrivateValue(GTShapelessRecipe.class, shapeless, "mInputValidator") != null);
+            flags.addProperty("validator_interpretation", "unresolved");
+        } else return "unsupported_native_class";
+        flags.addProperty("keeping_nbt", keepingNBT);
+        flags.addProperty("overwrite_nbt", overwriteNBT);
+        flags.addProperty("configured_enchantments_present", enchantments != null);
+        flags.addProperty("configured_enchantment_count", enchantments == null ? 0 : enchantments.length);
         ItemStack output = recipe.getRecipeOutput();
-        if (output == null || output.stackSize <= 0 || output.hasTagCompound()) return false;
-        if (ReflectionHelper.getPrivateValue(GTShapedRecipe.class, (GTShapedRecipe) recipe,
-            "mEnchantmentsAdded") != null) return false;
+        flags.addProperty("declared_output_present", output != null);
+        if (output != null) {
+            flags.addProperty("declared_output_stack_size", output.stackSize);
+            flags.addProperty("declared_output_has_nbt", output.hasTagCompound());
+        }
+        if (keepingNBT) return "keeping_nbt";
+        if (overwriteNBT) return "overwrite_nbt";
+        if (output == null || output.stackSize <= 0) return "missing_or_nonpositive_output";
+        if (output.hasTagCompound()) return "tagged_output";
+        if (enchantments != null) return "configured_enchantments";
         Item item = output.getItem();
-        if (item instanceof IElectricItem electric && electric.getTier(output) < Integer.MAX_VALUE) return false;
-        if (!(item instanceof GTGenericItem)) return true;
+        if (item == null) return "missing_output_item";
+        if (item instanceof IElectricItem electric && electric.getTier(output.copy()) < Integer.MAX_VALUE)
+            return "electric_charge_transfer";
+        if (!(item instanceof GTGenericItem)) return null;
         try {
             Class<?> updateOwner = item.getClass().getMethod("isItemStackUsable", ItemStack.class).getDeclaringClass();
-            if (updateOwner == GTGenericItem.class) return true;
-            return updateOwner == MetaBaseItem.class && item instanceof MetaBaseItem base
-                && base.mapEachBehavior(output, behavior -> Boolean.TRUE).isEmpty();
+            if (updateOwner == GTGenericItem.class) return null;
+            if (updateOwner == MetaBaseItem.class && item instanceof MetaBaseItem base
+                && base.mapEachBehavior(output, behavior -> Boolean.TRUE).isEmpty()) return null;
+            return "native_item_update";
         } catch (NoSuchMethodException unknownUpdate) {
-            return false;
+            return "unknown_native_item_update";
         }
     }
 
     static JsonObject outputConditions(IRecipe recipe) {
-        boolean certain = hasStaticOutput(recipe);
+        JsonObject decision = outputDecision(recipe);
+        boolean certain = "static".equals(decision.get("status").getAsString());
+        JsonObject evidence = object("reason", decision.remove("reason"),
+            "native_flags", decision.remove("native_flags"));
         JsonObject conditions = object("dynamic_output", certain ? "resolved_static" : "unresolved",
-            "output_transformations", certain
-                ? object("status", "static", "native_item_update", "verified_no_op",
-                    "electric_charge_transfer", "not_applicable", "configured_enchantments", "none")
-                : object("status", "uninterpreted", "native_item_update", "unresolved",
-                    "electric_charge_transfer", "unresolved", "configured_enchantments", "unresolved"));
+            "output_transformations", decision, "native_output_evidence", evidence);
+        if (recipe.getClass() == GTShapelessRecipe.class) conditions.addProperty("dynamic_inputs", "unresolved");
         if (certain) {
             conditions.addProperty("recipe_voltage_applicability", "not_applicable_crafting_grid");
             conditions.addProperty("tool_accounting", "container_damage_and_breakage_unresolved");
@@ -115,7 +166,7 @@ final class CraftingCapture {
             if (gtTemplate) {
                 JsonObject outputConditions = outputConditions(recipe);
                 staticGtOutput = "resolved_static".equals(outputConditions.get("dynamic_output").getAsString());
-                known = staticGtOutput;
+                  known = staticGtOutput && !nativeMatchingUnknown;
                 conditions.addProperty("declared_inputs", "captured");
                 for (Map.Entry<String, JsonElement> field : outputConditions.entrySet()) {
                     conditions.add(field.getKey(), field.getValue());
@@ -175,6 +226,6 @@ final class CraftingCapture {
         capture.coverage("minecraft.crafting.gt_shaped_declared", "partial", gtShaped,
             "Exact GTShapedRecipe declared slots captured. Non-NBT, non-electric outputs without configured enchantments or native update behaviors are static. Container and tool accounting remains unresolved");
         capture.coverage("minecraft.crafting.gt_shapeless_declared", "partial", gtShapeless,
-            "Exact GTShapelessRecipe inherited declared slots captured. Private inventory validator, NBT behavior and runtime output transformations remain unresolved");
+              "Exact GTShapelessRecipe declared slots and output decision facts captured. Verified no-op output transformations are static. Private inventory validator and input matching remain unresolved");
     }
 }

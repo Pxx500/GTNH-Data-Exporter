@@ -35,7 +35,7 @@ import net.minecraftforge.oredict.OreDictionary;
 final class MaterialFacts {
     private static final String PROFILE_VERSION = "5.09.54.221";
     private static final Set<String> ACCOUNTING_NATIVE_VERSIONS = new HashSet<>(Arrays.asList(
-        PROFILE_VERSION, "5.09.54.223", "5.09.54.225"));
+        PROFILE_VERSION, "5.09.54.223", "5.09.54.225", "5.09.54.256"));
     private static final String FLUID_SOURCE = "Materials.getGtMaterialFromFluid + Materials.getAll public phase identity union";
     private static final int NATIVE_DECLARATION_DEPTH = 32;
     private static final int NATIVE_DECLARATION_NODES = 1024;
@@ -270,9 +270,7 @@ final class MaterialFacts {
                 String candidatePhase = matches.size() == 1 ? matches.iterator().next() : "unresolved";
                 JsonArray phaseNames = new JsonArray();
                 for (String name : matches) phaseNames.add(new com.google.gson.JsonPrimitive(name));
-                JsonObject accounting = ACCOUNTING_NATIVE_VERSIONS.contains(nativeVersion)
-                    ? fluidAccounting(candidatePhase, original.tag != null, complete(tree))
-                    : unresolved("Runtime GT version has no proved accounting profile");
+                JsonObject accounting = fluidAccounting(nativeVersion, candidatePhase, original.tag != null, complete(tree));
                 candidates.add(object("material", tree, "phase", candidatePhase, "phases", phaseNames,
                     "accounting", accounting, "evidence", object("dispatcher", candidate == dispatcher,
                         "phase_catalog", catalogMatches.contains(candidate))));
@@ -292,7 +290,9 @@ final class MaterialFacts {
     }
 
     /** The public phase identities choose distinct native quantity conventions. */
-    static JsonObject fluidAccounting(String phase, boolean tagged, boolean knownComposition) {
+    static JsonObject fluidAccounting(String nativeVersion, String phase, boolean tagged, boolean knownComposition) {
+        if (!ACCOUNTING_NATIVE_VERSIONS.contains(nativeVersion))
+            return unresolved("Runtime GT version has no proved accounting profile");
         if (tagged) return unresolved("Tagged fluid state is not established by the native material association");
         if (!knownComposition) return unresolved("Native material composition is unresolved");
         if ("molten".equals(phase))

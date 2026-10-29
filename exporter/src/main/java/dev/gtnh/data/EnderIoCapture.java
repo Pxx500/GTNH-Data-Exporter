@@ -5,6 +5,8 @@ import static dev.gtnh.data.Jsons.object;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import cpw.mods.fml.common.Loader;
+import cpw.mods.fml.common.ModContainer;
 import crazypants.enderio.ModObject;
 import crazypants.enderio.machine.IMachineRecipe;
 import crazypants.enderio.machine.MachineRecipeRegistry;
@@ -33,19 +35,39 @@ final class EnderIoCapture {
     EnderIoCapture(NativeCapture capture) { this.capture = capture; }
 
     void capture() throws IOException {
+        ModContainer owner = Loader.instance().getIndexedModList().get("EnderIO");
+        String version = owner == null ? null : owner.getVersion();
+        JsonObject source = sourceDeclaration(version);
+        if (!source.get("native_version_supported").getAsBoolean()) {
+            capture.coverage("enderio:sag_mill", "unsupported", 0,
+                "No verified native Sag Mill declaration contract for this version", source);
+            capture.coverage("enderio:alloy_smelter", "unsupported", 0,
+                "No verified native Alloy Smelter declaration contract for this version", source);
+            return;
+        }
         recipes("enderio:sag_mill", "Sag Mill", ModObject.blockSagMill.unlocalisedName,
-            new ArrayList<>(CrusherRecipeManager.getInstance().getRecipes()), true);
+            new ArrayList<>(CrusherRecipeManager.getInstance().getRecipes()), true, version);
         recipes("enderio:alloy_smelter", "Alloy Smelter", ModObject.blockAlloySmelter.unlocalisedName,
-            new ArrayList<>(AlloyRecipeManager.getInstance().getRecipes()), false);
+            new ArrayList<>(AlloyRecipeManager.getInstance().getRecipes()), false, version);
         capture.coverage("enderio.grinding_ball_variants", "unsupported", 0,
             "Only the no-grinding-ball Sag baseline is captured. Ball modifiers, wear and output repetition are not expanded");
         capture.coverage("enderio.alloy_vanilla_smelting", "unsupported", 0,
             "The display helper omits configured exclusions. Furnace mode and vanilla wrapper execution are not interpreted");
     }
 
-    private void recipes(String family, String label, String machine, List<? extends IRecipe> recipes, boolean sag)
+    static JsonObject sourceDeclaration(String version) {
+        boolean known = "2.10.49".equals(version) || "2.10.51".equals(version);
+        return object("native_version", version, "native_version_supported", known,
+            "native_semantics_basis", known ? "verified_2.10.49_2.10.51_narrow_class_equivalence"
+                : "unsupported_native_version");
+    }
+
+    private void recipes(String family, String label, String machine, List<? extends IRecipe> recipes, boolean sag,
+        String version)
         throws IOException {
         JsonObject registry = registry(machine, sag);
+        for (Map.Entry<String, JsonElement> entry : sourceDeclaration(version).entrySet())
+            registry.add(entry.getKey(), entry.getValue());
         long supported = 0;
         for (int index = 0; index < recipes.size(); index++) {
             IRecipe recipe = recipes.get(index);
@@ -77,9 +99,11 @@ final class EnderIoCapture {
                 conditions.addProperty("dynamic_inputs", "unresolved");
                 conditions.addProperty("dynamic_output", "unresolved");
             }
-            capture.emitProcess(family, label, inputs, outputs, null, null, null, executable, conditions,
-                object("owner", sag ? "CrusherRecipeManager.getRecipes" : "AlloyRecipeManager.getRecipes",
-                    "index", index, "native_class", recipe.getClass().getName(), "native_version", "2.10.49"));
+            JsonObject provenance = sourceDeclaration(version);
+            provenance.addProperty("owner", sag ? "CrusherRecipeManager.getRecipes" : "AlloyRecipeManager.getRecipes");
+            provenance.addProperty("index", index);
+            provenance.addProperty("native_class", recipe.getClass().getName());
+            capture.emitProcess(family, label, inputs, outputs, null, null, null, executable, conditions, provenance);
         }
         capture.coverage(family, "partial", recipes.size(),
             "Configured manager records in native order. Supported baseline predicates: " + supported
