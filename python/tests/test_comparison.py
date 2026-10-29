@@ -4,6 +4,8 @@ import importlib.util
 import json
 import tempfile
 import unittest
+from contextlib import redirect_stdout, redirect_stderr
+from io import StringIO
 from pathlib import Path
 
 from .artifacts import choice, process, resource, slot, snapshot
@@ -16,6 +18,254 @@ spec.loader.exec_module(comparison)
 
 
 class ComparisonTests(unittest.TestCase):
+    def inventory_fixture(self):
+        covered = process('p', [], ['out'], family='gregtech:gt.recipe.alloysmelter')
+        covered['provenance'] = {'owner': 'GTRecipe', 'map': 'gt.recipe.alloysmelter'}
+        directory = snapshot(self.root / 'inventory-snapshot', resources=[resource('out')], processes=[covered],
+            coverage=[{'id': 'c', 'domain': 'gregtech.map:gt.recipe.alloysmelter', 'status': 'partial',
+                       'records': 1, 'reason': 'All registered entries captured, machine semantics partial', 'provenance': {}}])
+        manifest_path = directory / 'manifest.json'
+        manifest = json.loads(manifest_path.read_text())
+        manifest['pack'] = {'mods': [dict(id=id, version=version, source=id + '.jar', sha256=digest)
+            for id, version, digest in [('NotEnoughItems', '2.8.170-GTNH', '1086201a90bbfae020a42c6bce86d67d82fd0febbcccb72acc430694e978860a'),
+                ('gregtech', '5.09.54.256', 'b4f8d38ef734e08564e3ddb793c411a23a7d7df6b86de4994fa3d8f9afe947c3')]],
+            'config_script_digests': []}
+        manifest_path.write_text(json.dumps(manifest))
+        mod = manifest['pack']['mods'][1]
+        row = {'registration_key': 'h0', 'registration': 'craftinghandlers', 'registration_index': 0,
+            'global_index': 0, 'object_key': 'o0', 'same_instance_as': None, 'native_class': comparison.GT_HANDLER,
+            'hierarchy': [{'class': comparison.GT_HANDLER, 'source': {'status': 'jar', 'basis': 'unique_class_resource', 'file': mod['source'],
+                'sha256': mod['sha256'], 'owner_candidates': [mod]}}], 'interfaces': [], 'failures': [],
+            'native_source': {'status': 'mapped', 'profile': 'gt_nei_recipe_map_field_v1',
+                'api': 'gregtech.nei.GTNEIDefaultHandler.recipeMap', 'source_ids': ['gregtech:gt.recipe.alloysmelter'],
+                'map_name': 'gt.recipe.alloysmelter', 'map_registry_keys': ['gt.recipe.alloysmelter'],
+                'map_class': 'gregtech.api.recipe.RecipeMap'}}
+        unknown = json.loads(json.dumps(row))
+        unknown.update(registration_key='h2', registration='usagehandlers', registration_index=0,
+            global_index=2, object_key='o1', native_class='other.CustomHandler', hierarchy=[],
+            native_source={'status': 'unresolved', 'profile': None, 'api': None, 'source_ids': [],
+                'map_name': None, 'map_registry_keys': [], 'map_class': None})
+        rows = [row, dict(row, registration_key='h1', registration='serialCraftingHandlers', registration_index=0,
+            global_index=1, same_instance_as='h0'), unknown]
+        reference = directory / 'nei-inventory'
+        reference.mkdir()
+        summary = {'schema_version': 1, 'profile': 'handler_inventory', 'canonical_snapshot_id': manifest['snapshot_id'],
+            'canonical_pack': manifest['pack'], 'canonical_pack_sha256': hashlib.sha256(json.dumps(manifest['pack'], ensure_ascii=False,
+                separators=(',', ':')).encode()).hexdigest(), 'canonical_files': manifest['files'],
+            'counts': {'handlers': 3, 'signatures': 0, 'handler_views': 0},
+            'rosters': {'craftinghandlers': 1, 'serialCraftingHandlers': 1, 'usagehandlers': 1,
+                'serialUsageHandlers': 0, 'stable': True, 'references_unchanged': True},
+            'authority': {'status': 'verified', 'nei': manifest['pack']['mods'][0], 'gt': mod,
+                'nei_artifact_verified': True, 'gt_artifact_verified': True, 'failures': []},
+            'source_census': {'mapped': 2, 'unresolved': 1, 'unsupported_profile': 0, 'failed': 0},
+            'complete': True, 'scope': 'current retained crafting and usage registration entries only',
+            'signature_projection': 'not_applicable', 'view_projection': 'not_applicable',
+            'item_presentation_context': {'status': 'not_applicable', 'reason': 'inventory_only'},
+            'failed_handlers': 0, 'files': {}}
+        summary['class_counts'] = {comparison.GT_HANDLER: 2, 'other.CustomHandler': 1}
+        summary['native_files'] = [{'status': 'jar', 'basis': 'unique_class_resource', 'file': owner['source'], 'sha256': owner['sha256'],
+            'owner_candidates': [owner]} for owner in manifest['pack']['mods']]
+        (reference / 'summary.json').write_text(json.dumps(summary))
+        for name, values in [('handlers.jsonl.gz', rows), ('signatures.jsonl.gz', []), ('handler-views.jsonl.gz', [])]:
+            self.replace_records(reference, name, values, 'summary.json')
+        return directory, reference
+
+    def test_inventory_report_preserves_duplicate_registrations_and_unknown_sources(self):
+        directory, reference = self.inventory_fixture()
+        report = comparison.inventory_coverage(directory, reference)
+        self.assertEqual(len(report['handlers']), 3)
+        self.assertEqual([row['registration_key'] for row in report['handlers']], ['h0', 'h1', 'h2'])
+        self.assertEqual(report['handlers'][1]['same_instance_as'], 'h0')
+        self.assertEqual(report['handlers'][0]['capture']['status'], 'covered_declarations')
+        self.assertEqual(report['handlers'][0]['capture']['sources'][0]['canonical_records'], 1)
+        self.assertEqual(report['handlers'][2]['capture']['status'], 'unresolved')
+        self.assertEqual(report['handlers'][2]['registration'], 'usagehandlers')
+        self.assertTrue(all(row['comparison_verification']['status'] == 'not_performed' for row in report['handlers']))
+        self.assertEqual(report['canonical_sources']['families'][0]['handler_registration_keys'], ['h0', 'h1'])
+
+    def test_inventory_gt_subclass_associates_declared_map_only_with_verified_base_artifact(self):
+        directory, reference = self.inventory_fixture()
+        summary_path = reference / 'summary.json'
+        summary = json.loads(summary_path.read_text())
+        rows = list(comparison._records(reference, 'handlers.jsonl.gz', summary['files']))
+        subclass = 'bartworks.neiHandler.BioVatNEIHandler'
+        base = rows[0]['hierarchy'][0]
+        rows[0].update(native_class=subclass, hierarchy=[{'class': subclass, 'source': {
+            'status': 'unavailable', 'file': None, 'sha256': None, 'owner_candidates': []}}, base])
+        rows[1].update(native_class=subclass, hierarchy=rows[0]['hierarchy'])
+        self.replace_records(reference, 'handlers.jsonl.gz', rows, 'summary.json')
+        report = comparison.inventory_coverage(directory, reference)
+        self.assertEqual(report['handlers'][0]['capture']['status'], 'associated_declared_map')
+        self.assertEqual(report['handlers'][0]['capture']['handler_behavior'], 'unresolved_subclass')
+        self.assertEqual(report['handlers'][0]['capture']['sources'][0]['family'], 'gregtech:gt.recipe.alloysmelter')
+        self.assertEqual(report['canonical_sources']['families'][0]['handler_registration_keys'], ['h0', 'h1'])
+        self.assertEqual(report['handlers'][0]['comparison_verification']['status'], 'not_performed')
+        self.assertEqual(report['handlers'][0]['accounting']['status'], 'not_performed')
+        for row in rows[:2]:
+            row['hierarchy'][1]['source'].pop('basis', None)
+        self.replace_records(reference, 'handlers.jsonl.gz', rows, 'summary.json')
+        ambiguous = comparison.inventory_coverage(directory, reference)
+        self.assertEqual(ambiguous['handlers'][0]['capture']['status'], 'unresolved')
+        for row in rows[:2]:
+            row['hierarchy'][1] = {'class': comparison.GT_HANDLER, 'source': {
+                'status': 'unavailable', 'file': None, 'sha256': None, 'owner_candidates': []}}
+        self.replace_records(reference, 'handlers.jsonl.gz', rows, 'summary.json')
+        rejected = comparison.inventory_coverage(directory, reference)
+        self.assertEqual(rejected['handlers'][0]['capture']['status'], 'unresolved')
+        self.assertEqual(rejected['canonical_sources']['families'][0]['handler_registration_keys'], [])
+
+    def test_inventory_rejects_cohort_binding_counts_and_tampered_streams(self):
+        directory, reference = self.inventory_fixture()
+        summary_path = reference / 'summary.json'
+        original = json.loads(summary_path.read_text())
+        for field, value in [('canonical_snapshot_id', 'another'), ('canonical_pack_sha256', '0' * 64),
+                             ('canonical_files', {}), ('counts', {'handlers': 2, 'signatures': 0, 'handler_views': 0}),
+                             ('source_census', {}), ('failed_handlers', 1)]:
+            with self.subTest(field=field):
+                summary_path.write_text(json.dumps(dict(original, **{field: value})))
+                with self.assertRaises(comparison.ComparisonError):
+                    comparison.inventory_coverage(directory, reference)
+        summary_path.write_text(json.dumps(original))
+        for path in (directory / 'resources.jsonl.gz', reference / 'handlers.jsonl.gz'):
+            before = path.read_bytes()
+            path.write_bytes(before + b'corruption')
+            with self.assertRaisesRegex(comparison.ComparisonError, 'checksum'):
+                comparison.inventory_coverage(directory, reference)
+            path.write_bytes(before)
+        summary_path.write_text(json.dumps({**original, 'files': {**original['files'],
+            'handlers.jsonl.gz': {**original['files']['handlers.jsonl.gz'], 'records': 4}}}))
+        with self.assertRaisesRegex(comparison.ComparisonError, 'count'):
+            comparison.inventory_coverage(directory, reference)
+
+    def test_inventory_partial_roster_preserves_null_failure_and_cannot_claim_complete(self):
+        directory, reference = self.inventory_fixture()
+        rows = list(comparison._records(reference, 'handlers.jsonl.gz', json.loads((reference / 'summary.json').read_text())['files']))
+        rows[2].update(object_key=None, native_class=None, failures=[{'phase': 'registration', 'message': 'Null retained handler'}])
+        rows[2]['native_source']['status'] = 'failed'
+        self.replace_records(reference, 'handlers.jsonl.gz', rows, 'summary.json')
+        path = reference / 'summary.json'
+        summary = json.loads(path.read_text())
+        summary.update(complete=False, failed_handlers=1, source_census={'mapped': 2, 'unresolved': 0, 'unsupported_profile': 0, 'failed': 1})
+        summary['rosters']['stable'] = False
+        path.write_text(json.dumps(summary))
+        report = comparison.inventory_coverage(directory, reference)
+        self.assertFalse(report['inventory_complete'])
+        self.assertEqual(len(report['handlers']), 3)
+        self.assertEqual(report['handlers'][2]['capture']['status'], 'unresolved')
+        self.assertEqual(report['counts']['distinct_instances'], 1)
+        summary['complete'] = True
+        path.write_text(json.dumps(summary))
+        with self.assertRaisesRegex(comparison.ComparisonError, 'complete'):
+            comparison.inventory_coverage(directory, reference)
+
+    def test_inventory_lists_unbound_families_and_empty_gt_maps_and_fuel_is_not_furnace(self):
+        directory, reference = self.inventory_fixture()
+        manifest_path = directory / 'manifest.json'
+        manifest = json.loads(manifest_path.read_text())
+        processes = list(comparison._records(directory, 'processes.jsonl.gz', manifest['files']))
+        processes.append(process('hidden', [], ['out'], family='other:hidden'))
+        self.replace_records(directory, 'processes.jsonl.gz', processes, 'manifest.json')
+        coverage = list(comparison._records(directory, 'coverage.jsonl.gz', manifest['files']))
+        coverage.append({'id': 'empty', 'domain': 'gregtech.map:gt.recipe.empty', 'status': 'partial',
+            'records': 0, 'reason': 'All registered entries captured', 'provenance': {}})
+        self.replace_records(directory, 'coverage.jsonl.gz', coverage, 'manifest.json')
+        path = reference / 'summary.json'
+        summary = json.loads(path.read_text())
+        summary['canonical_files'] = json.loads(manifest_path.read_text())['files']
+        path.write_text(json.dumps(summary))
+        rows = list(comparison._records(reference, 'handlers.jsonl.gz', summary['files']))
+        owner = manifest['pack']['mods'][0]
+        rows[2].update(native_class='codechicken.nei.recipe.FuelRecipeHandler', hierarchy=[{
+            'class': 'codechicken.nei.recipe.FuelRecipeHandler', 'source': {'status': 'jar', 'basis': 'unique_class_resource',
+                'file': owner['source'], 'sha256': owner['sha256'], 'owner_candidates': [owner]}}])
+        self.replace_records(reference, 'handlers.jsonl.gz', rows, 'summary.json')
+        report = comparison.inventory_coverage(directory, reference)
+        families = {row['family']: row for row in report['canonical_sources']['families']}
+        self.assertEqual(families['gregtech:gt.recipe.empty']['canonical_records'], 0)
+        self.assertEqual(families['other:hidden']['handler_registration_keys'], [])
+        self.assertEqual(report['handlers'][2]['capture']['status'], 'adapter_missing')
+        self.assertEqual(report['handlers'][2]['capture']['sources'], [])
+        self.assertIn('fuel', report['handlers'][2]['capture']['reason'].lower())
+        rows[2]['hierarchy'][0]['source'].pop('basis')
+        self.replace_records(reference, 'handlers.jsonl.gz', rows, 'summary.json')
+        unproved = comparison.inventory_coverage(directory, reference)
+        self.assertEqual(unproved['handlers'][2]['capture']['status'], 'unresolved')
+        self.assertNotIn('profile', unproved['handlers'][2]['capture'])
+
+    def test_inventory_cli_preserves_all_rows_in_json_and_markdown_and_rejects_recipe_mode(self):
+        directory, reference = self.inventory_fixture()
+        before = {path: path.read_bytes() for path in [directory / 'manifest.json', reference / 'summary.json']}
+        expected = comparison.inventory_coverage(directory, reference)
+        report, markdown = self.root / 'report.json', self.root / 'report.md'
+        with redirect_stdout(StringIO()):
+            code = comparison.main([str(directory), '--reference', str(reference), '--mode', 'coverage',
+                '--report', str(report), '--markdown', str(markdown)])
+        self.assertEqual(code, 0)
+        self.assertEqual(json.loads(report.read_text()), expected)
+        self.assertTrue(all(row['registration_key'] in markdown.read_text() for row in expected['handlers']))
+        self.assertEqual({path: path.read_bytes() for path in before}, before)
+        with self.assertRaisesRegex(comparison.ComparisonError, 'no recipe comparison views'):
+            comparison.compare(directory, reference)
+        with redirect_stderr(StringIO()):
+            self.assertEqual(comparison.main([str(directory), '--reference', str(reference), '--mode', 'coverage',
+                '--report', str(report), '--max-missing', '0']), 2)
+
+    def test_inventory_gson_digest_preserves_order_nulls_unicode_and_disabled_html_escaping(self):
+        directory, reference = self.inventory_fixture()
+        manifest_path, summary_path = directory / 'manifest.json', reference / 'summary.json'
+        manifest, summary = json.loads(manifest_path.read_text()), json.loads(summary_path.read_text())
+        # This is the literal compact Gson representation, independent of Python's serializer.
+        mods = ','.join('{"id":"' + mod['id'] + '","version":"' + mod['version'] + '","source":"'
+            + mod['source'] + '","sha256":"' + mod['sha256'] + '"}' for mod in manifest['pack']['mods'])
+        gson = '{"mods":[' + mods + '],"config_script_digests":[{"path":"config/caf\u00e9<a>=b&c\\u2028x\\u2029y","sha256":null}]}'
+        pack = json.loads(gson)
+        manifest['pack'] = pack
+        summary.update(canonical_pack=pack, canonical_pack_sha256=hashlib.sha256(gson.encode('utf-8')).hexdigest())
+        manifest_path.write_text(json.dumps(manifest))
+        summary_path.write_text(json.dumps(summary))
+        self.assertEqual(comparison.inventory_coverage(directory, reference)['binding']['canonical_pack_sha256'],
+            summary['canonical_pack_sha256'])
+
+    def test_inventory_alloy_union_is_partial_and_usage_aliases_retain_both_occurrences(self):
+        directory, reference = self.inventory_fixture()
+        manifest_path, summary_path = directory / 'manifest.json', reference / 'summary.json'
+        manifest, summary = json.loads(manifest_path.read_text()), json.loads(summary_path.read_text())
+        owner = dict(id='EnderIO', version='2.10.51', source='EnderIO.jar',
+            sha256='527fafdf9add94ff74f47b9181ccd0cb77a6aa4ff09040b844a7fb91ca367c9b')
+        manifest['pack']['mods'].append(owner)
+        manifest_path.write_text(json.dumps(manifest))
+        recipes = list(comparison._records(directory, 'processes.jsonl.gz', manifest['files']))
+        recipes.append(process('alloy', [], ['out'], family='enderio:alloy_smelter', conditions={'fake': False, 'hidden': True}))
+        self.replace_records(directory, 'processes.jsonl.gz', recipes, 'manifest.json')
+        coverage = list(comparison._records(directory, 'coverage.jsonl.gz', manifest['files']))
+        coverage += [{'id': domain, 'domain': domain, 'status': status, 'records': count, 'reason': 'Native bounded source', 'provenance': {}}
+            for domain, status, count in [('enderio:alloy_smelter', 'partial', 1), ('enderio.alloy_vanilla_smelting', 'unsupported', 0)]]
+        self.replace_records(directory, 'coverage.jsonl.gz', coverage, 'manifest.json')
+        manifest = json.loads(manifest_path.read_text())
+        summary.update(canonical_files=manifest['files'], canonical_pack=manifest['pack'],
+            canonical_pack_sha256=comparison._pack_digest(manifest['pack']))
+        summary_path.write_text(json.dumps(summary))
+        rows = list(comparison._records(reference, 'handlers.jsonl.gz', summary['files']))
+        name = 'crazypants.enderio.nei.AlloySmelterRecipeHandler'
+        rows[2].update(native_class=name, hierarchy=[{'class': name, 'source': {'status': 'jar', 'basis': 'unique_class_resource', 'file': owner['source'],
+            'sha256': owner['sha256'], 'owner_candidates': [owner]}}])
+        rows.append(dict(rows[0], registration_key='h3', global_index=3, registration='serialUsageHandlers',
+            registration_index=0, same_instance_as='h0'))
+        self.replace_records(reference, 'handlers.jsonl.gz', rows, 'summary.json')
+        summary = json.loads(summary_path.read_text())
+        summary['counts']['handlers'] = 4
+        summary['source_census']['mapped'] = 3
+        summary['rosters']['serialUsageHandlers'] = 1
+        summary_path.write_text(json.dumps(summary))
+        report = comparison.inventory_coverage(directory, reference)
+        self.assertEqual(report['handlers'][2]['capture']['status'], 'partially_covered_declarations')
+        self.assertEqual(report['handlers'][3]['same_instance_as'], 'h0')
+        self.assertEqual(report['handlers'][3]['registration'], 'serialUsageHandlers')
+        self.assertEqual(report['handlers'][2]['accounting']['status'], 'not_performed')
+        self.assertEqual(report['handlers'][2]['accounting']['captured_sources'][0]['native_flags']['hidden']['true'], 1)
+        self.assertEqual(report['counts']['registrations'], 4)
+        self.assertEqual(report['counts']['distinct_instances'], 2)
+
     def setUp(self):
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
@@ -29,6 +279,15 @@ class ComparisonTests(unittest.TestCase):
         manifest_path = directory / manifest_name
         manifest = json.loads(manifest_path.read_text())
         manifest['files'][name] = {'sha256': hashlib.sha256(path.read_bytes()).hexdigest(), 'records': len(records)}
+        if manifest.get('profile') == 'handler_inventory' and name == 'handlers.jsonl.gz':
+            counts = {}
+            for record in records:
+                if record['native_class'] is not None:
+                    counts[record['native_class']] = counts.get(record['native_class'], 0) + 1
+                for entry in record['hierarchy']:
+                    if entry['source'] not in manifest['native_files']:
+                        manifest['native_files'].append(entry['source'])
+            manifest['class_counts'] = counts
         manifest_path.write_text(json.dumps(manifest))
         if manifest_name == 'manifest.json' and (directory / 'nei-reference/presentation-context.json').exists():
             reference = directory / 'nei-reference'

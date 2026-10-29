@@ -631,6 +631,46 @@ missing views, unsupported tanks and failed observations prevent complete
 validation. Agreement covers presentation templates, not controller execution,
 batch yield, power use or output-space checks.
 
+### Retained NEI handler inventory
+
+The paired reference scope `inventory` uses summary schema 1 with
+`profile: handler_inventory`. It records the four current retained rosters:
+`craftinghandlers`, `serialCraftingHandlers`, `usagehandlers` and
+`serialUsageHandlers`. Rejected historical registrations and GUI overlay
+registries are outside this scope. Recipe queries, display getters and handler
+IDs are not evaluated.
+
+Each `handlers.jsonl.gz` row retains its registration key, roster and local/global
+indices, object identity key, first-occurrence alias, native class, hierarchy,
+interfaces, artifact ownership evidence, native source binding and failures.
+Different instances of one class remain distinct. GT bindings identify the
+verified base-class recipe-map field and its actual global registry keys.
+They do not establish complete subclass presentation behavior or recipe equality.
+Class origins use unique class-loader resources, including standard multi-release
+entries authorized by their JAR manifest. Positive bindings require the complete
+JAR digest to match the captured artifact. Missing or ambiguous origins stay unresolved.
+
+The summary binds the canonical snapshot ID, complete pack metadata and all six
+canonical stream count/hash declarations. `canonical_pack_sha256` hashes compact
+UTF-8 Gson JSON preserving object order and escaping JavaScript line separators.
+It also declares the compressed inventory stream checksums, all four roster
+counts, identity stability, component authority, class/source counts and errors.
+Recipe signatures, views and presentation context are explicitly not applicable.
+`complete` describes the observed retained rosters, not complete pack semantics.
+
+`scripts/compare_nei.py SNAPSHOT --mode coverage --report REPORT.json` validates
+this reference and produces one classification per registration. Optional
+`--markdown REPORT.md` creates the human-readable report. The default reference
+directory is `SNAPSHOT/nei-reference`. The ordinary comparison mode rejects
+inventory references instead of treating their empty recipe streams as evidence.
+
+The coverage report includes every canonical process family, bound zero-entry
+GT maps and source families without a confirmed NEI handler binding. Exact class and
+artifact profiles establish declaration-source associations. Unsupported sources,
+informational handlers and unresolved mappings remain distinct. Accounting and
+recipe-comparison validation are marked not performed. Captured executable,
+dynamic-input/output and native flags remain separate observations.
+
 ## Dataset operations
 
 The same operations serve HTTP, CLI and MCP. Opening a Dataset fixes one

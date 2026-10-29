@@ -617,6 +617,8 @@ def compare(snapshot, reference, *, example_limit=20, profile='default'):
     snapshot, reference = Path(snapshot), Path(reference)
     manifest = json.loads((snapshot / 'manifest.json').read_text(encoding='utf-8'))
     summary = json.loads((reference / 'summary.json').read_text(encoding='utf-8'))
+    if summary.get('profile') == 'handler_inventory':
+        raise ComparisonError('Handler inventory contains no recipe comparison views. Use coverage mode')
     if manifest.get('schema_version') != 1 or type(summary.get('schema_version')) is not int or summary['schema_version'] not in ((3,) if still else (1, 2)):
         raise ComparisonError('Profile requires canonical schema 1 and reference schema ' + ('3' if still else '1/2'))
     if still:
@@ -920,19 +922,447 @@ def compare(snapshot, reference, *, example_limit=20, profile='default'):
     return report
 
 
+INVENTORY_AUTHORITY = {
+    'NotEnoughItems': ('2.8.170-GTNH', '1086201a90bbfae020a42c6bce86d67d82fd0febbcccb72acc430694e978860a'),
+    'gregtech': ('5.09.54.256', 'b4f8d38ef734e08564e3ddb793c411a23a7d7df6b86de4994fa3d8f9afe947c3'),
+}
+INVENTORY_ROSTERS = ('craftinghandlers', 'serialCraftingHandlers', 'usagehandlers', 'serialUsageHandlers')
+INVENTORY_COMPONENTS = {**INVENTORY_AUTHORITY,
+    'Avaritia': ('1.100', '6d69f28a34a4409e1da08a10aa454c5cc154f59b023caab1a7b8206becd2f139'),
+    'Botania': ('1.13.41-GTNH', '24879ea7e5cfa86c022c525061ecd95cb134ee99d29bb590f2f8d9605b15a3b2'),
+    'Forestry': ('4.11.40', '5d2fc33046bdce188f281892c429ac4b1cd3b3833b66cbf013600e0d66c47058'),
+    'EnderIO': ('2.10.51', '527fafdf9add94ff74f47b9181ccd0cb77a6aa4ff09040b844a7fb91ca367c9b'),
+}
+# Exact source-verified handler classes, never inherited or substring matches.
+INVENTORY_BINDINGS = {
+    'codechicken.nei.recipe.ShapedRecipeHandler': ('NotEnoughItems', 'minecraft:crafting', 'minecraft.crafting', 'CraftingManager.getRecipeList, shaped declarations'),
+    'codechicken.nei.recipe.ShapelessRecipeHandler': ('NotEnoughItems', 'minecraft:crafting', 'minecraft.crafting', 'CraftingManager.getRecipeList, shapeless declarations'),
+    FURNACE_HANDLER: ('NotEnoughItems', 'minecraft:smelting', 'minecraft.smelting', 'FurnaceRecipes.smelting().getSmeltingList'),
+    'fox.spiteful.avaritia.compat.nei.ExtremeShapedRecipeHandler': ('Avaritia', 'avaritia:extreme_crafting', 'avaritia.extreme_crafting', 'ExtremeCraftingManager.getRecipeList, shaped subset'),
+    'fox.spiteful.avaritia.compat.nei.ExtremeShapelessRecipeHandler': ('Avaritia', 'avaritia:extreme_crafting', 'avaritia.extreme_crafting', 'ExtremeCraftingManager.getRecipeList, shapeless subset'),
+    'vazkii.botania.client.integration.nei.recipe.RecipeHandlerManaPool': ('Botania', 'botania:mana_infusion', 'botania:mana_infusion', 'BotaniaAPI.manaInfusionRecipes'),
+    'vazkii.botania.client.integration.nei.recipe.RecipeHandlerRunicAltar': ('Botania', 'botania:runic_altar', 'botania:runic_altar', 'BotaniaAPI.runeAltarRecipes'),
+    'vazkii.botania.client.integration.nei.recipe.RecipeHandlerPetalApothecary': ('Botania', 'botania:petal_apothecary', 'botania:petal_apothecary', 'BotaniaAPI.petalRecipes, seed/water accounting unresolved'),
+    'forestry.factory.recipes.nei.NEIHandlerCentrifuge': ('Forestry', 'forestry:centrifuge', 'forestry:centrifuge', 'RecipeManagers.centrifugeManager.recipes'),
+    'forestry.factory.recipes.nei.NEIHandlerSqueezer': ('Forestry', 'forestry:squeezer', 'forestry:squeezer', 'RecipeManagers.squeezerManager.recipes, additional container recipe views unbound'),
+    'forestry.factory.recipes.nei.NEIHandlerCarpenter': ('Forestry', 'forestry:carpenter', 'forestry:carpenter', 'RecipeManagers.carpenterManager.recipes'),
+    STILL_HANDLER: ('Forestry', 'forestry:still', 'forestry:still', 'RecipeManagers.stillManager.recipes'),
+    'crazypants.enderio.nei.SagMillRecipeHandler': ('EnderIO', 'enderio:sag_mill', 'enderio:sag_mill', 'CrusherRecipeManager.getRecipes, no-ball baseline only'),
+    'crazypants.enderio.nei.AlloySmelterRecipeHandler': ('EnderIO', 'enderio:alloy_smelter', 'enderio:alloy_smelter', 'AlloyRecipeManager.getRecipes, vanilla smelting helper unbound'),
+}
+INVENTORY_PARTIAL = {
+    'forestry.factory.recipes.nei.NEIHandlerSqueezer': ('forestry.other_factories', 'SqueezerRecipeManager.containerRecipes views are outside the static Squeezer capture'),
+    'crazypants.enderio.nei.SagMillRecipeHandler': ('enderio.grinding_ball_variants', 'Grinding ball auxiliary views and modifier variants are outside the no-ball capture'),
+    'crazypants.enderio.nei.AlloySmelterRecipeHandler': ('enderio.alloy_vanilla_smelting', 'Handler unions configured alloy recipes with the unbound vanilla smelting helper'),
+}
+INVENTORY_OTHER_SOURCES = {
+    'codechicken.nei.recipe.BrewingRecipeHandler': ('NotEnoughItems', 'adapter_missing', 'other-mod-recipes', 'Native brewing display has no captured brewing source adapter'),
+    'codechicken.nei.recipe.FuelRecipeHandler': ('NotEnoughItems', 'adapter_missing', None, 'Furnace fuel/burn-time catalog, not the inherited furnace recipe source'),
+    'codechicken.nei.recipe.InformationHandler': ('NotEnoughItems', 'informational', None, 'Information pages, not material recipe declarations'),
+    'codechicken.nei.recipe.ProfilerRecipeHandler': ('NotEnoughItems', 'informational', None, 'NEI profiling instrumentation'),
+    'codechicken.nei.recipe.FireworkRecipeHandler': ('NotEnoughItems', 'unresolved', 'minecraft.crafting', 'Generated RecipeFireworks examples, not a static registry-equivalence proof'),
+    'codechicken.nei.recipe.RepairRecipeHandler': ('NotEnoughItems', 'unresolved', 'minecraft.crafting', 'Generated ItemList repair examples, not static registered producers'),
+    'fox.spiteful.avaritia.compat.nei.CompressionHandler': ('Avaritia', 'adapter_missing', 'other-mod-recipes', 'CompressorManager.getRecipes has no native capture adapter'),
+    'vazkii.botania.client.integration.nei.recipe.RecipeHandlerLexicaBotania': ('Botania', 'informational', None, 'BotaniaAPI.getAllEntries/getDisplayedRecipes information pages'),
+    'vazkii.botania.client.integration.nei.recipe.RecipeHandlerFloatingFlowers': ('Botania', 'unresolved', 'botania.other_recipes', 'Query-generated NBT flower examples, not a mana or petal registry binding'),
+}
+for _handler, _owner, _domain, _proof in (
+        ('vazkii.botania.client.integration.nei.recipe.RecipeHandlerElvenTrade', 'Botania', 'botania.other_recipes', 'BotaniaAPI.elvenTradeRecipes'),
+        ('vazkii.botania.client.integration.nei.recipe.RecipeHandlerBrewery', 'Botania', 'botania.other_recipes', 'BotaniaAPI.brewRecipes'),
+        ('vazkii.botania.client.integration.nei.recipe.RecipeHandlerPureDaisy', 'Botania', 'botania.other_recipes', 'BotaniaAPI.pureDaisyRecipes'),
+        ('forestry.factory.recipes.nei.NEIHandlerBottler', 'Forestry', 'forestry.other_factories', 'Native Bottler display recipe list'),
+        ('forestry.factory.recipes.nei.NEIHandlerFabricator', 'Forestry', 'forestry.other_factories', 'RecipeManagers.fabricatorManager and FabricatorSmeltingRecipeManager'),
+        ('forestry.factory.recipes.nei.NEIHandlerFermenter', 'Forestry', 'forestry.other_factories', 'RecipeManagers.fermenterManager'),
+        ('forestry.factory.recipes.nei.NEIHandlerMoistener', 'Forestry', 'forestry.other_factories', 'RecipeManagers.moistenerManager'),
+        ('crazypants.enderio.nei.VatRecipeHandler', 'EnderIO', 'other-mod-recipes', 'VatRecipeManager'),
+        ('crazypants.enderio.nei.EnchanterRecipeHandler', 'EnderIO', 'other-mod-recipes', 'EnchanterRecipeManager'),
+        ('crazypants.enderio.nei.SliceAndSpliceRecipeHandler', 'EnderIO', 'other-mod-recipes', 'SliceAndSpliceRecipeManager'),
+        ('crazypants.enderio.nei.SoulBinderRecipeHandler', 'EnderIO', 'other-mod-recipes', 'Soul Binder MachineRecipeRegistry')):
+    INVENTORY_OTHER_SOURCES[_handler] = (_owner, 'adapter_missing', _domain, _proof + ' has no native capture adapter')
+INVENTORY_SOURCE_REVISIONS = {
+    'NotEnoughItems': ('NotEnoughItems', '897a22ad17509f3ae36ed2d5fdd61dbf94613b7f'),
+    'gregtech': ('GT5-Unofficial', 'a74eaa4642f6097d7703650a1aa695d9983b8d47'),
+    'Avaritia': ('Avaritia', 'f02c7bfe69b4eff4c0187b4808d5cc581f22c1e9'),
+    'Botania': ('Botania', '8c5c51e6fa892b2c8e45b0b9890e88194f2cf10c'),
+    'Forestry': ('ForestryMC', '4b310d407f9881b64567b405ef2cabebc46c4b44'),
+    'EnderIO': ('EnderIO', '87e5a32b89b6585af6f38e4a73ad29a055984f88'),
+}
+
+
+def _inventory_profile(owner, native_class):
+    repository, revision = INVENTORY_SOURCE_REVISIONS[owner]
+    version, checksum = INVENTORY_COMPONENTS[owner]
+    return {'owner': owner, 'version': version, 'sha256': checksum, 'source_revision': revision,
+        'handler_source': f'https://github.com/GTNewHorizons/{repository}/blob/{revision}/src/main/java/' + native_class.replace('.', '/') + '.java'}
+
+
+def _inventory_owner(row, id, manifest, *, declaring_class=None):
+    expected = INVENTORY_COMPONENTS[id]
+    for entry in row['hierarchy']:
+        evidence = entry['source']
+        if entry['class'] != (declaring_class or row['native_class']) or evidence['status'] != 'jar':
+            continue
+        if evidence.get('basis') != 'unique_class_resource':
+            continue
+        for mod in evidence['owner_candidates']:
+            if (mod['id'] == id and mod in manifest['pack']['mods']
+                    and (mod.get('version'), mod.get('sha256')) == expected
+                    and evidence.get('sha256') == expected[1]):
+                return mod
+    return None
+
+
+def _pack_digest(pack):
+    # Gson's compact JSON preserves object order and escapes the JavaScript line separators.
+    encoded = json.dumps(pack, ensure_ascii=False, separators=(',', ':'), allow_nan=False)
+    return hashlib.sha256(encoded.replace('\u2028', '\\u2028').replace('\u2029', '\\u2029').encode('utf-8')).hexdigest()
+
+
+def _inventory_rows(reference, summary, manifest):
+    if (not isinstance(summary, dict) or type(summary.get('schema_version')) is not int or summary['schema_version'] != 1
+            or summary.get('profile') != 'handler_inventory'):
+        raise ComparisonError('Coverage requires handler_inventory schema 1')
+    if (summary.get('canonical_snapshot_id') != manifest['snapshot_id']
+            or summary.get('canonical_pack') != manifest['pack']
+            or summary.get('canonical_pack_sha256') != _pack_digest(manifest['pack'])
+            or summary.get('canonical_files') != manifest['files']):
+        raise ComparisonError('Inventory snapshot, pack checksum or canonical file binding does not match')
+    if (summary.get('signature_projection') != 'not_applicable'
+            or summary.get('view_projection') != 'not_applicable'
+            or summary.get('item_presentation_context') != {'status': 'not_applicable', 'reason': 'inventory_only'}
+            or set(summary.get('files', {})) != {'handlers.jsonl.gz', 'signatures.jsonl.gz', 'handler-views.jsonl.gz'}):
+        raise ComparisonError('Invalid inventory-only capability or stream declaration')
+    for name in ('signatures.jsonl.gz', 'handler-views.jsonl.gz'):
+        if list(_records(reference, name, summary['files'])):
+            raise ComparisonError('Inventory-only recipe streams must be empty')
+    rows = list(_records(reference, 'handlers.jsonl.gz', summary['files']))
+    rosters = summary.get('rosters')
+    if (not isinstance(rosters, dict) or any(type(rosters.get(key)) is not int or rosters[key] < 0
+            for key in INVENTORY_ROSTERS)
+            or any(type(rosters.get(key)) is not bool for key in ('stable', 'references_unchanged'))
+            or type(summary.get('complete')) is not bool
+            or type(summary.get('failed_handlers')) is not int or summary['failed_handlers'] < 0):
+        raise ComparisonError('Invalid roster completeness or count declarations')
+    if (summary.get('counts') != {'handlers': len(rows), 'signatures': 0, 'handler_views': 0}
+            or any(type(value) is not int for value in summary['counts'].values())):
+        raise ComparisonError('Inventory stream counts do not match')
+    if sum(rosters[key] for key in INVENTORY_ROSTERS) != len(rows):
+        raise ComparisonError('Roster registration counts do not match')
+    order = (key for key in INVENTORY_ROSTERS for _ in range(rosters[key]))
+    local, instances, census = Counter(), {}, Counter()
+    failures = 0
+    for index, row in enumerate(rows):
+        registration = row.get('registration')
+        if (registration != next(order)
+                or type(row.get('global_index')) is not int or row['global_index'] != index
+                or row.get('registration_key') != f'h{index}'
+                or type(row.get('registration_index')) is not int or row['registration_index'] != local[registration]
+                or (row.get('object_key') is not None and (not isinstance(row['object_key'], str)
+                    or not re.fullmatch(r'o[0-9]+', row['object_key'])))
+                or not isinstance(row.get('failures'), list)
+                or not isinstance(row.get('hierarchy'), list) or not isinstance(row.get('interfaces'), list)
+                or (row.get('native_class') is not None and not isinstance(row['native_class'], str))):
+            raise ComparisonError('Invalid inventory registration occurrence')
+        local[registration] += 1
+        first = instances.get(row['object_key']) if row['object_key'] is not None else None
+        if row.get('same_instance_as') != first:
+            raise ComparisonError('Inventory instance alias does not point to its first registration')
+        if row['object_key'] is not None:
+            if first is None and row['object_key'] != f'o{len(instances)}':
+                raise ComparisonError('Inventory object keys do not follow first-observed identity order')
+            instances.setdefault(row['object_key'], row['registration_key'])
+        elif row['native_class'] is not None or not row['failures']:
+            raise ComparisonError('Null retained handlers need explicit failure evidence')
+        source = row.get('native_source')
+        if (not isinstance(source, dict) or source.get('status') not in ('mapped', 'unresolved', 'unsupported_profile', 'failed')
+                or not isinstance(source.get('source_ids'), list) or not isinstance(source.get('map_registry_keys'), list)):
+            raise ComparisonError('Invalid native source inspection')
+        census[source['status']] += 1
+        failures += bool(row['failures'])
+        for entry in row['hierarchy']:
+            evidence = entry.get('source')
+            if (not isinstance(entry.get('class'), str) or not isinstance(evidence, dict)
+                    or evidence.get('status') not in ('jar', 'directory', 'unavailable', 'failed')
+                    or not isinstance(evidence.get('owner_candidates'), list)):
+                raise ComparisonError('Invalid class source evidence')
+            if evidence['status'] == 'jar' and not re.fullmatch(r'[0-9a-f]{64}', str(evidence.get('sha256', ''))):
+                raise ComparisonError('Class JAR evidence has no valid checksum')
+            if any(owner not in manifest['pack']['mods'] or owner.get('sha256') != evidence.get('sha256')
+                   for owner in evidence['owner_candidates']):
+                raise ComparisonError('Class owner evidence does not match the canonical pack')
+    if any(local[key] != rosters[key] for key in INVENTORY_ROSTERS):
+        raise ComparisonError('Roster registration counts do not match')
+    if (summary.get('source_census') != {key: census[key] for key in ('mapped', 'unresolved', 'unsupported_profile', 'failed')}
+            or any(type(value) is not int for value in summary['source_census'].values())
+            or summary['failed_handlers'] != failures):
+        raise ComparisonError('Inventory source/failure census does not match')
+    class_counts = dict(Counter(row['native_class'] for row in rows if row['native_class'] is not None))
+    if (summary.get('class_counts') != class_counts or not isinstance(summary.get('native_files'), list)
+            or any(type(value) is not int for value in summary['class_counts'].values())):
+        raise ComparisonError('Inventory class/source census does not match')
+    authority = summary.get('authority')
+    if (not isinstance(authority, dict) or authority.get('status') not in ('verified', 'unsupported', 'failed')
+            or not isinstance(authority.get('failures'), list)):
+        raise ComparisonError('Invalid inventory authority')
+    mods = {mod['id']: mod for mod in manifest['pack']['mods']}
+    if len(mods) != len(manifest['pack']['mods']):
+        raise ComparisonError('Canonical pack has duplicate mod IDs')
+    for key, id in (('nei', 'NotEnoughItems'), ('gt', 'gregtech')):
+        verified = authority.get(key + '_artifact_verified')
+        if type(verified) is not bool:
+            raise ComparisonError('Inventory component artifact verification is missing')
+        if authority.get(key) is not None and authority[key] != mods.get(id):
+            raise ComparisonError('Inventory component identity does not match its canonical mod')
+        if verified:
+            mod = mods.get(id, {})
+            if authority.get(key) != mod or (mod.get('version'), mod.get('sha256')) != INVENTORY_AUTHORITY[id]:
+                raise ComparisonError('Unverified runtime claiming verified inventory authority')
+            if not any(isinstance(item, dict) and item.get('status') == 'jar'
+                       and item.get('sha256') == mod['sha256'] for item in summary['native_files']):
+                raise ComparisonError('Verified inventory component has no captured JAR evidence')
+    if (authority['status'] == 'verified') != authority['nei_artifact_verified']:
+        raise ComparisonError('Inventory authority disagrees with its NEI artifact evidence')
+    if summary['complete'] and (failures or not rosters['stable'] or not rosters['references_unchanged']
+                               or not authority['nei_artifact_verified']):
+        raise ComparisonError('Inventory claims complete despite failed or unstable collection')
+    return rows
+
+
+def inventory_coverage(snapshot, inventory):
+    """Bind all retained NEI registration occurrences to canonical source evidence."""
+    try:
+        return _inventory_coverage(snapshot, inventory)
+    except ComparisonError:
+        raise
+    except (OSError, ValueError, KeyError, TypeError, EOFError) as error:
+        raise ComparisonError(f'Invalid inventory or canonical artifact: {error}') from error
+
+
+def _inventory_coverage(snapshot, inventory):
+    snapshot, inventory = Path(snapshot), Path(inventory)
+    manifest_bytes = (snapshot / 'manifest.json').read_bytes()
+    summary_bytes = (inventory / 'summary.json').read_bytes()
+    manifest, summary = json.loads(manifest_bytes), json.loads(summary_bytes)
+    filenames = {name + '.jsonl.gz' for name in ('resources', 'groups', 'processes', 'sources', 'environments', 'coverage')}
+    if (not isinstance(manifest, dict) or type(manifest.get('schema_version')) is not int or manifest['schema_version'] != 1
+            or not isinstance(manifest.get('pack'), dict) or not isinstance(manifest.get('files'), dict)
+            or set(manifest['files']) != filenames or not isinstance(manifest.get('snapshot_id'), str)):
+        raise ComparisonError('Invalid canonical manifest for coverage inventory')
+    rows = _inventory_rows(inventory, summary, manifest)
+    families, domains, acquisition = {}, [], Counter()
+    for filename in sorted(filenames):
+        for record in _records(snapshot, filename, manifest['files']):
+            if filename == 'processes.jsonl.gz':
+                family = record['family']
+                stats = families.setdefault(family, {'family': family, 'canonical_records': 0,
+                    'captured_executability': {'true': 0, 'false': 0, 'unknown': 0},
+                    'native_flags': {key: {'true': 0, 'false': 0, 'unknown': 0} for key in ('enabled', 'fake', 'hidden')}, 'unresolved_inputs': 0,
+                    'unresolved_outputs': 0, 'handler_registration_keys': []})
+                stats['canonical_records'] += 1
+                stats['captured_executability']['true' if record['executable'] is True else 'false' if record['executable'] is False else 'unknown'] += 1
+                for key, values in stats['native_flags'].items():
+                    value = record['conditions'].get(key)
+                    values['true' if value is True else 'false' if value is False else 'unknown'] += 1
+                for field in ('inputs', 'outputs'):
+                    status = record['conditions'].get('dynamic_' + ('output' if field == 'outputs' else 'inputs'))
+                    stats['unresolved_' + field] += status is not None and status != 'resolved_static'
+            elif filename == 'coverage.jsonl.gz':
+                domains.append(record)
+            elif filename == 'sources.jsonl.gz':
+                acquisition[(record['kind'], record['provenance'].get('owner'), record['status'])] += 1
+    by_domain = defaultdict(list)
+    gt_domains = {}
+    for domain in domains:
+        by_domain[domain['domain']].append(domain)
+        if domain['domain'].startswith('gregtech.map:'):
+            family = 'gregtech:' + domain['domain'][len('gregtech.map:'):]
+            gt_domains[family] = domain['domain']
+            families.setdefault(family, {'family': family, 'canonical_records': 0,
+                'captured_executability': {'true': 0, 'false': 0, 'unknown': 0},
+                'native_flags': {key: {'true': 0, 'false': 0, 'unknown': 0} for key in ('enabled', 'fake', 'hidden')}, 'unresolved_inputs': 0,
+                'unresolved_outputs': 0, 'handler_registration_keys': []})
+    family_domains = {binding[1]: binding[2] for binding in INVENTORY_BINDINGS.values()}
+    family_domains.update(gt_domains)
+    for family, stats in families.items():
+        domain = family_domains.get(family)
+        stats['coverage'] = by_domain[domain] if domain else []
+    counts = Counter()
+    result_rows = []
+    for original in rows:
+        row = dict(original)
+        capture = {'status': 'unresolved', 'sources': [], 'reason': 'No exact source-verified handler mapping'}
+        source = row['native_source']
+        mapped_owner = None
+        if (summary['authority']['gt_artifact_verified']
+                and source['status'] == 'mapped' and source.get('profile') == 'gt_nei_recipe_map_field_v1'
+                and source.get('api') == 'gregtech.nei.GTNEIDefaultHandler.recipeMap'
+                and _inventory_owner(row, 'gregtech', manifest, declaring_class=GT_HANDLER)):
+            ids, keys = source['source_ids'], source['map_registry_keys']
+            if (not keys or any(not isinstance(key, str) or not key for key in keys)
+                    or ids != ['gregtech:' + key for key in keys] or len(set(keys)) != len(keys)):
+                raise ComparisonError('Mapped GT source identities disagree with native registry keys')
+            subclass = row['native_class'] != GT_HANDLER
+            capture = {'status': 'associated_declared_map' if subclass else 'covered_declarations', 'sources': [],
+                'reason': 'Verified GT base recipeMap field associates the declared source. Subclass behavior remains unknown'
+                    if subclass else 'Exact native RecipeMap identity',
+                'handler_behavior': 'unresolved_subclass' if subclass else 'verified_base_source'}
+            mapped_owner = 'gregtech'
+            for family, key in zip(ids, keys):
+                domain = 'gregtech.map:' + key
+                coverage = by_domain[domain]
+                family_stats = families.get(family)
+                if family_stats is not None:
+                    family_stats['handler_registration_keys'].append(row['registration_key'])
+                supported = bool(coverage) and all(item['status'] in ('complete', 'partial') for item in coverage)
+                if not supported and not subclass:
+                    capture['status'] = 'unresolved'
+                capture['sources'].append({'family': family, 'domain': domain,
+                    'canonical_records': family_stats['canonical_records'] if family_stats else 0,
+                    'coverage': coverage, 'mapping_proof': 'GTNEIDefaultHandler.recipeMap -> RecipeMap.ALL_RECIPE_MAPS keys',
+                    'capture_status': 'covered_declarations' if supported else 'unresolved'})
+        elif summary['authority']['status'] == 'verified' and row['native_class'] in INVENTORY_BINDINGS:
+            owner, family, domain, proof = INVENTORY_BINDINGS[row['native_class']]
+            if _inventory_owner(row, owner, manifest):
+                mapped_owner = owner
+                family_stats, coverage = families.get(family), by_domain[domain]
+                if family_stats is not None:
+                    family_stats['handler_registration_keys'].append(row['registration_key'])
+                supported = bool(coverage) and all(item['status'] in ('complete', 'partial') for item in coverage)
+                status = 'covered_declarations' if supported else 'unresolved'
+                capture = {'status': status, 'reason': 'Exact handler class and source JAR profile',
+                    'sources': [{'family': family, 'domain': domain, 'canonical_records': family_stats['canonical_records'] if family_stats else 0,
+                        'coverage': coverage, 'mapping_proof': proof, 'capture_status': status}]}
+                if supported and row['native_class'] in INVENTORY_PARTIAL:
+                    missing_domain, reason = INVENTORY_PARTIAL[row['native_class']]
+                    capture.update(status='partially_covered_declarations', limitations=[{
+                        'domain': missing_domain, 'coverage': by_domain[missing_domain], 'reason': reason}])
+        elif summary['authority']['status'] == 'verified' and row['native_class'] in INVENTORY_OTHER_SOURCES:
+            owner, status, domain, proof = INVENTORY_OTHER_SOURCES[row['native_class']]
+            if _inventory_owner(row, owner, manifest):
+                mapped_owner = owner
+                capture = {'status': status, 'sources': [], 'reason': proof, 'mapping_proof': proof,
+                    'coverage': by_domain[domain] if domain else []}
+        if mapped_owner is not None:
+            capture['profile'] = _inventory_profile(mapped_owner, GT_HANDLER if mapped_owner == 'gregtech' else row['native_class'])
+        row['capture'] = capture
+        row['accounting'] = {'status': 'not_performed',
+            'scope': 'No complete recipe ledger or machine-condition validation. Captured flags are separate observations',
+            'captured_sources': [{'family': item['family'], 'captured_executability': families[item['family']]['captured_executability'],
+                'unresolved_inputs': families[item['family']]['unresolved_inputs'],
+                'unresolved_outputs': families[item['family']]['unresolved_outputs'],
+                'native_flags': families[item['family']]['native_flags']}
+                for item in capture['sources'] if item['family'] in families]}
+        row['comparison_verification'] = {'status': 'not_performed', 'reason': 'inventory_only_no_recipe_views'}
+        counts[capture['status']] += 1
+        result_rows.append(row)
+    return {'schema_version': 1, 'report_kind': 'nei_handler_source_coverage',
+        'canonical_snapshot_id': manifest['snapshot_id'], 'binding': {'canonical_manifest_sha256': hashlib.sha256(manifest_bytes).hexdigest(),
+            'inventory_summary_sha256': hashlib.sha256(summary_bytes).hexdigest(), 'canonical_files': manifest['files'],
+            'inventory_files': summary['files'], 'canonical_pack_sha256': summary['canonical_pack_sha256']},
+        'inventory_complete': summary['complete'], 'rosters': summary['rosters'], 'authority': summary['authority'],
+        'class_counts': summary['class_counts'], 'native_files': summary['native_files'],
+        'handlers': result_rows, 'counts': {'registrations': len(rows),
+            'distinct_instances': len({row['object_key'] for row in rows if row['object_key'] is not None}),
+            'distinct_classes': len({row['native_class'] for row in rows if row['native_class'] is not None}),
+            'capture_status': dict(counts)}, 'canonical_sources': {'families': sorted(families.values(), key=lambda value: value['family']),
+            'coverage': domains, 'acquisition': [{'kind': key[0], 'owner': key[1], 'status': key[2], 'records': count}
+                for key, count in sorted(acquisition.items(), key=lambda item: str(item[0]))]},
+        'gaps': [{'registration_key': row['registration_key'], 'status': row['capture']['status'],
+                 'reason': row['capture']['reason']} for row in result_rows if row['capture']['status'] not in ('covered_declarations', 'informational')],
+        'limitations': ['Every row is a registration, not a recipe or missing-recipe count',
+            'Duplicate registrations share canonical source counts. Do not sum those counts as distinct recipes',
+            'Unknown source mappings do not prove missing adapters', 'Inventory-only capture does not verify recipe presentation']}
+
+
+def inventory_markdown(report):
+    """Render every registration and canonical family without an example cap."""
+    def cell(value):
+        return str(value).replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;').replace('|', '\\|').replace('\n', ' ')
+
+    counts = report['counts']
+    lines = ['# NEI handler/source coverage', '', 'Snapshot: ' + report['canonical_snapshot_id'], '',
+        'Inventory collection complete: ' + ('yes' if report['inventory_complete'] else 'no') + '.',
+        f"Observed {counts['registrations']} registrations, {counts['distinct_instances']} distinct objects and "
+        f"{counts['distinct_classes']} distinct handler classes.", '',
+        'Registrations are not recipes. Accounting validation and recipe comparison were not performed.', '',
+        '| Capture status | Registrations | Meaning |', '|---|---|---|']
+    for status, label, meaning in (
+            ('covered_declarations', 'Captured declarations', 'The native source has captured catalog declarations. This does not prove execution.'),
+            ('associated_declared_map', 'Declared map association', 'The verified GT base field identifies a declared map. Subclass behavior remains unknown.'),
+            ('partially_covered_declarations', 'Partially captured source', 'Some native source declarations are captured. Additional handler sources or variants remain outside that scope.'),
+            ('adapter_missing', 'Confirmed adapter gap', 'The exact native source is known and has no capture adapter. This is not a missing-recipe count.'),
+            ('informational', 'Informational', 'Source evidence identifies information or instrumentation rather than a material recipe catalog.'),
+            ('unresolved', 'Unresolved', 'Source identity, artifact proof or capture binding is insufficient. This does not establish a missing adapter.')):
+        lines.append('| ' + ' | '.join((label + ' (`' + status + '`)',
+            str(counts['capture_status'].get(status, 0)), meaning)) + ' |')
+    gaps = {}
+    for row in report['handlers']:
+        if row['capture']['status'] == 'adapter_missing':
+            group = gaps.setdefault(row['native_class'], {'registrations': 0, 'reasons': set()})
+            group['registrations'] += 1
+            group['reasons'].add(row['capture']['reason'])
+    lines += ['', '## Confirmed adapter gaps', '',
+        'One row per exact handler class. Counts are registration occurrences, not missing recipes.', '']
+    if gaps:
+        lines += ['| Exact handler class | Registrations | Existing source proof |', '|---|---|---|']
+        for native_class, group in sorted(gaps.items()):
+            lines.append('| ' + ' | '.join(cell(value) for value in (native_class, group['registrations'],
+                ' '.join(sorted(group['reasons'])))) + ' |')
+    else:
+        lines.append('No source-proven adapter gaps were identified in this inventory.')
+    lines += ['', '## All registrations', '',
+        '| Registration | Class | Native sources | Capture | Accounting | Comparison | Evidence and limits |', '|---|---|---|---|---|---|---|']
+    for row in report['handlers']:
+        values = [row['registration_key'] + ' (' + row['registration'] + ')', row['native_class'],
+            ', '.join(item['family'] for item in row['capture']['sources']), row['capture']['status'],
+            row['accounting']['status'], row['comparison_verification']['status'],
+            row['capture']['reason'] + ' '.join(' ' + item['reason'] for item in row['capture'].get('limitations', []))]
+        lines.append('| ' + ' | '.join(cell(value) for value in values) + ' |')
+    lines += ['', '## Canonical source families', '', '| Family | Records | Bound registrations |', '|---|---|---|']
+    for family in report['canonical_sources']['families']:
+        lines.append('| ' + ' | '.join(cell(value) for value in (family['family'], family['canonical_records'],
+            ', '.join(family['handler_registration_keys']) or 'unbound')) + ' |')
+    lines += ['', '## Canonical coverage evidence', '', '| Domain | Status | Records | Reason |', '|---|---|---|---|']
+    for domain in report['canonical_sources']['coverage']:
+        lines.append('| ' + ' | '.join(cell(domain[key]) for key in ('domain', 'status', 'records', 'reason')) + ' |')
+    return '\n'.join(lines) + '\n'
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('snapshot', type=Path)
     parser.add_argument('--reference', type=Path)
-    parser.add_argument('--profile', choices=('default', 'forestry_still'), default='default')
+    parser.add_argument('--mode', choices=('compare', 'coverage'), default='compare')
+    parser.add_argument('--markdown', type=Path)
+    parser.add_argument('--profile', choices=('default', 'forestry_still'))
     parser.add_argument('--report', type=Path, required=True)
-    parser.add_argument('--example-limit', type=int, default=20)
-    parser.add_argument('--max-missing', type=int, default=0)
-    parser.add_argument('--max-differences', type=int, default=0)
-    parser.add_argument('--max-capture-failures', type=int, default=0)
+    parser.add_argument('--example-limit', type=int)
+    parser.add_argument('--max-missing', type=int)
+    parser.add_argument('--max-differences', type=int)
+    parser.add_argument('--max-capture-failures', type=int)
     parser.add_argument('--max-unsupported', type=int)
     args = parser.parse_args(argv)
     try:
+        if args.mode == 'coverage':
+            if any(value is not None for value in (args.profile, args.example_limit, args.max_missing,
+                    args.max_differences, args.max_capture_failures, args.max_unsupported)):
+                raise ComparisonError('Recipe comparison profiles/thresholds do not apply to inventory coverage')
+            report = inventory_coverage(args.snapshot, args.reference or args.snapshot / 'nei-reference')
+            args.report.parent.mkdir(parents=True, exist_ok=True)
+            args.report.write_text(_json(report) + '\n', encoding='utf-8')
+            if args.markdown:
+                args.markdown.parent.mkdir(parents=True, exist_ok=True)
+                args.markdown.write_text(inventory_markdown(report), encoding='utf-8')
+            print(_json({'scope': 'NEI registration source coverage only', 'counts': report['counts'],
+                'inventory_complete': report['inventory_complete'], 'report': str(args.report)}))
+            return 0
+        if args.markdown is not None:
+            raise ComparisonError('--markdown is available only for inventory coverage')
+        args.profile = args.profile or 'default'
+        args.example_limit = 20 if args.example_limit is None else args.example_limit
+        args.max_missing = 0 if args.max_missing is None else args.max_missing
+        args.max_differences = 0 if args.max_differences is None else args.max_differences
+        args.max_capture_failures = 0 if args.max_capture_failures is None else args.max_capture_failures
         for value in (args.max_missing, args.max_differences, args.max_capture_failures, args.max_unsupported):
             if value is not None and value < 0:
                 raise ComparisonError('Thresholds must be nonnegative')

@@ -70,6 +70,26 @@ Handler errors, empty queries and projection failures remain distinct. A
 completed partial reference can publish with `complete=false`. Fatal I/O or a
 deadline failure exits with code 2 without a canonical manifest.
 
+For a source-coverage audit, use `--nei-reference inventory` with
+`scripts/export_full_pack.py`, or `-PdataNeiReferenceScope=inventory` with the
+paired Gradle invocation. This records all four retained crafting and usage
+rosters without querying recipes or handler names. It preserves registration
+order, repeated instances, class and JAR evidence, and verified native source
+bindings. Its completeness means retained-roster inventory, not recipe equality.
+
+Generate the offline report from that paired capture:
+
+```powershell
+python scripts/compare_nei.py PATH_TO_SNAPSHOT --mode coverage --report exports/coverage.json --markdown exports/coverage.md
+```
+
+The report validates the snapshot, pack and all six canonical stream bindings.
+It lists every registration and canonical recipe source. Declaration presence,
+captured execution flags and recipe comparison remain separate. Unknown mappings
+stay unresolved. Informational handlers are distinguished from missing adapters.
+Inventory mode produces no recipe views or presentation context and cannot be
+used as a recipe-equivalence comparison.
+
 Signatures use `Recipe.of(handler,index).getRecipeId().toJsonObject()` and are
 labelled `native_recipe_id_api`. This is an API projection, not an actual
 `/recipeid` command dump. All registered crafting and serial crafting handlers
