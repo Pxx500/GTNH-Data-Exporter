@@ -632,42 +632,19 @@ batch yield, power use or output-space checks.
 ### Retained NEI handler inventory
 
 The paired reference scope `inventory` uses summary schema 1 with
-`profile: handler_inventory`. It records the four current retained rosters:
-`craftinghandlers`, `serialCraftingHandlers`, `usagehandlers` and
-`serialUsageHandlers`. Rejected historical registrations and GUI overlay
-registries are outside this scope. Recipe queries, display getters and handler
-IDs are not evaluated.
+`profile: handler_inventory`. It records retained crafting and usage
+handler registrations without querying recipes or display views. Each
+`handlers.jsonl.gz` row identifies a registration and its source where resolved.
+Different instances of one class remain distinct. The summary records roster
+counts, checksums and capture errors. `complete` covers the observed rosters,
+not all pack behavior or recipe equality.
 
-Each `handlers.jsonl.gz` row retains its registration key, roster and local/global
-indices, object identity key, first-occurrence alias, native class, hierarchy,
-interfaces, artifact ownership evidence, native source binding and failures.
-Different instances of one class remain distinct. GT bindings identify the
-verified base-class recipe-map field and its actual global registry keys.
-They do not establish complete subclass presentation behavior or recipe equality.
-Class origins use unique class-loader resources, including standard multi-release
-entries authorized by their JAR manifest. Positive bindings require the complete
-JAR digest to match the captured artifact. Missing or ambiguous origins stay unresolved.
-
-The summary binds the canonical snapshot ID, complete pack metadata and all six
-canonical stream count/hash declarations. `canonical_pack_sha256` hashes compact
-UTF-8 Gson JSON preserving object order and escaping JavaScript line separators.
-It also declares the compressed inventory stream checksums, all four roster
-counts, identity stability, component authority, class/source counts and errors.
-Recipe signatures, views and presentation context are explicitly not applicable.
-`complete` describes the observed retained rosters, not complete pack semantics.
-
-`scripts/compare_nei.py SNAPSHOT --mode coverage --report REPORT.json` validates
-this reference and produces one classification per registration. Optional
-`--markdown REPORT.md` creates the human-readable report. The default reference
-directory is `SNAPSHOT/nei-reference`. The ordinary comparison mode rejects
-inventory references instead of treating their empty recipe streams as evidence.
-
-The coverage report includes every canonical process family, bound zero-entry
-GT maps and source families without a confirmed NEI handler binding. Exact class and
-artifact profiles establish declaration-source associations. Unsupported sources,
-informational handlers and unresolved mappings remain distinct. Accounting and
-recipe-comparison validation are marked not performed. Captured executable,
-dynamic-input/output and native flags remain separate observations.
+Run `scripts/compare_nei.py SNAPSHOT --mode coverage --report REPORT.json`
+to classify registrations and canonical process families. Add
+`--markdown REPORT.md` for a readable report. The default reference directory
+is `SNAPSHOT/nei-reference`. Ordinary recipe comparison does not accept an
+inventory reference. Unsupported sources, informational handlers and unresolved
+mappings are reported separately.
 
 ## Dataset operations
 
@@ -1070,34 +1047,17 @@ provenance, native machine execution or whether removing a window preserves
 every condition. It changes neither discovery nor path order and does not
 filter recipes. Empty annotations do not certify absence of material detours.
 
-Material search separately checks two- and three-recipe spine windows before
-retaining or settling a path. It skips a continuation only when every complete,
-certain concrete assignment returns the exact entering resource with net quantity
-at least zero. Material-flow paths must consume their selected source. Returning
-that source as a catalyst is insufficient even when the window produces new target
-material. The final recipe must itself declare a return of the entering
-resource. Earlier-return windows remain eligible outside this conservative scope.
-Other coproducts need not have zero balances. This is a material-flow
-objective, not atom provenance or a claim that the recipes are useless.
-Consumed entering stock in any compatible case, uncertainty, unsupported
-accounting or incomplete bounded enumeration keep the continuation eligible.
-An explicitly required resource inside the window preserves intentional passage.
-Catalytic exits are excluded by this material-flow objective. Shortest/raw lookup,
-selected-path recycling and loop audits retain their existing behavior.
+Material search skips a sequence of two or three recipes when every supported,
+certain assignment returns at least as much of its entering resource as it
+consumes, even if other ingredients produce a new output. The final recipe must
+declare that return. Unknown or incomplete accounting keeps the path eligible. A required
+resource inside the window also keeps it eligible. This policy does not prove
+material provenance or machine feasibility. Shortest lookup and selected-path
+recycling are unaffected.
 
-`search.material_contribution` reports the policy and scope, unique
-`checked_windows`, actual `rejected_continuations`, `unknown_windows`,
-`required_overrides`, `cache_hits`, `loaded_process_records`, `matching_rows`,
-`accounting_matching_rows`, `cases` and `charged_work`. Native matching and
-selected-path ledgers share the Dataset accounting owner. Queries memoize
-window results and charge added work to the existing search work budget.
-Checks allow at most 16 assignments and 64 input slots per window, reading
-at most 17 members per choice to detect over-bound matching. Progressive
-checks yield between bounded matching/accounting steps. Only suffixes with a
-possible final splitter retain the one/two-step history needed by these checks
-in dominance keys. Other suffixes keep the existing dominance behavior.
-No index rebuild
-or new recipe fact is required.
+`search.material_contribution` reports the policy, checked windows, rejected
+continuations, unknown checks, required overrides and work used. Checks are
+bounded to 16 assignments and 64 input slots per window.
 
 `route` contains `status`, `strategy`, ordered `resource_ids` and ordered
 `process_ids`. The strategy field retains `shortest_known_dependency_path`.

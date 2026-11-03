@@ -8,11 +8,9 @@ attached client world/player, then captures at ServerTick END with LOWEST
 priority. It exits only after publishing the manifest, or with exit code 2 on
 capture failure.
 
-Mod versions are captured as provenance and do not gate execution or interpretation.
-Adapters use the available native APIs, exact recipe and manager classes, and
-observed data to identify unsupported behavior. Inventory artifact hashes must
-match the current capture's manifest. They are not release allowlists.
-Unknown subclasses and unresolved runtime transactions remain explicit.
+Mod versions are recorded as provenance and do not restrict capture.
+Unsupported behavior, unknown
+subclasses and unresolved runtime transactions remain explicit in the export.
 
 The readiness signal is `GTValues.worldTickHappened`, set after
 `GregTechAPI.sFirstWorldTick` by the native `GTProxy.onWorldTickEvent`.

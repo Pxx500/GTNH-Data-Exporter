@@ -107,12 +107,11 @@ facts as evidence. Inspect `search.requirement_classes`,
 `search.material_evidence` and `search.recovery_preference` for coverage and
 scoring. These preferences do not prove material transfer, purity or yield.
 
-Material mode also gives primitive blast furnace paths a small extra weight and
-tries other eligible machines first within shared ingredient branches. This lets
-Electric Blast Furnace routes compete before a primitive furnace settles the
-branch. It is a search preference, not recipe equivalence or an energy comparison.
-Tier filters still apply. Oxygen, circuits, heat and other captured requirements
-remain on the exact recipes. Inspect `search.machine_preference` for this policy.
+Material mode prefers Electric Blast Furnace over primitive blast furnaces
+when eligible within shared ingredient branches.
+Tier filters and recipe requirements still apply. Inspect
+`search.machine_preference` for the policy. This preference is not an energy
+comparison.
 
 Inspect `path_details[].material_detours` in material traces for short windows
 with no net change in captured materials. `zero_net` covers every supported
@@ -132,20 +131,13 @@ stock includes presence requirements. Don't subtract the presence map to
 infer consumed stock. Use the existing selected-path accounting workflow
 when you need a specific concrete scenario.
 
-Material search also skips short source-return windows before retaining paths.
-Every supported certain case must return the exact entering resource with net
-quantity at least zero. The selected source must be consumed, so a returned
-catalyst is insufficient even if it enables new target production.
-The final recipe must declare the entering resource's return.
-Earlier-return windows stay eligible outside this conservative scope.
-This does not require every coproduct balance to be zero. A case that consumes
-the entering resource, or unknown, probabilistic or over-bound accounting,
-keeps the continuation eligible.
-An explicitly required internal resource preserves intentional passage through
-the window. Inspect `search.material_contribution` for rejected continuations,
-unknown checks, required overrides and charged work. This changes the selected
-material-flow objective, not raw recipe facts or shortest-path lookup. It does
-not prove atom provenance or machine feasibility.
+Material search skips sequences of two or three recipes when every supported,
+certain case returns at least as much of the entering resource as it consumes,
+even if other ingredients produce a new output. The final recipe must declare
+that return. Unknown or incomplete accounting keeps the path eligible, as does an
+explicitly required resource inside the window. Inspect
+`search.material_contribution` for the results. This policy does not prove
+material provenance or machine feasibility and does not affect shortest lookup.
 
 `path_selection="diverse"` spreads routes across target ingredient branches.
 `path_selection="shortest"` prefers fewer steps. Neither means lower EU or
