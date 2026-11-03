@@ -23,10 +23,8 @@ deadline also reports failure and exits with code 2 even if client world launch
 blocks. `gtnh.data.bootstrapTimeoutSeconds` sets that error deadline, default
 180 seconds. The deadline never establishes readiness or starts a fallback run.
 
-The isolated world uses a fixed nonzero seed. GT's XSTR generator degenerates
-to an all-zero stream for seed zero, which caused repeated ruin generation and
-a native enchantment failure during the original bootstrap. The manifest
-records the actual server seed as an exact decimal string.
+The isolated world uses a fixed nonzero seed, recorded in the manifest as an
+exact decimal string.
 
 ## Build and run
 
@@ -63,72 +61,16 @@ manifest after the reference summary. The existing bootstrap deadline covers
 NEI readiness. `gtnh.data.neiCaptureTimeoutSeconds`, default 180 seconds, bounds
 the paired capture and fails the process if a native query blocks.
 
-The fresh `nei-reference/` child contains `handlers.jsonl.gz`,
-`signatures.jsonl.gz`, `handler-views.jsonl.gz` and `summary.json`. These are
-separate from the six canonical streams. The summary binds the same canonical
-snapshot ID and pack/config digest cohort, plus per-file checksums and counts.
-It also checksums `presentation-context.json`, which binds closed canonical
-resource/process files and declares independent `gt-display-aliases.jsonl.gz`
-and `item-pools.jsonl.gz` streams. Context uses direct original GT anchors and
-the public NEI item pools before handler enumeration. It preserves ordered
-quantities and typed NBT rather than deriving alternatives from recipe views.
-Handler errors, empty queries and projection failures remain distinct. A
-completed partial reference can publish with `complete=false`. Fatal I/O or a
-deadline failure exits with code 2 without a canonical manifest.
+The `nei-reference/` directory contains the paired reference and summary.
+It is separate from the canonical snapshot. A partial reference reports
+`complete=false`. Fatal I/O or deadline failures leave no canonical manifest.
+See [FORMAT.md](../FORMAT.md#independent-nei-reference) for the reference
+streams, comparison scope and limitations.
 
-For a source-coverage audit, use `--nei-reference inventory` with
-`scripts/export_full_pack.py`, or `-PdataNeiReferenceScope=inventory` with the
-paired Gradle invocation. This records all four retained crafting and usage
-rosters without querying recipes or handler names. It preserves registration
-order, repeated instances, class and JAR evidence, and verified native source
-bindings. Its completeness means retained-roster inventory, not recipe equality.
-
-Generate the offline report from that paired capture:
-
-```powershell
-python scripts/compare_nei.py PATH_TO_SNAPSHOT --mode coverage --report exports/coverage.json --markdown exports/coverage.md
-```
-
-The report validates the snapshot, pack and all six canonical stream bindings.
-It lists every registration and canonical recipe source. Declaration presence,
-captured execution flags and recipe comparison remain separate. Unknown mappings
-stay unresolved. Informational handlers are distinguished from missing adapters.
-Inventory mode produces no recipe views or presentation context and cannot be
-used as a recipe-equivalence comparison.
-
-Signatures use `Recipe.of(handler,index).getRecipeId().toJsonObject()` and are
-labelled `native_recipe_id_api`. This is an API projection, not an actual
-`/recipeid` command dump. All registered crafting and serial crafting handlers
-are queried through their native all-recipes contract. The command's
-recipe-ID blacklist is not applied, and the summary says so.
-
-Handler views preserve ingredient, result and other-stack presentation
-categories separately. Every raw `PositionedStack.items` alternative retains
-detached typed item facts before one reverse dispatch through NEI's public
-serializers and `NBTJson` conversion. The native JSON retains NEI's projection
-ambiguities. Separate typed facts allow exact identity comparison without
-reconstructing NBT types from that JSON. Neither path reads display-name getters.
-Other stacks can be fuels or auxiliary presentation, not necessarily outputs.
-Native `getChance()` values are presentation data whose default can be 10000,
-not verified runtime probabilities. Exact `GTNEIDefaultHandler` records map
-through public `getRecipeMap()` to the full canonical `gregtech:` family.
-Public frontend properties and GT `FixedPositionedStack.realStackSize` retain
-quantity/unification presentation context without replacing the raw stack JSON.
-Custom frontends, filters and getters still need scoped comparison support.
-
-The NEI reference extension compiled against the consuming module's explicit
-`NotEnoughItems:2.8.159-GTNH:dev` dependency. The module model and documented
-library-search source CLI found its actual attached sources. The generic
-library-search launcher failed to prepare the nested module, and that failure
-is retained in `build/nei-library-search.log`. `test build` passed with the
-three existing contract tests. IntelliJ completed with 34 advisory findings.
-Direct installed PMD, using the same audit rules and 115 actual compile
-classpath entries, completed with 43 advisory findings and no processing or
-configuration errors. The combined runner still skips PMD because its Git-root
-lookup misses this module's wrapper. New findings concern method/class
-complexity, duplicate close handling and style, not observed capture failures.
-No audit suppressions were added. These checks establish compilation and
-static analysis, not runtime NEI coverage or equivalence.
+For a source-coverage inventory without querying recipe views, use
+`--nei-reference inventory` with `scripts/export_full_pack.py`. Generate its
+report with `python scripts/compare_nei.py PATH_TO_SNAPSHOT --mode coverage
+--report exports/coverage.json --markdown exports/coverage.md`.
 
 ## Current coverage
 
@@ -207,177 +149,7 @@ Underground-fluid blacklist/provider matching remains unresolved, with raw
 rules and captured config digests. Referenced resources are not a full NEI
 catalog. Counts are not a claim of complete semantics.
 
-## Verification
+## Attribution
 
-The developer accounting extension passed 26 Java, 92 Python and 28 GUI tests
-with a successful production UI build. The final paired capture/import exited
-0 in 210.53 seconds. It preserves 259,781 processes and 118,717 resources and
-adds versioned material facts plus nominal native GT recipe voltage tiers.
-The same scoped NEI comparison retains 78,389 matches, zero differences and
-zero missing matches. Known Door errors keep its strict completeness false.
-
-All 4,695 query-accountable resources passed actual native-unit inspection.
-Iron dust, small/tiny dust and molten forms yield Fe amounts 1, 1/4, 1/9 and
-1/144. Native density and hierarchical component units remain significant.
-The native fluid dispatcher omits water, while Water and Ice share its public
-phase identity. The capture retains both candidates. Query consensus confirms
-the same H2/O1 per 1,000 units without choosing a material identity or
-certifying purity. Missing associations/components remain unsupported.
-
-IntelliJ audit 6e413a6d-6309-48ea-86a2-3533fe4e6972 completed with 61 advisories.
-Direct PMD against the actual compile classpath completed with 170 advisories
-and no processing/configuration errors. The combined runner still reports its
-nested-wrapper PMD stage as skipped. No metric suppressions were added.
-
-One consolidated review and focused correction check closed five reachable
-UI/transport findings. Fresh configured official MCP and HTTP match Dataset
-for native chemistry, a tier-filtered GT path, selected 100%/50% reagent
-recycling, bounded loop queries and exact source records.
-
-The combined Botania and independent-projection extension passed 22 Java,
-60 Python and 19 GUI tests. Actual Botania `1.13.38-GTNH` resolves in the
-consuming module. The final paired capture/import completed in 186.22 seconds.
-All 152 base Mana Infusion ingredient/result records agree with same-run NEI.
-Eight wildcard cases use independent pools. Eleven Mini Flower and two Magic
-Bees subclass templates remain inspectable with unresolved execution.
-GUI recipe details show exact total mana and required catalysts below the pool.
-
-Schema 3 records the selected serializer through one equivalent public reverse
-dispatch, with one call per reached handler. All 62,131 scoped projections
-selected the default item serializer. The five-map GT/furnace comparison has
-78,389 matches, zero differences and zero missing recipes. This includes 28,895
-Fluid Solidifier matches and the Lapotron double-NBT case. Reference summary 2
-adds pre-conversion typed handler facts alongside the native payload. Exact
-dual-identity comparison verifies the previously ambiguous TiC and recycling
-views. Display-name reads on copies remove a proven TGregworks mutation, with
-all 28,715 affected input choices agreeing with their unified members. Null
-and empty-compound NBT stay distinct. Known Door failures
-still prevent strict completeness. Historical contexts retain their captured
-scope and original projection rules, with no retrospective inferred facts.
-
-IntelliJ completed with 56 advisory findings. Direct PMD completed against the
-actual classpath with 158 advisories and no processing/configuration errors.
-The combined launcher still skips PMD because the wrapper is in this nested
-module, so its skipped result is not the direct analysis. Complexity metrics,
-Java 11 API suggestions for the Java 8 target and a nullable test-result warning
-remain documented rather than driving unsupported behavior changes.
-
-The Forestry/small-ore extension passed 15 Java tests and 46 Python tests.
-The build resolves the actual Forestry `4.11.39` API. A fresh paired capture
-and validated import completed in 179.46 seconds. All 2,106 small-ore rules
-passed native sequence, weight, host probability, typed identity, link and
-context checks. Existing 22,898 normal mining records remain semantically
-unchanged. Potential rule products remain searchable and unresolved in trace.
-
-All 154 native Forestry records were compared with scoped NEI item views.
-153 match fully. One comb recipe has 49 native products, of which NEI displays
-only nine. All nine displayed products match the native chance ordering and
-quantities. Capture retains all 49 rather than treating the display cap as a
-recipe limit. Native probabilities are source-backed, not verified through
-generic NEI's default chance getter. All 1,674 EnderIO records remain unchanged
-after moving their lattice calculation to the shared NativeCapture owner.
-
-IntelliJ completed with 51 advisories. The combined runner still skips PMD
-because its Git-root check misses the module wrapper. Direct PMD with the same
-rules, actual classpath and Java 1.8 parser completed with 131 advisories across
-production/tests and no processing or configuration errors. A consolidated
-source review found no actionable correctness issues. Complexity and coupling
-findings remain advisory.
-
-The independent presentation extension passed all ten Java tests and a
-fresh paired game capture in 176.56 seconds. Typed NBT reconstruction covers
-native types 0 through 11, long bounds, empty typed lists and malformed values.
-Closed stream declarations remain available before delayed publication.
-Context checksum/count tests reject altered input before native queries.
-IntelliJ completed with 46 advisories. The combined audit's PMD launcher
-failed because `Get-FileHash` was unavailable in its environment. Direct PMD
-with the same rules, actual exported classpath and Java 1.8 parser completed
-with 96 advisories across production and test sources and no processing or
-configuration errors. Complexity and existing style findings remain advisory.
-This preserves the failed launcher evidence rather than declaring it healthy.
-
-The bounded EnderIO adapter has a pure probability boundary test covering
-threshold zero, one-half, one, negative values and unsupported nonfinite
-values. The combined build passed all four Java tests. The real paired
-capture verified 1,663 Sag Mill and 11 Alloy records, with no unresolved
-inputs/outputs or invalid quantities in this measured set. All 4,403 native
-output identity/amount entries agree with scoped NEI views. Native chances
-and RF remain source-backed fields because generic NEI chances are defaults.
-
-The integrated extension passed `test build` on 2026-10-12 with four Java
-tests. Public API proof comes from attached GT `5.09.54.221` and EnderIO
-`2.10.49` sources. No Forge fixture or production test hook was added.
-IntelliJ reported 38 advisory findings. Direct PMD completed against the
-exported compile classpath with 57 advisory findings and no processing errors.
-After the observed login pipeline naming correction, the build passed again.
-The focused readiness-file checks reported zero IntelliJ findings and three
-PMD complexity advisories. Existing complexity warnings remain. Runtime
-validation verified all 122 Sievert and 157 Materials records in the new
-full-pack snapshot, with no missing fields or uninterpreted instances of
-these exact classes.
-
-The consuming module's actual GT dependency is `5.09.54.221`. Library-search
-successfully exported its attached source inventory after model preparation.
-The first compile found private GT NBT matching and an unavailable NBT list
-getter. The code now reads public native input-matcher properties and a copy
-of the list, without reflecting on private fields.
-
-`test build` succeeded on 2026-10-11 with three regression tests. They check
-compressed checksums/record counts, last-step manifest publication, refusal to
-overwrite an existing snapshot, and typed NBT with exact 64-bit strings.
-These were contract regression tests after implementation, not a claimed
-red-first TDD cycle. Logs are under local `build/verification.log` and
-`build/test-results/test/`. Build verification does not prove game capture.
-The parent runs consolidated Java audit and the real full-pack smoke test.
-
-For the exact GT crafting catalog extension, a plain JUnit fixture could not
-initialize Forge's live registries without LaunchWrapper. It failed before
-capture, so it was removed rather than reported as a behavioral regression
-test. The existing three contract tests and build are rerun. The real full-pack
-smoke must verify declared slots and unresolved matching/output flags.
-
-The extension passed `test build` on 2026-10-12 with all three existing tests.
-IntelliJ completed its recheck with 27 advisory findings. Its new constructor
-reachability warning overlooks the Forge lifecycle entry point. The combined
-runner skipped PMD because it resolves the Git root rather than this nested
-Gradle module. A separate installed PMD run used the same bundled ruleset and
-115 entries from the exported compile classpath. It completed without
-processing or configuration errors. Complexity and nesting findings remain
-advisory, including six for the crafting catalog method. No audit suppressions
-or native runtime evaluation were added to hide these findings.
-
-The first full-pack run on 2026-10-11 failed before capture during Galacticraft
-server-start initialization of Ross128b. The native ruin chest called
-EnchantmentHelper with an enchantment candidate set whose total weight was
-non-positive, causing WeightedRandom to throw. The exporter had not entered
-capture. The failed directory had no manifest. The exact native enchantment
-entry is not present in the log, and no pack bug was patched. The new bootstrap
-failure/deadline path compiled successfully. The three contract tests also
-passed. The second runtime attempt failed automatically without publishing a
-manifest, verifying the error path. A temporary read-only enchantment probe
-recorded positive initial candidate sums and zero-weight candidates. It has
-been removed, with diagnostic logs retained. The compatibility-filtered set
-at the actual throw is unknown, so the exact offending enchantment is not
-established. Parent verification covers the final build after probe removal.
-
-The adapted MIT source is attributed in `NativeCapture.java` and
-`CraftingCapture.java`, and the full
-notice is retained in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
-
-## Successful full-pack capture
-
-The corrected bootstrap and collector completed a real run on 2026-10-11.
-The manifest published after about seven seconds of capture. The game exited
-successfully and the Python importer validated all checksums, record counts
-and references before activating the SQLite index. Full pipeline time was
-140.62 seconds. Local evidence is retained under `../exports/runtime-native-inputs`.
-
-Counts are 122,835 resources, 186,528 groups, 257,788 processes, 224 sources,
-119 environments and 185 coverage records. Five unregistered ItemDoor inputs
-are explicitly unresolved. All 609 null group references found in the earlier
-failed artifact are corrected by omitting absent group references. The failed
-artifacts remain diagnostic evidence and were never published as datasets.
-
-This establishes a working full-pack runtime capture for the implemented
-domains. Custom crafting and non-GT machine semantics remain partial or
-unsupported. Record counts alone do not prove full recipe coverage.
+The collector adapts MIT-licensed source from Calculation Oracle. See
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for the full notice.

@@ -102,32 +102,10 @@ transitions remain valid alternatives. The GUI defaults to this policy. Agent,
 CLI and HTTP calls retain `diverse` as the default, so request `material`
 explicitly when that is the intended question.
 
-Prepared analysis gives unrepresented target requirement classes a
-turn before equivalent endpoint jobs. Class equality uses the complete
-snapshot-specific accepted resource sets and their declared amount, consumption
-chance and NBT effects. Original endpoint recipes, AND slots and cofeeds remain
-separate. Inspect `search.requirement_classes` for class coverage and charged
-scheduling work.
-`known_classes` and `represented_classes` count resolved classes.
-`unresolved_jobs` and `represented_unresolved_jobs` are separate counts.
-An unresolved job is not a proven equivalent requirement.
-
-It also distinguishes structured native material declarations from
-opaque or partial ones. A disjoint name set across these evidence bases receives
-an uncertainty hint rather than a stronger discontinuity hint. Scoring and
-`path_details.material_continuity` use the same comparison.
-`structured_complete` describes declaration structure, not purity, chemical
-validity or source-atom contribution. Display formulas are not parsed. Inspect
-`search.material_evidence` for prepared lookups and comparisons.
-
-Material mode gives lower priority to captured recovery recipes that dismantle
-an explicitly composed component, or turn a crafted form back into dust of the
-same primary material. This is a soft preference. Required recovery paths and
-byproduct paths remain eligible. Unknown material roles receive no extra
-recovery weight. It does not certify source-atom transfer, chemical purity or
-lossless recycling. Inspect `search.recovery_preference` for the weight and
-candidate fact lookups. This metadata is read per query, without a new index
-version or a game dump. The extra lookups can increase query time.
+Material search prioritizes distinct target requirements and uses native material
+facts as evidence. Inspect `search.requirement_classes`,
+`search.material_evidence` and `search.recovery_preference` for coverage and
+scoring. These preferences do not prove material transfer, purity or yield.
 
 Material mode also gives primitive blast furnace paths a small extra weight and
 tries other eligible machines first within shared ingredient branches. This lets
@@ -173,53 +151,13 @@ not prove atom provenance or machine feasibility.
 `path_selection="shortest"` prefers fewer steps. Neither means lower EU or
 better ore utilization. Choose the policy explicitly when comparing results.
 
-Material search needs a prepared index. Call `flow_index_status` if readiness
-is unknown. If its status is `missing` or `incompatible`, use
-`rebuild_flow_index` once. It writes replaceable derived data next to the
-imported database and may take longer than a lookup. Do not rebuild before
-every trace. New imports prepare this data automatically. A rebuild needs
-the imported dump, not a running game. An incompatible index is not silently
-used as if it belonged to the current snapshot or analysis version. Material
-evidence and requirement classes were introduced in analysis version 4.
-Item-type classification was introduced in version 5. The current preparation
-format is version 6, which also stores the exact captured recipe family for
-metadata lookups. This changes no ranking weights or recipe records.
-A process reporting an earlier version has older code loaded.
-Reload the MCP process after
-upgrading, then explicitly rebuild if status is incompatible.
-Rebuilding derived data does not reload running code.
+Material search needs a prepared index. Check `flow_index_status` and use
+`rebuild_flow_index` if it is missing or incompatible. New imports prepare it
+automatically. Reload the MCP process after upgrading before rebuilding.
 
-Material presentation lists retained paths through the consumed item first
-within comparable final Cutter transformations. Inspect `path_ordering`
-for the applied policy, classification visits and permutation from new path
-positions to original positions. Route, branch indices and path details already
-follow that order. This Cutter preference does not reorder other families.
-This is a declared mechanical continuity preference. Fluids can contribute
-material, including recipes that consume UU-Matter, and remain required inputs.
-All returned fluid paths stay available. Use required intermediates when you
-want a particular fluid route. Ordering does not recover an undiscovered path
-or establish best yield, atom contribution or a coolant role.
-
-Material presentation also moves retained Space Mining acquisition paths after
-other alternatives already found. This preference takes priority over the Cutter
-convention. Recognition requires one of the exact source-verified `.221`, `.223`
-or `.225` version and JAR cohorts. Unknown cohorts stay neutral. No path or native
-recipe field is removed. Direct and sole acquisition routes remain available.
-This is presentation of existing dependency paths, not improved discovery,
-certified material transfer, or an optimization of ore yield or energy. For
-Scheelite, it can expose a shorter QFT and Tungstensteel route before the chemical
-route. Use required intermediates or tier filters when those constraints matter.
-Other path selectors retain their existing order.
-
-`path_ordering.changed` describes the final permutation. The acquisition policy
-also reports whether its own partition changed the order, the exact source
-cohort and affected recipes. `unchanged_material_order` means no preference
-applied. Its visit counts still report presentation work. These counts are
-separate from search budgets and do not establish additional coverage.
-
-The presentation pass and batched unresolved-producer checks use the existing
-imported data and keep analysis version 6. Reload running code after upgrading.
-Rebuild only if `flow_index_status` reports missing or incompatible data.
+Material presentation may reorder retained Cutter and Space Mining paths.
+Inspect `path_ordering` for the policy and permutation. Ordering does not
+change discovery, remove recipe inputs or establish the best route.
 
 Some captured catalogs are informational declarations. For example,
 `forestry:squeezer` retains static native ingredients and products with unresolved
@@ -254,13 +192,10 @@ machine modifiers and partial product-tank acceptance remain unresolved.
 Declared ingredient lookup and raw inspection are supported when captured,
 while null executable status prevents ordinary operation accounting.
 
-Material search uses partial successor expansion. Each admitted cursor entry
-is one concrete child path and counts against `queued_states`. Its next sibling
-is admitted when that entry is processed. Deferred descriptors are not already
-explored paths. Inspect `search.partial_expansion` for their current and peak
-counts, candidate validations and cursor lifecycle. A small heap does not mean
-those descriptors or their work disappeared. `path_limit` and missing target
-branches still prevent a completeness claim.
+Search can stop before all paths or target branches are found. Inspect
+`limit_reasons`, `search.partial_expansion` and `search.reference_candidate`
+when assessing completeness. A retained reference path is not proof of an
+optimal route.
 
 Voltage bounds restrict captured recipe voltage requirements. Verified static
 GT shaped crafting-grid declarations can report tier status `not_applicable`
@@ -268,19 +203,6 @@ with a null tier. They need no machine voltage and pass those bounds. This is
 an explicit native marker checked against its declaration context. Null EU by
 itself does not imply that status, free energy or resolved tool returns. Other
 unknown tiers continue to follow `unknown_tier_policy`.
-
-Material search retains a found hop-reference witness as a provisional
-candidate within the existing path and included-recipe limits. Its material
-jobs can still improve it. A better candidate replaces it only when the full
-covered requirement-class set agrees. Retention alone does not finish that
-material exploration, including when `max_paths=1`.
-Read `search.reference_candidate` for admission, final retention, replacement
-and compatible-improvement turns. Its resource and process arrays identify
-the admitted reference, which may later be replaced and not embedded in the
-final graph. Follow exact IDs in the same snapshot when needed. Its charged
-work includes candidate admission and replacement bookkeeping. Requirement
-class work is reported separately. A retained witness can coexist with search
-truncation. It does not prove optimality or supply the other recipe inputs.
 
 ## Compare recipe machine variants
 
@@ -326,10 +248,7 @@ recycling or other unrestricted dependencies.
 Recognition uses captured `item_type` class/interface ancestry. Missing or
 failed item evidence is unknown, not a negative classification. Inspect the
 returned recognition diagnostics before claiming the categories were fully
-recognized. Current older captures lack these facts. The public default stays
-`"allow"` until the native evidence is accepted and rolled out. The current
-prepared format requires analysis version 6 and the normal explicit rebuild
-after loading new code.
+recognized. Older captures may lack these facts. The default policy is `"allow"`.
 
 ## Interpret resource origin separately from planning boundaries
 
@@ -373,7 +292,6 @@ use a reference alone as proof of native acceptance or a supported chain step.
 {"name":"find_processes","arguments":{"input_id":"r5090","input_mode":"declared","limit":5}}
 ```
 
-No new dump, sidecar rebuild or database migration is needed for this lookup.
 Use `get_group` only when the matching group matters, since some groups are
 large. For sources, follow `parameters.generated_source_id` directly with
 `get_source`, rather than enumerating the source catalog.
