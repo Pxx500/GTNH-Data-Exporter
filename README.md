@@ -24,7 +24,9 @@ repository. Capture your pack or import a snapshot supplied separately.
 You need Python 3.11+ and Node.js 22.12+ or a supported newer version. Node is
 needed to build the UI. Once built, Python serves the UI and API together.
 
-Run these commands in PowerShell from the repository root:
+### Windows (PowerShell)
+
+Run these commands from the repository root:
 
 ```powershell
 python -m venv python/.venv
@@ -33,8 +35,38 @@ npm --prefix ui ci
 npm --prefix ui run build
 ```
 
-The examples below use this virtual environment directly, so activation isn't
-required.
+### Linux (Bash)
+
+Run these commands from the repository root:
+
+```bash
+python3 -m venv python/.venv
+python/.venv/bin/python -m pip install -e ./python
+npm --prefix ui ci
+npm --prefix ui run build
+```
+
+On Debian or Ubuntu, install the `python3-venv` package if creating the virtual
+environment fails because `ensurepip` is unavailable.
+
+The remaining examples use Windows virtual-environment paths. On Linux,
+replace `python/.venv/Scripts/python.exe` with `python/.venv/bin/python` and
+use `python3` where an example calls `python`. When capturing a full pack,
+replace the Windows JDK path with the path to a compatible Linux JDK; the
+separate full-pack Gradle setup described below is still required.
+
+The examples use the virtual environment directly, so activation isn't
+required. For example, on Linux a synthetic dataset can be created, imported,
+and served with:
+
+```bash
+python3 examples/make_snapshot.py exports/snapshot
+python/.venv/bin/python -m gtnh_data import exports/snapshot --database exports/snapshot/index.sqlite
+python/.venv/bin/python -m gtnh_data serve --database exports/snapshot/index.sqlite --ui-dist ui/dist
+```
+
+Use a fresh `exports/snapshot` directory. This example contains invented data,
+not GTNH recipes.
 
 ## Get a dataset
 

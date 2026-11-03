@@ -18,8 +18,9 @@ test('material groups show shared inputs once and keep auxiliary inputs, costs a
   expect(within(tile).getAllByRole('button',{name:'Metal'})).toHaveLength(1)
   expect(within(tile).getAllByRole('button',{name:'Casing'})).toHaveLength(1)
   const variants=within(tile).getByText('Machine variants (2)').closest('details')!
+  const assemblerEnergy=(text:string)=>text.replace(/[\s,.]/g,'')==='7680EU/t'
   expect(variants).not.toHaveAttribute('open')
-  expect(within(tile).getByText('7680 EU/t')).not.toBeVisible()
+  expect(within(tile).getByText(assemblerEnergy)).not.toBeVisible()
   expect(within(tile).getByRole('button',{name:'Wrench'})).not.toBeVisible()
   fireEvent.click(within(tile).getByText('Machine variants (2)'))
   const craft=within(tile).getByRole('region',{name:'Variant Crafted casing'})
@@ -29,7 +30,7 @@ test('material groups show shared inputs once and keep auxiliary inputs, costs a
   expect(within(craft).queryByText('0 EU/t')).not.toBeInTheDocument()
   expect(within(assemble).getByRole('button',{name:'Programmed circuit'})).toBeVisible()
   expect(within(assemble).getByText('200 ticks')).toBeVisible()
-  expect(within(assemble).getByText('7680 EU/t')).toBeVisible()
+  expect(within(assemble).getByText(assemblerEnergy)).toBeVisible()
   fireEvent.click(within(assemble).getByRole('button',{name:'Inspect details'}))
   expect(inspect).toHaveBeenLastCalledWith('assemble')
   fireEvent.click(within(craft).getByText('Conditions and research'))
