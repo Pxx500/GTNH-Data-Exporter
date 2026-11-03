@@ -9,7 +9,7 @@ from mcp.server import Server
 from mcp.server.stdio import stdio_server
 from mcp.shared.exceptions import MCPError
 
-from .dataset import Dataset, DatasetError, _json
+from .dataset import Dataset, DatasetError, TRACE_DEFAULTS, TRACE_LIMITS, _json
 
 GUIDE_URI = 'gtnh-data://guide/query-workflows'
 GUIDANCE = (
@@ -97,19 +97,19 @@ OPERATIONS = {
     "find_sources": ('Find configured acquisition sources by resource/environment with small pages. These are definitions, not surveyed deposits. Rule candidates are not fixed independent yields', _schema({"resource_id": OPTIONAL_STRING, "environment_id": OPTIONAL_STRING, **PAGING})),
     "get_source": ('Read a source and follow parameters.generated_source_id directly to its generator. Keep conditions, environment links, resource semantics and provenance', _schema({"id": STRING}, ("id",))),
     "find_environments": ('Find registered generation environments with q and a small limit. Null dimension/provider mappings remain unresolved. Registration is not proof of a loaded or reachable world', _schema({"q": STRING, **PAGING})),
-    "trace_processes": ('Find bounded consume dependency paths from A to B, not complete inventory or yield plans. Diverse spreads ingredient branches, shortest means steps not EU, material prioritizes native material continuity using a prepared flow index. Keep all side inputs. Compact view retains complete selected recipes and declared choices, with omitted candidate counts in presentation. Concise keeps that graph and complete recipes but omits resource material facts and provenance, available through get_resource in the same snapshot. Full view expands matching variants. Group exclusions use literal captured members on paths, preserve cofeeds and do not expand wildcard or NBT matching. Inspect path_details, route, paths, branches, leaves, presentation and limits. Uses its own material/tier filters, not profile scope', _schema({"start_id": STRING, "target_id": STRING, "max_depth": {"type": "integer", "minimum": 1, "maximum": 64, "default": 12}, "max_processes": {"type": "integer", "minimum": 1, "maximum": 5000, "default": 300, "description": "Limit unique recipes included in the returned combined graph. This is separate from search.limit and search.work_limit. Raising it does not raise those search bounds"},
-                            "max_paths": {"type": "integer", "minimum": 1, "maximum": 100, "default": 8}, "max_extra_steps": {"type": "integer", "minimum": 0, "maximum": 64, "default": 6},
+    "trace_processes": ('Find bounded consume dependency paths from A to B, not complete inventory or yield plans. Diverse spreads ingredient branches, shortest means steps not EU, material prioritizes native material continuity using a prepared flow index. Keep all side inputs. Compact view retains complete selected recipes and declared choices, with omitted candidate counts in presentation. Concise keeps that graph and complete recipes but omits resource material facts and provenance, available through get_resource in the same snapshot. Full view expands matching variants. Group exclusions use literal captured members on paths, preserve cofeeds and do not expand wildcard or NBT matching. Inspect path_details, route, paths, branches, leaves, presentation and limits. Uses its own material/tier filters, not profile scope', _schema({"start_id": STRING, "target_id": STRING, "max_depth": {"type": "integer", "minimum": 1, "maximum": TRACE_LIMITS['max_depth'], "default": TRACE_DEFAULTS['max_depth']}, "max_processes": {"type": "integer", "minimum": 1, "maximum": TRACE_LIMITS['max_processes'], "default": TRACE_DEFAULTS['max_processes'], "description": "Limit unique recipes included in the returned combined graph. This is separate from search.limit and search.work_limit. Raising it does not raise those search bounds"},
+                            "max_paths": {"type": "integer", "minimum": 1, "maximum": TRACE_LIMITS['max_paths'], "default": TRACE_DEFAULTS['max_paths']}, "max_extra_steps": {"type": "integer", "minimum": 0, "maximum": TRACE_LIMITS['max_extra_steps'], "default": TRACE_DEFAULTS['max_extra_steps']},
                             "path_selection": {"enum": ["diverse", "shortest", "material"], "default": "diverse"}, "view": {"enum": ["compact", "full", "concise"], "default": "compact"},
                             "terminal_artifact_policy": {"enum": ["allow", "direct_targets_only"], "default": "allow", "description": "direct_targets_only retains direct tool and part targets and required cofeeds, but blocks recognized tools and parts on paths to ordinary outputs. Recognition covers Tinkers tools, ammo and parts (including TGregworks) and GT MetaGeneratedTool items (including turbine rotors), using captured runtime ancestry. Inspect search.terminal_artifacts for recognition limits"},
                             "required_resource_ids": {"type": "array", "items": STRING}, "excluded_resource_ids": {"type": "array", "items": STRING}, "excluded_group_ids": IDS, **TIERS}, ("start_id", "target_id"))),
 }
 
-TRACE_BUDGET = {"type": "number", "minimum": .05, "maximum": 60, "default": 5}
+TRACE_BUDGET = {"type": "number", "minimum": .05, "maximum": TRACE_LIMITS['time_budget_seconds'], "default": TRACE_DEFAULTS['time_budget_seconds']}
 TRACE_JOB = {"job_id": STRING}
 _trace_properties = dict(OPERATIONS['trace_processes'][1]['properties'])
 _trace_properties.update(path_selection={"enum": ["material"], "default": "material"},
                          time_budget_seconds=TRACE_BUDGET,
-                         budget_multiplier={"type": "integer", "minimum": 1, "maximum": 10, "default": 1})
+                         budget_multiplier={"type": "integer", "minimum": 1, "maximum": TRACE_LIMITS['budget_multiplier'], "default": TRACE_DEFAULTS['budget_multiplier']})
 OPERATIONS.update({
     'start_trace_search': ('Start a process-local material trace job. Poll with get_trace_search. Results are validated trace snapshots. Time budgets pause resumable work, logical guards finish it. Reuse the same job to continue', _schema(_trace_properties, ('start_id', 'target_id'))),
     'get_trace_search': ('Poll a process-local trace job. after_revision omits unchanged results. Keep the last result when result is absent. Progress is search work, not a completion percentage', _schema({**TRACE_JOB, 'after_revision': {"type": ["integer", "null"], "minimum": 0}}, ('job_id',))),

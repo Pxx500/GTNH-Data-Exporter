@@ -33,9 +33,6 @@ import net.minecraftforge.oredict.OreDictionary;
 
 /** Native declarations and quantity bases. These facts do not certify chemical purity. */
 final class MaterialFacts {
-    private static final String PROFILE_VERSION = "5.09.54.221";
-    private static final Set<String> ACCOUNTING_NATIVE_VERSIONS = new HashSet<>(Arrays.asList(
-        PROFILE_VERSION, "5.09.54.223", "5.09.54.225", "5.09.54.256"));
     private static final String FLUID_SOURCE = "Materials.getGtMaterialFromFluid + Materials.getAll public phase identity union";
     private static final int NATIVE_DECLARATION_DEPTH = 32;
     private static final int NATIVE_DECLARATION_NODES = 1024;
@@ -76,8 +73,7 @@ final class MaterialFacts {
                 "lookup_nbt_semantics", "ignored", "lookup_wildcard_fallback", true,
                 "primary", primary, "byproducts", secondary));
             String reason = null;
-            if (!ACCOUNTING_NATIVE_VERSIONS.contains(nativeVersion)) reason = "Runtime GT version has no proved accounting profile";
-            else if (prefix == null || !SOLID_PREFIXES.contains(prefix)) reason = "Prefix has no bounded solid accounting profile";
+            if (prefix == null || !SOLID_PREFIXES.contains(prefix)) reason = "Prefix has no bounded solid accounting profile";
             else if (data.hasExplicitComposition) reason = "Explicit recycling composition is not a chemical-purity declaration";
             else if (secondary.size() != 0) reason = "Item association includes secondary materials";
             else if (original.hasTagCompound()) reason = "GT association ignores this resource's NBT state";
@@ -291,8 +287,6 @@ final class MaterialFacts {
 
     /** The public phase identities choose distinct native quantity conventions. */
     static JsonObject fluidAccounting(String nativeVersion, String phase, boolean tagged, boolean knownComposition) {
-        if (!ACCOUNTING_NATIVE_VERSIONS.contains(nativeVersion))
-            return unresolved("Runtime GT version has no proved accounting profile");
         if (tagged) return unresolved("Tagged fluid state is not established by the native material association");
         if (!knownComposition) return unresolved("Native material composition is unresolved");
         if ("molten".equals(phase))
@@ -375,7 +369,7 @@ final class MaterialFacts {
     }
 
     private JsonObject facts(String source, String status) {
-        return object("schema_version", 1, "native_version", nativeVersion, "profile_version", PROFILE_VERSION, "source_api", source,
+        return object("schema_version", 1, "native_version", nativeVersion, "profile_version", nativeVersion, "source_api", source,
             "status", status, "gt_material_unit", Long.toString(GTValues.M), "chemistry_purity", "not_certified");
     }
 

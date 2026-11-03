@@ -1077,6 +1077,35 @@ provenance, native machine execution or whether removing a window preserves
 every condition. It changes neither discovery nor path order and does not
 filter recipes. Empty annotations do not certify absence of material detours.
 
+Material search separately checks two- and three-recipe spine windows before
+retaining or settling a path. It skips a continuation only when every complete,
+certain concrete assignment returns the exact entering resource with net quantity
+at least zero. Material-flow paths must consume their selected source. Returning
+that source as a catalyst is insufficient even when the window produces new target
+material. The final recipe must itself declare a return of the entering
+resource. Earlier-return windows remain eligible outside this conservative scope.
+Other coproducts need not have zero balances. This is a material-flow
+objective, not atom provenance or a claim that the recipes are useless.
+Consumed entering stock in any compatible case, uncertainty, unsupported
+accounting or incomplete bounded enumeration keep the continuation eligible.
+An explicitly required resource inside the window preserves intentional passage.
+Catalytic exits are excluded by this material-flow objective. Shortest/raw lookup,
+selected-path recycling and loop audits retain their existing behavior.
+
+`search.material_contribution` reports the policy and scope, unique
+`checked_windows`, actual `rejected_continuations`, `unknown_windows`,
+`required_overrides`, `cache_hits`, `loaded_process_records`, `matching_rows`,
+`accounting_matching_rows`, `cases` and `charged_work`. Native matching and
+selected-path ledgers share the Dataset accounting owner. Queries memoize
+window results and charge added work to the existing search work budget.
+Checks allow at most 16 assignments and 64 input slots per window, reading
+at most 17 members per choice to detect over-bound matching. Progressive
+checks yield between bounded matching/accounting steps. Only suffixes with a
+possible final splitter retain the one/two-step history needed by these checks
+in dominance keys. Other suffixes keep the existing dominance behavior.
+No index rebuild
+or new recipe fact is required.
+
 `route` contains `status`, `strategy`, ordered `resource_ids` and ordered
 `process_ids`. The strategy field retains `shortest_known_dependency_path`.
 For diverse and shortest selection this means fewest process steps in the
@@ -1095,11 +1124,15 @@ identifies the first qualifying path. The returned process IDs are exactly
 the union of complete emitted paths. Only transitions belonging to those
 paths become recipe-to-recipe connections in the GUI.
 
-`max_paths` defaults to 8 and accepts 1..100. `max_extra_steps` defaults to 6
-and accepts 0..64, relative to the shortest qualifying path. `max_depth`
-accepts 1..64 and bounds total path steps. `max_processes` accepts 1..5000
-and bounds the union of distinct recipes. Each path is included whole or
+`max_paths` defaults to 20 and accepts 1..100. `max_extra_steps` defaults to 64
+and accepts 0..128, relative to the shortest qualifying path. `max_depth`
+defaults to 64, accepts 1..128 and bounds total path steps. `max_processes`
+defaults to 5000, accepts 1..5000 and bounds the union of distinct recipes. Each path is included whole or
 omitted. A path that cannot fit is never represented as a successful fragment.
+Material search jobs default to 60 seconds per run or continuation and a
+1× search work budget. The time range remains 0.05..60 seconds and the work
+multiplier range remains 1..10. These budgets are separate from the included
+recipe limit.
 Selected-path recycling explicitly uses shortest selection and retains its
 two-extra-step default. Its quantities and recovery ranking still refer to
 concrete recipe witnesses.

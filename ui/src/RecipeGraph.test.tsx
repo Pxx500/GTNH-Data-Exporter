@@ -6,6 +6,57 @@ import {toPng,toSvg} from 'html-to-image'
 vi.mock('html-to-image',()=>({toPng:vi.fn(),toSvg:vi.fn()}))
 
 afterEach(()=>{cleanup();vi.clearAllMocks()})
+
+test('growing a long shared prefix into unequal fanout branches keeps every DAG dependency below its producer',async()=>{
+  const prefix=Array.from({length:12},(_,i)=>`prefix-${i}`)
+  const left=['left-0','left-1'],right=['right-0','right-1','right-2','right-3']
+  const chain=(ids:string[])=>ids.slice(1).map((target,i)=>({id:`${ids[i]}:${target}`,source:ids[i],target,resourceId:'material'}))
+  const process=(id:string):Process=>({id,family:'test',display_name:id,inputs:[],outputs:[],duration_ticks:20,eu_per_tick:8,amperage:1,executable:true,conditions:{},provenance:{}})
+  const graph=(ids:string[],connections:ReturnType<typeof chain>)=>({resources:[],recipes:ids.map(id=>({id,inspectId:id,process:process(id)})),connections})
+  const first=graph([...prefix,...left,'join'],chain([...prefix,...left,'join']))
+  const full=graph([...prefix,...left,'join',...right],[...first.connections,...chain([prefix.at(-1)!,...right,'join'])])
+  const inspect=vi.fn(),inspectResource=vi.fn()
+  const view=render(<RecipeGraph graph={first} highlight={null} inspect={inspect} inspectResource={inspectResource}/>)
+  const position=(id:string)=>{
+    const node=view.container.querySelector(`[data-id="${id}"]`) as HTMLElement
+    return {node,y:Number(node.style.transform.match(/translate\([\d.-]+px,\s*([\d.-]+)px\)/)![1]),height:node.offsetHeight}
+  }
+  await waitFor(()=>expect(position('join').y).toBeGreaterThan(1000))
+  const viewport=view.container.querySelector('.react-flow__viewport') as HTMLElement
+  await waitFor(()=>expect(viewport.style.transform).toContain('scale(0.1)'))
+  const camera=viewport.style.transform
+  view.rerender(<RecipeGraph graph={full} highlight={null} inspect={inspect} inspectResource={inspectResource}/>)
+  await waitFor(()=>{
+    expect(view.container.querySelectorAll('.react-flow__edge')).toHaveLength(full.connections.length)
+    for(const edge of full.connections){
+      const source=position(edge.source)
+      expect(position(edge.target).y,`${edge.source} → ${edge.target}`).toBeGreaterThanOrEqual(source.y+source.height+60)
+    }
+  })
+  expect(viewport.style.transform).toBe(camera)
+  const moved=position('prefix-0').node
+  const beforeDrag=moved.style.transform
+  fireEvent.click(moved)
+  moved.focus()
+  fireEvent.keyDown(moved,{key:'ArrowRight'})
+  await waitFor(()=>expect(moved.style.transform).not.toBe(beforeDrag))
+  const manualPosition=moved.style.transform
+  view.rerender(<RecipeGraph graph={{...full,resources:[...full.resources],recipes:[...full.recipes].reverse(),connections:[...full.connections].reverse()}} highlight={null} inspect={inspect} inspectResource={inspectResource}/>)
+  expect(position('prefix-0').node.style.transform).toBe(manualPosition)
+})
+
+test('cyclic returns remain visible while the acyclic entry and exit still flow downward',async()=>{
+  const ids=['start','cycle-a','cycle-b','finish']
+  const process:Process={id:'native',family:'test',display_name:'Cycle recipe',inputs:[],outputs:[],duration_ticks:20,eu_per_tick:8,amperage:1,executable:true,conditions:{},provenance:{}}
+  const connections=[['start','cycle-a'],['cycle-a','cycle-b'],['cycle-b','cycle-a'],['cycle-b','finish']].map(([source,target])=>({id:`${source}:${target}`,source,target,resourceId:'a'}))
+  const view=render(<RecipeGraph graph={{resources:[],recipes:ids.map(id=>({id,inspectId:id,process})),connections}} highlight={null} inspect={vi.fn()} inspectResource={vi.fn()}/>)
+  const y=(id:string)=>Number((view.container.querySelector(`[data-id="${id}"]`) as HTMLElement).style.transform.match(/translate\([\d.-]+px,\s*([\d.-]+)px\)/)![1])
+  await waitFor(()=>expect(y('finish')).toBeGreaterThan(500))
+  expect(y('cycle-a')).toBeGreaterThan(y('start'))
+  expect(y('finish')).toBeGreaterThan(y('cycle-b'))
+  expect(y('cycle-a')).not.toBe(y('cycle-b'))
+  expect(view.container.querySelectorAll('.react-flow__edge')).toHaveLength(4)
+})
 test('material groups show shared inputs once and keep auxiliary inputs, costs and exact inspection with each machine',async()=>{
   const resources:Resource[]=['Metal','Casing','Wrench','Programmed circuit'].map((display_name,index)=>({id:`r${index}`,display_name,registry_name:`test:r${index}`,kind:'item',metadata:0,nbt:null,provenance:{}}))
   const crafting:Process={id:'craft',family:'minecraft:crafting',display_name:'Crafted casing',inputs:[{role:'consume',choices:[{resource_id:'r0',amount:2,match:{mode:'exact'}}]},{role:'consume',choices:[{resource_id:'r2',amount:1,match:{mode:'exact'}}]}],outputs:[{resource_id:'r1',amount:1,chance:{numerator:1,denominator:1}}],duration_ticks:null,eu_per_tick:null,amperage:null,executable:true,conditions:{tool_accounting:'container_damage_and_breakage_unresolved'},provenance:{}}

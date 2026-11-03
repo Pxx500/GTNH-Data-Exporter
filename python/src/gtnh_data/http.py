@@ -7,7 +7,7 @@ import json
 from fastapi import Body, FastAPI, Query, Request
 from fastapi.responses import FileResponse, JSONResponse
 
-from .dataset import Dataset, DatasetError
+from .dataset import Dataset, DatasetError, TRACE_DEFAULTS
 
 
 def create_app(dataset: Dataset, ui_dist: str | Path | None = None) -> FastAPI:
@@ -119,8 +119,9 @@ def create_app(dataset: Dataset, ui_dist: str | Path | None = None) -> FastAPI:
         return dataset.find_environments(q=q, offset=offset, limit=limit)
 
     @app.get("/api/trace")
-    def trace(start_id: str, target_id: str, max_depth: int = 12, max_processes: int = 300, max_paths: int = 8,
-              max_extra_steps: int = 6, path_selection: str = 'diverse', required_resource_id: list[str] = Query(default=[]), excluded_resource_id: list[str] = Query(default=[]),
+    def trace(start_id: str, target_id: str, max_depth: int = TRACE_DEFAULTS['max_depth'],
+              max_processes: int = TRACE_DEFAULTS['max_processes'], max_paths: int = TRACE_DEFAULTS['max_paths'],
+              max_extra_steps: int = TRACE_DEFAULTS['max_extra_steps'], path_selection: str = 'diverse', required_resource_id: list[str] = Query(default=[]), excluded_resource_id: list[str] = Query(default=[]),
               excluded_group_id: list[str] = Query(default=[]),
               min_tier: int | None = None, max_tier: int | None = None, unknown_tier_policy: str = 'exclude',
               view: str = Query(default='full', json_schema_extra={'enum': ['full', 'compact', 'concise']}),

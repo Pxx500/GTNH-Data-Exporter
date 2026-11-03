@@ -42,10 +42,6 @@ final class ForestryCapture {
 
     ForestryCapture(NativeCapture capture) { this.capture = capture; }
 
-    private static boolean versionKnown(String version) {
-        return "4.11.39".equals(version) || "4.11.40".equals(version);
-    }
-
     void capture() throws IOException {
         centrifuge();
         squeezer();
@@ -72,7 +68,7 @@ final class ForestryCapture {
         for (ICentrifugeRecipe recipe : new ArrayList<>(manager.recipes())) {
             String nativeClass = recipe == null ? null : recipe.getClass().getName();
             classes.merge(nativeClass == null ? "null" : nativeClass, 1, Integer::sum);
-            boolean known = versionKnown(version) && nativeManager && recipe != null && recipe.getClass() == CentrifugeRecipe.class;
+            boolean known = nativeManager && recipe != null && recipe.getClass() == CentrifugeRecipe.class;
             JsonObject conditions = object("native_class", nativeClass, "native_registry_class", manager.getClass().getName(),
                 "registry_binding", nativeManager ? "exact_native_manager_static_registry" : "uninterpreted_manager",
                 "selection", nativeManager ? "first_matching_native_hashset_iteration" : "uninterpreted_manager", "registry_order", "within_run_only",
@@ -148,12 +144,6 @@ final class ForestryCapture {
     private void squeezer() throws IOException {
         ModContainer owner = Loader.instance().getIndexedModList().get("Forestry");
         String version = owner == null ? null : owner.getVersion();
-        if (!versionKnown(version)) {
-            capture.coverage("forestry:squeezer", "unsupported", 0,
-                "No verified native Squeezer declaration contract for this version",
-                object("native_version", version));
-            return;
-        }
         ISqueezerManager manager = RecipeManagers.squeezerManager;
         if (manager == null || manager.getClass() != SqueezerRecipeManager.class) {
             capture.coverage("forestry:squeezer", "unsupported", 0,
@@ -250,9 +240,9 @@ final class ForestryCapture {
         ModContainer owner = Loader.instance().getIndexedModList().get("Forestry");
         String version = owner == null ? null : owner.getVersion();
         ICarpenterManager manager = RecipeManagers.carpenterManager;
-        if (!versionKnown(version) || manager == null || manager.getClass() != CarpenterRecipeManager.class) {
+        if (manager == null || manager.getClass() != CarpenterRecipeManager.class) {
             capture.coverage("forestry:carpenter", "unsupported", 0,
-                "Verified native Carpenter manager is unavailable for this Forestry version",
+                "Native Carpenter manager is unavailable or has an unsupported class",
                 object("native_version", version, "registry_class", manager == null ? null : manager.getClass().getName()));
             return;
         }
@@ -369,8 +359,8 @@ final class ForestryCapture {
         ModContainer owner = Loader.instance().getIndexedModList().get("Forestry");
         String version = owner == null ? null : owner.getVersion();
         IStillManager manager = RecipeManagers.stillManager;
-        if (!versionKnown(version) || manager == null || manager.getClass() != StillRecipeManager.class) {
-            capture.coverage("forestry:still", "unsupported", 0, "Verified native Still manager is unavailable for this Forestry version",
+        if (manager == null || manager.getClass() != StillRecipeManager.class) {
+            capture.coverage("forestry:still", "unsupported", 0, "Native Still manager is unavailable or has an unsupported class",
                 object("native_version", version, "registry_class", manager == null ? null : manager.getClass().getName()));
             return;
         }
@@ -458,7 +448,7 @@ final class ForestryCapture {
             "container_handling", "separate_periodic_fluid_container_transactions_not_recipe_coproducts",
             "effective_duration", "machine_owned_unknown", "effective_energy", "machine_owned_unknown",
             "machine_context", "power_redstone_speed_difficulty_tanks_and_persisted_input_buffer");
-        String reason = !versionKnown(version) ? "unsupported_native_version" : recipe == null ? "null_native_recipe"
+        String reason = recipe == null ? "null_native_recipe"
             : recipe.getClass() != StillRecipe.class ? "uninterpreted_native_subclass" : null;
         if (reason != null) {
             conditions.addProperty("declaration_status", reason);
@@ -568,7 +558,7 @@ final class ForestryCapture {
             "input_matching", "phantom_grid_configuration_and_ore_equivalent_selected_stock_removal_unresolved",
             "container_returns", "unresolved_selected_item_callbacks", "effective_duration", "machine_owned_unknown",
             "effective_energy", "machine_owned_unknown", "machine_context", "power_redstone_speed_difficulty_and_output_space");
-        String reason = !versionKnown(version) ? "unsupported_native_version" : recipe == null ? "null_native_recipe"
+        String reason = recipe == null ? "null_native_recipe"
             : recipe.getClass() != CarpenterRecipe.class ? "uninterpreted_native_subclass" : null;
         if (reason != null) {
             conditions.addProperty("declaration_status", reason);

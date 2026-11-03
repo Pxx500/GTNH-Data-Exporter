@@ -88,6 +88,40 @@ public final class NeiReferenceCaptureTest {
     }
 
     @Test
+    public void inventoryBindsLoadedArtifactsToTheCurrentManifestWithoutVersionPins() throws Exception {
+        JsonObject manifest = inventoryManifest();
+        JsonArray mods = manifest.getAsJsonObject("pack").getAsJsonArray("mods");
+        Class<?>[] owners = {codechicken.nei.recipe.GuiCraftingRecipe.class, gregtech.nei.GTNEIDefaultHandler.class};
+        String[] ids = {"NotEnoughItems", "gregtech"};
+        for (int index = 0; index < owners.length; index++) {
+            Class<?> owner = owners[index];
+            JsonObject source = NeiReferenceCapture.classResourceOrigin(owner.getClassLoader(),
+                owner.getName().replace('.', '/') + ".class");
+            assertEquals("jar", source.get("status").getAsString());
+            Path artifact = java.nio.file.Paths.get(java.net.URI.create(source.getAsJsonArray("origins").get(0).getAsString()));
+            mods.add(Jsons.object("id", ids[index], "version", "future-development-version", "source", source.get("file"),
+                "sha256", SnapshotWriter.sha256(artifact)));
+        }
+        List<List<?>> rosters = Arrays.asList(new ArrayList<>(Arrays.asList(new OpaqueCraftHandler())),
+            new ArrayList<>(), new ArrayList<>(), new ArrayList<>());
+        Path output = temporary.getRoot().toPath().resolve("current-artifacts");
+        NeiReferenceCapture.captureInventory(output, manifest, () -> rosters);
+        JsonObject summary = SnapshotWriter.JSON.fromJson(new String(Files.readAllBytes(output.resolve("summary.json")),
+            StandardCharsets.UTF_8), JsonObject.class);
+        assertTrue(summary.get("complete").getAsBoolean());
+        assertTrue(summary.getAsJsonObject("authority").get("nei_artifact_verified").getAsBoolean());
+        assertTrue(summary.getAsJsonObject("authority").get("gt_artifact_verified").getAsBoolean());
+        assertEquals("future-development-version", summary.getAsJsonObject("authority").getAsJsonObject("nei")
+            .get("version").getAsString());
+        mods.get(0).getAsJsonObject().addProperty("sha256", "different-current-artifact");
+        Path mismatch = temporary.getRoot().toPath().resolve("mismatched-artifacts");
+        NeiReferenceCapture.captureInventory(mismatch, manifest, () -> rosters);
+        JsonObject rejected = SnapshotWriter.JSON.fromJson(new String(Files.readAllBytes(mismatch.resolve("summary.json")),
+            StandardCharsets.UTF_8), JsonObject.class);
+        assertFalse(rejected.getAsJsonObject("authority").get("nei_artifact_verified").getAsBoolean());
+    }
+
+    @Test
     public void classResourceOriginsRequireOneDistinctOriginAndExposeMissingResources() throws Exception {
         String resource = "sample/Entry.class";
         Path first = temporary.newFolder("origin-one").toPath();

@@ -70,6 +70,34 @@ class ComparisonTests(unittest.TestCase):
             self.replace_records(reference, name, values, 'summary.json')
         return directory, reference
 
+    def test_inventory_uses_current_manifest_artifacts_not_release_allowlists(self):
+        directory, reference = self.inventory_fixture()
+        manifest_path = directory / 'manifest.json'
+        manifest = json.loads(manifest_path.read_text())
+        summary_path = reference / 'summary.json'
+        summary = json.loads(summary_path.read_text())
+        rows = self.read_records(reference, 'handlers.jsonl.gz')
+        for index, mod in enumerate(manifest['pack']['mods']):
+            mod.update(version='latest-daily-dev', sha256=str(index + 1) * 64, source='daily-' + mod['id'] + '.jar')
+        summary.update(canonical_pack=manifest['pack'], canonical_pack_sha256=comparison._pack_digest(manifest['pack']))
+        summary['authority'].update(nei=manifest['pack']['mods'][0], gt=manifest['pack']['mods'][1])
+        for index, mod in enumerate(manifest['pack']['mods']):
+            summary['native_files'][index].update(file=mod['source'], sha256=mod['sha256'], owner_candidates=[mod])
+        for row in rows:
+            for entry in row['hierarchy']:
+                mod = manifest['pack']['mods'][1]
+                entry['source'].update(file=mod['source'], sha256=mod['sha256'], owner_candidates=[mod])
+        manifest_path.write_text(json.dumps(manifest))
+        summary_path.write_text(json.dumps(summary))
+        self.replace_records(reference, 'handlers.jsonl.gz', rows, 'summary.json')
+        report = comparison.inventory_coverage(directory, reference)
+        self.assertEqual(report['handlers'][0]['capture']['status'], 'covered_declarations')
+        self.assertEqual(report['handlers'][0]['capture']['profile']['version'], 'latest-daily-dev')
+        rows[0]['hierarchy'][0]['source']['sha256'] = '0' * 64
+        self.replace_records(reference, 'handlers.jsonl.gz', rows, 'summary.json')
+        with self.assertRaises(comparison.ComparisonError):
+            comparison.inventory_coverage(directory, reference)
+
     def test_inventory_report_preserves_duplicate_registrations_and_unknown_sources(self):
         directory, reference = self.inventory_fixture()
         report = comparison.inventory_coverage(directory, reference)
@@ -870,7 +898,6 @@ class ComparisonTests(unittest.TestCase):
                     else:
                         manifest['pack']['mods'][1]['version'] = '2.8.159-GTNH'
                     manifest_path.write_text(json.dumps(manifest))
-                    summary['canonical_pack'] = manifest['pack']
                 elif case == 'snapshot':
                     summary['canonical_snapshot_id'] = 'other'
                 elif case == 'files':
@@ -898,8 +925,38 @@ class ComparisonTests(unittest.TestCase):
         summary = json.loads(summary_path.read_text())
         summary['canonical_pack'] = manifest['pack']
         summary_path.write_text(json.dumps(summary))
-        with self.assertRaisesRegex(comparison.ComparisonError, 'gregtech'):
-            comparison.compare(directory, reference)
+        context_path = reference / 'presentation-context.json'
+        context = json.loads(context_path.read_text())
+        context['canonical_pack'] = manifest['pack']
+        context_path.write_text(json.dumps(context))
+        summary['files']['presentation-context.json']['sha256'] = hashlib.sha256(context_path.read_bytes()).hexdigest()
+        summary_path.write_text(json.dumps(summary))
+        self.assertEqual(comparison.compare(directory, reference)['counts']['matched'], 1)
+
+    def test_still_current_versions_keep_exact_class_and_templates(self):
+        directory, reference = self.still_capture()
+        manifest_path = directory / 'manifest.json'
+        manifest = json.loads(manifest_path.read_text())
+        for index, mod in enumerate(manifest['pack']['mods']):
+            mod.update(version='next-daily-dev', sha256=str(index + 1) * 64)
+        manifest_path.write_text(json.dumps(manifest))
+        processes = self.read_records(directory, 'processes.jsonl.gz')
+        for record in processes:
+            record['conditions']['native_version'] = 'next-daily-dev'
+        self.replace_records(directory, 'processes.jsonl.gz', processes, 'manifest.json')
+        manifest = json.loads(manifest_path.read_text())
+        summary_path = reference / 'summary.json'
+        summary = json.loads(summary_path.read_text())
+        summary.update(canonical_pack=manifest['pack'], canonical_files=manifest['files'])
+        summary_path.write_text(json.dumps(summary))
+        result = comparison.compare(directory, reference, profile='forestry_still')
+        self.assertGreater(result['counts']['matched'], 0)
+        self.assertEqual(result['counts']['unsupported'], 0)
+        processes[0]['conditions']['native_class'] += 'Custom'
+        self.replace_records(directory, 'processes.jsonl.gz', processes, 'manifest.json')
+        summary['canonical_files'] = json.loads(manifest_path.read_text())['files']
+        summary_path.write_text(json.dumps(summary))
+        self.assertGreater(comparison.compare(directory, reference, profile='forestry_still')['counts']['unsupported'], 0)
 
     def test_still_incomplete_catalogs_remain_incomplete_even_with_complete_claim(self):
         base = self.root

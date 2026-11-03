@@ -34,8 +34,7 @@ public class ForestryCaptureTest {
             assertNull(declaration.output);
             assertEquals("unresolved", declaration.conditions.get("dynamic_inputs").getAsString());
             assertEquals("unresolved", declaration.conditions.get("dynamic_output").getAsString());
-            assertEquals("4.11.39".equals(version) || "4.11.40".equals(version)
-                ? "uninterpreted_native_subclass" : "unsupported_native_version",
+            assertEquals("uninterpreted_native_subclass",
                 declaration.conditions.get("declaration_status").getAsString());
         }
     }
@@ -117,7 +116,7 @@ public class ForestryCaptureTest {
             assertTrue(declaration.conditions.has("dynamic_output"));
         }
         ForestryCapture.CarpenterDeclaration unchecked = ForestryCapture.carpenterDeclaration(unsafe, "4.11.41");
-        assertEquals("unsupported_native_version", unchecked.conditions.get("declaration_status").getAsString());
+        assertEquals("uninterpreted_native_subclass", unchecked.conditions.get("declaration_status").getAsString());
         assertNull(unchecked.output);
     }
 
@@ -125,13 +124,13 @@ public class ForestryCaptureTest {
     public void currentForestryProfileRetainsCarpenterQuantitiesAndStillNullStatus() {
         ShapedRecipeCustom grid = new ShapedRecipeCustom(new ItemStack(new Item(), 3), "AA", 'A', new Item());
         ForestryCapture.CarpenterDeclaration declaration = ForestryCapture.carpenterDeclaration(
-            new CarpenterRecipe(7, null, null, grid), "4.11.40");
+            new CarpenterRecipe(7, null, null, grid), "future-version");
         assertTrue(declaration.known);
         assertEquals(3, declaration.output.stackSize);
         assertEquals(2, declaration.ingredients.length);
         assertEquals(7, declaration.conditions.get("native_processing_time").getAsInt());
-        assertEquals("4.11.40", declaration.conditions.get("native_version").getAsString());
-        assertEquals("null_native_recipe", ForestryCapture.stillDeclaration(null, "4.11.40")
+        assertEquals("future-version", declaration.conditions.get("native_version").getAsString());
+        assertEquals("null_native_recipe", ForestryCapture.stillDeclaration(null, "future-version")
             .conditions.get("declaration_status").getAsString());
     }
 

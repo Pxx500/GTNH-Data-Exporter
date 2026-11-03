@@ -118,13 +118,6 @@ final class NativeCapture {
         String sourceApi = "gtnhintergalactic.recipe.SpacePumpingRecipes.RECIPES";
         ModContainer owner = Loader.instance().getIndexedModList().get("gtnhintergalactic");
         String version = owner == null ? null : owner.getVersion();
-        if (!"5.09.54.221".equals(version) && !"5.09.54.223".equals(version)
-            && !"5.09.54.225".equals(version) && !"5.09.54.256".equals(version)) {
-            coverage("gtnhintergalactic.space_pumping", "unsupported", 0,
-                "No verified native Space Pumping contract for this version",
-                object("source_api", sourceApi, "native_version", version));
-            return;
-        }
         int energy = Math.toIntExact(TileEntityModulePump.ENERGY_CONSUMPTION);
         List<Map.Entry<Pair<Integer, Integer>, FluidStack>> entries =
             new ArrayList<>(SpacePumpingRecipes.RECIPES.entrySet());

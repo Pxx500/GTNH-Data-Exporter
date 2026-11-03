@@ -27,6 +27,57 @@ def network_semantics(result):
 
 
 class TransportTests(unittest.TestCase):
+    def test_trace_128_bounds_are_shared_by_http_cli_and_official_mcp(self):
+        arguments = dict(start_id='a', target_id='b', max_depth=128, max_extra_steps=128,
+                         max_paths=1, max_processes=5, path_selection='shortest')
+        with TestClient(create_app(self.dataset)) as client:
+            response = client.get('/api/trace', params=arguments)
+            self.assertEqual(response.status_code, 200, response.text)
+            self.assertTrue(response.json()['paths'])
+            for field in ('max_depth', 'max_extra_steps'):
+                self.assertEqual(client.get('/api/trace', params=dict(arguments, **{field: 129})).status_code, 400)
+            job_args = dict(arguments, path_selection='material')
+            job = client.post('/api/trace-jobs', json=job_args)
+            self.assertEqual(job.status_code, 200, job.text)
+            client.delete('/api/trace-jobs/' + job.json()['job_id'])
+            for field in ('max_depth', 'max_extra_steps'):
+                self.assertEqual(client.post('/api/trace-jobs', json=dict(job_args, **{field: 129})).status_code, 400)
+        command = ['trace', '--database', str(self.database), '--start-id', 'a', '--target-id', 'b',
+                   '--max-depth', '128', '--max-extra-steps', '128', '--path-selection', 'shortest']
+        output = StringIO()
+        with redirect_stdout(output):
+            self.assertEqual(main(command), 0)
+        self.assertTrue(json.loads(output.getvalue())['paths'])
+        for flag in ('--max-depth', '--max-extra-steps'):
+            invalid = list(command)
+            invalid[invalid.index(flag) + 1] = '129'
+            with redirect_stderr(StringIO()):
+                self.assertEqual(main(invalid), 2)
+
+        async def exercise():
+            parameters = StdioServerParameters(command=sys.executable,
+                args=['-m', 'gtnh_data', 'mcp', '--database', str(self.database)], env=dict(os.environ))
+            async with stdio_client(parameters) as (read_stream, write_stream):
+                async with ClientSession(read_stream, write_stream, read_timeout_seconds=15) as session:
+                    await session.initialize()
+                    schemas = {tool.name: tool.input_schema for tool in (await session.list_tools()).tools}
+                    for operation in ('trace_processes', 'start_trace_search'):
+                        properties = schemas[operation]['properties']
+                        for field in ('max_depth', 'max_extra_steps'):
+                            self.assertEqual(properties[field]['maximum'], 128)
+                        for field, default in [('max_depth', 64), ('max_processes', 5000), ('max_paths', 20), ('max_extra_steps', 64)]:
+                            self.assertEqual(properties[field]['default'], default)
+                        request = dict(arguments, path_selection='material') if operation == 'start_trace_search' else arguments
+                        answer = await session.call_tool(operation, request)
+                        self.assertFalse(answer.is_error, answer.content)
+                        if operation == 'start_trace_search':
+                            await session.call_tool('close_trace_search', {'job_id': answer.structured_content['job_id']})
+                        for field in ('max_depth', 'max_extra_steps'):
+                            self.assertTrue((await session.call_tool(operation, dict(request, **{field: 129}))).is_error)
+                    self.assertEqual(schemas['start_trace_search']['properties']['time_budget_seconds']['default'], 60)
+                    self.assertEqual(schemas['start_trace_search']['properties']['budget_multiplier']['default'], 1)
+        asyncio.run(exercise())
+
     def test_cli_json_preserves_unicode_on_cp1250_stdout_and_stderr(self):
         display_name = '\ue00e GT Iron Dust'
         recipe = process('make', [slot(choice('start'))], ['target'], family='gregtech:assembler')
@@ -713,7 +764,7 @@ class TransportTests(unittest.TestCase):
                     tools = await session.list_tools()
                     trace_schema = next(tool.input_schema for tool in tools.tools if tool.name == 'trace_processes')
                     self.assertEqual(trace_schema['properties']['path_selection'], {'enum': ['diverse', 'shortest', 'material'], 'default': 'diverse'})
-                    self.assertEqual(trace_schema['properties']['max_extra_steps']['default'], 6)
+                    self.assertEqual(trace_schema['properties']['max_extra_steps']['default'], 64)
                     loop_schema = next(tool.input_schema for tool in tools.tools if tool.name == 'find_loops')
                     for parameter, maximum in [('max_depth', 20), ('max_processes', 1000), ('max_states', 50000)]:
                         self.assertEqual(loop_schema['properties'][parameter]['maximum'], maximum)

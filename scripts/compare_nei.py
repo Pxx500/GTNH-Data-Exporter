@@ -32,20 +32,11 @@ HANDLER_ITEM_FACTS = {'version': 1, 'stage': 'before_native_serialization', 'ide
 GT_FAMILIES = frozenset('gregtech:gt.recipe.' + name for name in ('alloysmelter', 'metalbender', 'macerator', 'orewasher', 'fluidsolidifier'))
 HISTORICAL_GT_FAMILIES = frozenset(('gregtech:gt.recipe.alloysmelter', 'gregtech:gt.recipe.metalbender',
                                    'gregtech:gt.recipe.macerator', 'gregtech:gt.recipe.orewasher'))
-PINNED_MODS = {
-    'NotEnoughItems': ('2.8.159-GTNH', '050b2440952adc930e871586f496607959344aa2d7c3be781fd922a5b253a3af'),
-    'gregtech': ('5.09.54.221', '60ceb229cd894dd28393efb6d0013de2835289eeef6fcf84ad3e17a6475baf5b'),
-}
 STILL_HANDLER = 'forestry.factory.recipes.nei.NEIHandlerStill'
 STILL_CACHED_RECIPE = STILL_HANDLER + '$CachedStillRecipe'
 STILL_PROFILE = ('forestry:still', 'forestry_still')
-STILL_PINNED_MODS = {
-    'Forestry': ('4.11.39', 'f3cacea1f523a5b94bf3f7bcc811c49dd5224d5024ac3d98fb6ac3b26a51547f'),
-    'NotEnoughItems': ('2.8.160-GTNH', '723984da9883980f1b13a71e3e500ed52ea3c059141ef931078a8ea511a1ae17'),
-}
 STILL_SOURCE_SCOPE = {
     'forestry_commit': 'f2e85073d33f50f9eec874cdabef41e1a85b297f',
-    'components': {name: {'version': version, 'sha256': checksum} for name, (version, checksum) in STILL_PINNED_MODS.items()},
     'family': 'forestry:still', 'projection': 'unscaled_per_unit_templates',
 }
 SOURCE_SCOPE = {
@@ -363,9 +354,9 @@ def _still_view_projection(handler, view):
 
 def _still_canonical_projection(process, resources):
     facts = process.get('conditions') or {}
-    if (facts.get('native_class') != 'forestry.factory.recipes.StillRecipe' or facts.get('native_version') != '4.11.39'
+    if (facts.get('native_class') != 'forestry.factory.recipes.StillRecipe'
             or facts.get('declaration_status') != 'captured_exact_native_class'):
-        raise Unsupported('Still canonical declaration is outside the verified exact recipe class/version')
+        raise Unsupported('Still canonical declaration is outside the supported exact recipe class')
     return _projection([_still_fluid(facts.get('native_input_template'), resources)],
                        [_still_fluid(facts.get('native_output_template'), resources)])
 
@@ -651,9 +642,11 @@ def compare(snapshot, reference, *, example_limit=20, profile='default'):
     if summary.get('canonical_snapshot_id') != manifest['snapshot_id'] or summary.get('canonical_pack') != manifest['pack']:
         raise ComparisonError('Reference snapshot identity or pack/config cohort does not match')
     mods = {mod['id']: mod for mod in manifest['pack']['mods']}
-    for id, (version, checksum) in (STILL_PINNED_MODS if still else PINNED_MODS).items():
-        if id not in mods or (mods[id].get('version'), mods[id].get('sha256')) != (version, checksum):
-            raise ComparisonError(f'Unmapped runtime version/hash for {id}')
+    for id in (('Forestry', 'NotEnoughItems') if still else ('gregtech', 'NotEnoughItems')):
+        mod = mods.get(id, {})
+        if (not isinstance(mod.get('version'), str) or not mod['version']
+                or not re.fullmatch(r'[0-9a-f]{64}', str(mod.get('sha256', '')))):
+            raise ComparisonError(f'Missing current runtime artifact identity for {id}')
     handler_records = list(_records(reference, 'handlers.jsonl.gz', summary['files']))
     handlers = {record['handler_key']: record for record in handler_records}
     if len(handlers) != len(handler_records):
@@ -922,17 +915,7 @@ def compare(snapshot, reference, *, example_limit=20, profile='default'):
     return report
 
 
-INVENTORY_AUTHORITY = {
-    'NotEnoughItems': ('2.8.170-GTNH', '1086201a90bbfae020a42c6bce86d67d82fd0febbcccb72acc430694e978860a'),
-    'gregtech': ('5.09.54.256', 'b4f8d38ef734e08564e3ddb793c411a23a7d7df6b86de4994fa3d8f9afe947c3'),
-}
 INVENTORY_ROSTERS = ('craftinghandlers', 'serialCraftingHandlers', 'usagehandlers', 'serialUsageHandlers')
-INVENTORY_COMPONENTS = {**INVENTORY_AUTHORITY,
-    'Avaritia': ('1.100', '6d69f28a34a4409e1da08a10aa454c5cc154f59b023caab1a7b8206becd2f139'),
-    'Botania': ('1.13.41-GTNH', '24879ea7e5cfa86c022c525061ecd95cb134ee99d29bb590f2f8d9605b15a3b2'),
-    'Forestry': ('4.11.40', '5d2fc33046bdce188f281892c429ac4b1cd3b3833b66cbf013600e0d66c47058'),
-    'EnderIO': ('2.10.51', '527fafdf9add94ff74f47b9181ccd0cb77a6aa4ff09040b844a7fb91ca367c9b'),
-}
 # Exact source-verified handler classes, never inherited or substring matches.
 INVENTORY_BINDINGS = {
     'codechicken.nei.recipe.ShapedRecipeHandler': ('NotEnoughItems', 'minecraft:crafting', 'minecraft.crafting', 'CraftingManager.getRecipeList, shaped declarations'),
@@ -989,15 +972,16 @@ INVENTORY_SOURCE_REVISIONS = {
 }
 
 
-def _inventory_profile(owner, native_class):
+def _inventory_profile(owner, native_class, manifest):
     repository, revision = INVENTORY_SOURCE_REVISIONS[owner]
-    version, checksum = INVENTORY_COMPONENTS[owner]
+    mod = next(mod for mod in manifest['pack']['mods'] if mod['id'] == owner)
+    version, checksum = mod.get('version'), mod['sha256']
     return {'owner': owner, 'version': version, 'sha256': checksum, 'source_revision': revision,
+        'source_reference_scope': 'historical_api_contract_not_current_artifact_equivalence',
         'handler_source': f'https://github.com/GTNewHorizons/{repository}/blob/{revision}/src/main/java/' + native_class.replace('.', '/') + '.java'}
 
 
 def _inventory_owner(row, id, manifest, *, declaring_class=None):
-    expected = INVENTORY_COMPONENTS[id]
     for entry in row['hierarchy']:
         evidence = entry['source']
         if entry['class'] != (declaring_class or row['native_class']) or evidence['status'] != 'jar':
@@ -1006,8 +990,8 @@ def _inventory_owner(row, id, manifest, *, declaring_class=None):
             continue
         for mod in evidence['owner_candidates']:
             if (mod['id'] == id and mod in manifest['pack']['mods']
-                    and (mod.get('version'), mod.get('sha256')) == expected
-                    and evidence.get('sha256') == expected[1]):
+                    and isinstance(mod.get('sha256'), str)
+                    and evidence.get('sha256') == mod['sha256']):
                 return mod
     return None
 
@@ -1115,7 +1099,7 @@ def _inventory_rows(reference, summary, manifest):
             raise ComparisonError('Inventory component identity does not match its canonical mod')
         if verified:
             mod = mods.get(id, {})
-            if authority.get(key) != mod or (mod.get('version'), mod.get('sha256')) != INVENTORY_AUTHORITY[id]:
+            if authority.get(key) != mod or not re.fullmatch(r'[0-9a-f]{64}', str(mod.get('sha256', ''))):
                 raise ComparisonError('Unverified runtime claiming verified inventory authority')
             if not any(isinstance(item, dict) and item.get('status') == 'jar'
                        and item.get('sha256') == mod['sha256'] for item in summary['native_files']):
@@ -1243,7 +1227,7 @@ def _inventory_coverage(snapshot, inventory):
                 capture = {'status': status, 'sources': [], 'reason': proof, 'mapping_proof': proof,
                     'coverage': by_domain[domain] if domain else []}
         if mapped_owner is not None:
-            capture['profile'] = _inventory_profile(mapped_owner, GT_HANDLER if mapped_owner == 'gregtech' else row['native_class'])
+            capture['profile'] = _inventory_profile(mapped_owner, GT_HANDLER if mapped_owner == 'gregtech' else row['native_class'], manifest)
         row['capture'] = capture
         row['accounting'] = {'status': 'not_performed',
             'scope': 'No complete recipe ledger or machine-condition validation. Captured flags are separate observations',

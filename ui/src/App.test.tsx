@@ -78,7 +78,7 @@ test('trace reports every invalid numeric setting while typing and keeps the who
   const strategy=traceSection('Search strategy and budgets'),voltage=traceSection('Recipe voltage limits')
   fireEvent.click(strategy)
   fireEvent.click(voltage)
-  const invalid=[['Maximum depth','0'],['Included recipe limit','5001'],['Paths','1.5'],['Additional steps',''],['Search time per run (seconds)','0'],['Minimum recipe voltage tier','-1'],['Maximum recipe voltage tier','16']]
+  const invalid=[['Maximum depth','129'],['Included recipe limit','5001'],['Paths','1.5'],['Additional steps','129'],['Search time per run (seconds)','0'],['Minimum recipe voltage tier','-1'],['Maximum recipe voltage tier','16']]
   for(const [label,value] of invalid){
     fireEvent.change(screen.getByLabelText(label),{target:{value}})
     expect(screen.getByLabelText(label)).toHaveAttribute('aria-invalid','true')
@@ -94,10 +94,13 @@ test('trace reports every invalid numeric setting while typing and keeps the who
   fireEvent.submit(submit.closest('form')!)
   expect(searches).toHaveLength(0)
   fireEvent.click(strategy)
-  fireEvent.change(screen.getByLabelText('Maximum depth'),{target:{value:'64'}})
+  fireEvent.change(screen.getByLabelText('Maximum depth'),{target:{value:'128'}})
   expect(screen.getByLabelText('Maximum depth')).toHaveAttribute('aria-invalid','false')
   expect(within(summary).getAllByRole('listitem')).toHaveLength(6)
   expect(summary).not.toHaveTextContent('Maximum depth')
+  fireEvent.change(screen.getByLabelText('Additional steps'),{target:{value:'128'}})
+  expect(screen.getByLabelText('Additional steps')).toHaveAttribute('aria-invalid','false')
+  expect(within(summary).getAllByRole('listitem')).toHaveLength(5)
   expect(screen.getByLabelText('Paths')).toHaveAttribute('aria-invalid','true')
   expect(submit).toBeDisabled()
 })
@@ -182,7 +185,7 @@ test('trace validates optional tier ranges and only applies time budgets in mate
   fireEvent.change(screen.getByLabelText('Search time per run (seconds)'),{target:{value:'0.051'}})
   fireEvent.click(submit)
   await waitFor(()=>expect(calls).toHaveLength(2))
-  expect(calls[1].body).toMatchObject({time_budget_seconds:0.051,max_depth:12,max_processes:150,max_paths:8,max_extra_steps:6})
+  expect(calls[1].body).toMatchObject({time_budget_seconds:0.051,max_depth:12,max_processes:5000,max_paths:20,max_extra_steps:64,budget_multiplier:1})
 })
 
 test('trace starts with optional controls collapsed and keeps source, target and search visible',async()=>{
@@ -335,7 +338,7 @@ test('material jobs show retained results, stop and continue the same search wit
   expect(screen.getByRole('region',{name:'Trace setting errors'})).toHaveTextContent('Search time per run (seconds) must be a finite number from 0.05 to 60.')
   fireEvent.click(settings)
   fireEvent.change(screen.getByLabelText('Search time per run (seconds)'),{target:{value:'2'}})
-  fireEvent.change(screen.getByLabelText('Search work budget'),{target:{value:'2'}})
+  fireEvent.change(screen.getByLabelText('Search effort'),{target:{value:'2'}})
   fireEvent.click(settings)
   expect(settings).toHaveTextContent('Main material flow · 2 custom limits')
   expect(screen.getByLabelText('Search time per run (seconds)')).not.toBeVisible()
@@ -744,8 +747,12 @@ test('labels synthetic data and forwards trace controls to Dataset while retaini
   fireEvent.click(strategy)
   fireEvent.click(voltage)
   expect(screen.getByLabelText('Route selection')).toHaveValue('material')
-  expect(screen.getByLabelText('Additional steps')).toHaveValue(6)
-  expect(screen.getByLabelText('Included recipe limit')).toHaveValue(150)
+  expect(screen.getByLabelText('Maximum depth')).toHaveValue(64)
+  expect(screen.getByLabelText('Additional steps')).toHaveValue(64)
+  expect(screen.getByLabelText('Included recipe limit')).toHaveValue(5000)
+  expect(screen.getByLabelText('Paths')).toHaveValue(20)
+  expect(screen.getByLabelText('Search time per run (seconds)')).toHaveValue(60)
+  expect(screen.getByLabelText('Search effort')).toHaveValue('1')
   const start=screen.getByLabelText('Supplied start resource')
   fireEvent.focus(start);fireEvent.change(start,{target:{value:'Test mold'}})
   fireEvent.click(await screen.findByRole('option',{name:/Test mold/}))
@@ -810,7 +817,7 @@ test('labels synthetic data and forwards trace controls to Dataset while retaini
   currentStatus={...status,snapshot_id:'next-snapshot'}
   fireEvent.click(screen.getByRole('button',{name:'Refresh'}))
   await screen.findByText('next-snapshot')
-  expect(screen.getByLabelText('Maximum depth')).toHaveValue(12)
+  expect(screen.getByLabelText('Maximum depth')).toHaveValue(64)
   expect(screen.queryByLabelText('Highlight route')).not.toBeInTheDocument()
 })
 

@@ -5,6 +5,15 @@ import type { Process } from './api'
 
 afterEach(() => {cleanup(); vi.unstubAllGlobals()})
 
+test('the native electric blast furnace map has an unambiguous machine heading',()=>{
+  const process:Process={id:'ebf',family:'gregtech:gt.recipe.blastfurnace',display_name:'Blast Furnace',
+    inputs:[],outputs:[],duration_ticks:500,eu_per_tick:120,amperage:1,executable:true,
+    conditions:{coil_heat:1000},provenance:{owner:'GTRecipe'}}
+  render(<ProcessDetail process={process} resources={new Map()}/>)
+  expect(screen.getByRole('heading',{name:'Electric Blast Furnace'})).toBeVisible()
+  expect(process.display_name).toBe('Blast Furnace')
+})
+
 const manaProcess: Process = {id:'mana-recipe',family:'botania:mana_infusion',display_name:'Mana infusion',
   inputs:[],outputs:[],duration_ticks:null,eu_per_tick:null,amperage:null,executable:true,
   conditions:{total_mana:1000000,energy_unit:'mana',effective_duration:'collision_runtime_gate_unknown'},provenance:{}}

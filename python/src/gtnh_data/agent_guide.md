@@ -39,7 +39,7 @@ build another client-side solver by stitching trace spines together.
 Use `start_trace_search` for a material query whose results may improve during
 further exploration. It takes the usual trace settings, defaults to
 `path_selection="material"`, and accepts `time_budget_seconds` from 0.05 to 60
-(default 5) and integer `budget_multiplier` from 1 to 10 (default 1).
+(default 60) and integer `budget_multiplier` from 1 to 10 (default 1).
 Other selectors remain available through the synchronous `trace_processes`.
 An unavailable prepared index is an explicit failure, not an automatic rebuild.
 
@@ -129,6 +129,13 @@ lossless recycling. Inspect `search.recovery_preference` for the weight and
 candidate fact lookups. This metadata is read per query, without a new index
 version or a game dump. The extra lookups can increase query time.
 
+Material mode also gives primitive blast furnace paths a small extra weight and
+tries other eligible machines first within shared ingredient branches. This lets
+Electric Blast Furnace routes compete before a primitive furnace settles the
+branch. It is a search preference, not recipe equivalence or an energy comparison.
+Tier filters still apply. Oxygen, circuits, heat and other captured requirements
+remain on the exact recipes. Inspect `search.machine_preference` for this policy.
+
 Inspect `path_details[].material_detours` in material traces for short windows
 with no net change in captured materials. `zero_net` covers every supported
 concrete input case compatible with the selected dependency spine.
@@ -146,6 +153,21 @@ execution or that removing the window preserves all conditions. Starting
 stock includes presence requirements. Don't subtract the presence map to
 infer consumed stock. Use the existing selected-path accounting workflow
 when you need a specific concrete scenario.
+
+Material search also skips short source-return windows before retaining paths.
+Every supported certain case must return the exact entering resource with net
+quantity at least zero. The selected source must be consumed, so a returned
+catalyst is insufficient even if it enables new target production.
+The final recipe must declare the entering resource's return.
+Earlier-return windows stay eligible outside this conservative scope.
+This does not require every coproduct balance to be zero. A case that consumes
+the entering resource, or unknown, probabilistic or over-bound accounting,
+keeps the continuation eligible.
+An explicitly required internal resource preserves intentional passage through
+the window. Inspect `search.material_contribution` for rejected continuations,
+unknown checks, required overrides and charged work. This changes the selected
+material-flow objective, not raw recipe facts or shortest-path lookup. It does
+not prove atom provenance or machine feasibility.
 
 `path_selection="diverse"` spreads routes across target ingredient branches.
 `path_selection="shortest"` prefers fewer steps. Neither means lower EU or

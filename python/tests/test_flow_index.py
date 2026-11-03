@@ -49,6 +49,36 @@ def recovery_fixture(root, *, explicit=True):
 
 
 class FlowIndexTests(unittest.TestCase):
+    def test_material_paths_prefer_electric_blast_furnace_without_bypassing_tiers(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            rows = [material(id, 'Iron') for id in ('iron', 'steel', 'target')]
+            rows.extend(resource(id) for id in ('coal', 'carbon', 'oxygen'))
+            brick = process('a-brick', [slot(choice('iron')), slot(choice('coal', amount=4))],
+                            ['steel'], family='gregtech:gt.recipe.primitiveblastfurnace')
+            electric = process('z-electric', [slot(choice('iron')), slot(choice('carbon')),
+                                slot(choice('oxygen', amount=1000))], ['steel'],
+                               family='gregtech:gt.recipe.blastfurnace', conditions={'coil_heat': 1000})
+            electric['eu_per_tick'] = 120
+            alloy = process('b-alloy', [slot(choice('iron')), slot(choice('carbon', amount=3))],
+                            ['steel'], family='gregtech:gt.recipe.alloyblastsmelter')
+            alloy['eu_per_tick'] = 512
+            finish = process('finish', [slot(choice('steel'))], ['target'], family='gregtech:gt.recipe.assembler')
+            for record in (brick, electric, alloy, finish):
+                record['provenance']['owner'] = 'GTRecipe'
+            dataset = Dataset.import_snapshot(snapshot(root / 'capture', resources=rows,
+                processes=[brick, electric, alloy, finish]), root / 'index.sqlite')
+            self.addCleanup(dataset.shutdown_trace_searches)
+            for target in ('steel', 'target'):
+                with self.subTest(target=target):
+                    result = dataset.trace_processes(start_id='iron', target_id=target,
+                        path_selection='material', max_paths=1, max_depth=8, max_extra_steps=6)
+                    self.assertEqual(result['paths'][0]['process_ids'][0], 'z-electric')
+                    self.assertEqual(dataset.get_process('z-electric')['item'], electric)
+                    low_tier = dataset.trace_processes(start_id='iron', target_id=target,
+                        path_selection='material', max_paths=1, max_depth=8, max_extra_steps=6, max_tier=1)
+                    self.assertEqual(low_tier['paths'][0]['process_ids'][0], 'a-brick')
+
     def test_material_continues_known_routes_after_distinct_process_limit(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

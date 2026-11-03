@@ -3,7 +3,7 @@ import { Background, Controls, Handle, MiniMap, Position, ReactFlow, ReactFlowPr
 import type { Edge, Node, NodeProps } from '@xyflow/react'
 import dagre from '@dagrejs/dagre'
 import type { Process, Resource, Trace } from './api'
-import { Badge, ConditionFacts, ProcessDetail, ProcessExecutionFacts, ProcessInputs, ProcessMaterialIO } from './Details'
+import { Badge, ConditionFacts, ProcessDetail, ProcessExecutionFacts, ProcessInputs, ProcessMaterialIO, processName } from './Details'
 import { quantity } from './AccountingDetails'
 import type { Rational } from './AccountingDetails'
 import {renderRecipeBoard} from './RecipeBoardImage'
@@ -15,15 +15,15 @@ type RecipeNodeData = RecipeGraphData['recipes'][number] & {resources: ReadonlyM
 type RecipeNode = Node<RecipeNodeData, 'recipe'>
 export interface AttachedConnection {source:string;target:string;resourceId:string;label:string}
 function RecipeTile({data}: NodeProps<RecipeNode>) {
-  const title=data.variants?data.process.outputs.map(output=>data.resources.get(output.resource_id)?.display_name || output.resource_id).join(' + '):data.process.display_name || data.process.id
+  const title=data.variants?data.process.outputs.map(output=>data.resources.get(output.resource_id)?.display_name || output.resource_id).join(' + '):processName(data.process)
   return <article aria-label={`Recipe ${title}`} className={`recipe-tile ${data.muted ? 'path-muted' : ''}`}>
     <Handle type="target" position={Position.Top}/>
-    <div className="recipe-tile-toolbar"><Badge tone="good">{data.paths.length > 1 ? `Shared by ${data.paths.length} paths` : data.paths.length ? `Path ${data.paths[0] + 1}` : 'Network recipe'}</Badge>{data.runs && <Badge>Runs {quantity(data.runs)}</Badge>}{!data.variants && <button className="nodrag" aria-label={`Process ${data.process.display_name || data.process.id}`} onClick={() => data.inspect(data.inspectId)}>Inspect details</button>}</div>
+    <div className="recipe-tile-toolbar"><Badge tone="good">{data.paths.length > 1 ? `Shared by ${data.paths.length} paths` : data.paths.length ? `Path ${data.paths[0] + 1}` : 'Network recipe'}</Badge>{data.runs && <Badge>Runs {quantity(data.runs)}</Badge>}{!data.variants && <button className="nodrag" aria-label={`Process ${processName(data.process)}`} onClick={() => data.inspect(data.inspectId)}>Inspect details</button>}</div>
     <div className="nodrag" onClick={event=>event.stopPropagation()}>{data.variants?<section className="process-detail">
       <div className="detail-title"><div><p className="eyebrow">Material transformation</p><h3>{title}</h3></div></div>
       <ProcessMaterialIO process={data.process} inputIndices={data.process.inputs.map((_,index)=>index).filter(index=>!data.variants![0].auxiliaryInputIndices.includes(index))} resources={data.resources} onSelect={data.inspectResource}/>
-      <details className="machine-variants"><summary>Machine variants ({data.variants.length})</summary><p className="help">Retained variants in this search. Choose an exact recipe to inspect or recycle.</p>{data.variants.map(variant=><section key={variant.process.id} aria-label={`Variant ${variant.process.display_name || variant.process.id}`} className="machine-variant">
-        <div className="detail-title"><div><strong>{variant.process.display_name || variant.process.id}</strong><p>{variant.process.family}</p></div><button onClick={()=>data.inspect(variant.process.id)}>Inspect details</button></div>
+      <details className="machine-variants"><summary>Machine variants ({data.variants.length})</summary><p className="help">Retained variants in this search. Choose an exact recipe to inspect or recycle.</p>{data.variants.map(variant=><section key={variant.process.id} aria-label={`Variant ${processName(variant.process)}`} className="machine-variant">
+        <div className="detail-title"><div><strong>{processName(variant.process)}</strong><p>{variant.process.family}</p></div><button onClick={()=>data.inspect(variant.process.id)}>Inspect details</button></div>
         <ProcessExecutionFacts process={variant.process} resources={data.resources} onSelect={data.inspectResource} showUnknownCosts/>
         {variant.auxiliaryInputIndices.length>0 && <><h4>Auxiliary requirements</h4><ProcessInputs process={variant.process} inputIndices={variant.auxiliaryInputIndices} resources={data.resources} onSelect={data.inspectResource}/></>}
         <ConditionFacts value={variant.process.conditions}/>
@@ -84,12 +84,10 @@ function Flow({graph:recipeGraph,highlight,inspect,inspectResource,recycle,recyc
     data:{...recipe,paths:recipe.paths??[],resources,muted:false,inspect,inspectResource,recycle:recycleProcesses && !recycleProcesses.includes(recipe.process.id)?undefined:recycle}})),[recipeGraph,resources,inspect,inspectResource,recycle,recycleProcesses])
   const [nodes,setNodes,onNodesChange] = useNodesState<RecipeNode>(initialNodes)
   const loadedTrace = useRef(recipeGraph)
-  const arrangedTrace = useRef<RecipeGraphData | null>(null)
-  const placed=useRef(new Set<string>())
+  const arrangedTopology = useRef<string|null>(null)
+  const layoutAnchor=useRef<string|null>(null)
   useEffect(()=>{if(loadedTrace.current!==recipeGraph){
     loadedTrace.current=recipeGraph
-    const ids=new Set(initialNodes.map(node=>node.id))
-    placed.current=new Set([...placed.current].filter(id=>ids.has(id)))
     setNodes(current=>{
       const existing=new Map(current.map(node=>[node.id,node]))
       return initialNodes.map(node=>{
@@ -103,30 +101,28 @@ function Flow({graph:recipeGraph,highlight,inspect,inspectResource,recycle,recyc
   const {getNodes,fitView} = useReactFlow<RecipeNode>()
   const dimensions = nodes.map(node => `${node.id}:${node.measured?.width}:${node.measured?.height}`).join('|')
   const connections=recipeGraph.connections
+  const topology=JSON.stringify([initialNodes.map(node=>node.id).sort(),connections.map(edge=>JSON.stringify([edge.source,edge.target])).sort()])
   const edges: Edge[] = useMemo(()=>connections.map(link=>({id:link.id,source:link.source,target:link.target,label:(link.label ? `${link.label}: ` : '')+(resources.get(link.resourceId)?.display_name || resources.get(link.resourceId)?.registry_name || link.resourceId),markerEnd:{type:MarkerType.ArrowClosed},style:{stroke:highlight===null || (link.paths??[]).includes(highlight) ? '#087c70' : '#bac5ce',strokeWidth:highlight===null || (link.paths??[]).includes(highlight) ? 2.5 : 1},labelStyle:{fontSize:11,fill:'#38596c'},labelBgPadding:[7,4] as [number,number],labelBgBorderRadius:4})),[connections,resources,highlight])
-  const arrange = useCallback((onlyNew=false) => {
-    const graph = new dagre.graphlib.Graph().setGraph({rankdir:'TB',nodesep:40,ranksep:60,marginx:24,marginy:24}).setDefaultEdgeLabel(()=>({}))
+  const arrange = useCallback((keepCamera=false) => {
+    const graph = new dagre.graphlib.Graph().setGraph({rankdir:'TB',ranker:'longest-path',nodesep:40,ranksep:60,marginx:24,marginy:24}).setDefaultEdgeLabel(()=>({}))
     const current = getNodes()
-    if(current.length!==initialNodes.length || current.some(node=>!initialNodes.some(expected=>expected.id===node.id) || !node.measured?.width || !node.measured?.height)) return false
-    const moving=onlyNew?current.filter(node=>!placed.current.has(node.id)):current
-    if(moving.length===0)return true
-    const movingIds=new Set(moving.map(node=>node.id))
-    const fixed=current.filter(node=>!movingIds.has(node.id))
-    moving.forEach(node=>graph.setNode(node.id,{width:node.measured!.width!,height:node.measured!.height!}))
-    connections.filter(edge=>movingIds.has(edge.source) && movingIds.has(edge.target)).forEach(edge=>graph.setEdge(edge.source,edge.target))
+    if(current.length===0 || current.length!==initialNodes.length || current.some(node=>!initialNodes.some(expected=>expected.id===node.id) || !node.measured?.width || !node.measured?.height)) return false
+    current.forEach(node=>graph.setNode(node.id,{width:node.measured!.width!,height:node.measured!.height!}))
+    connections.forEach(edge=>graph.setEdge(edge.source,edge.target))
     dagre.layout(graph)
-    const offsetX=fixed.length?Math.max(...fixed.map(node=>node.position.x+node.measured!.width!))+40:0
-    const offsetY=fixed.length?Math.min(...fixed.map(node=>node.position.y)):0
+    const anchor=keepCamera?current.find(node=>node.id===layoutAnchor.current):undefined
+    const anchorPoint=anchor?graph.node(anchor.id):undefined
+    const offsetX=anchor?anchor.position.x-(anchorPoint!.x-anchor.measured!.width!/2):0
+    const offsetY=anchor?anchor.position.y-(anchorPoint!.y-anchor.measured!.height!/2):0
     setNodes(current.map(node=>{
-      if(!movingIds.has(node.id))return node
       const point=graph.node(node.id)
       return {...node,position:{x:point.x-node.measured!.width!/2+offsetX,y:point.y-node.measured!.height!/2+offsetY}}
     }))
-    moving.forEach(node=>placed.current.add(node.id))
-    if(!onlyNew || fixed.length===0)requestAnimationFrame(()=>{void fitView({padding:.16,maxZoom:.9})})
+    if(!keepCamera || arrangedTopology.current===null)requestAnimationFrame(()=>{void fitView({padding:.16,maxZoom:.9})})
+    if(!anchor)layoutAnchor.current=current[0]?.id??null
     return true
   },[getNodes,setNodes,connections,fitView,initialNodes])
-  useEffect(()=>{if(initialized && arrangedTrace.current!==recipeGraph && arrange(true)) arrangedTrace.current=recipeGraph},[initialized,dimensions,arrange,recipeGraph])
+  useEffect(()=>{if(initialized && arrangedTopology.current!==topology && arrange(true)) arrangedTopology.current=topology},[initialized,dimensions,arrange,topology])
   useEffect(()=>{setNodes(current=>current.map(node=>({...node,data:{...node.data,inspect,inspectResource,recycle:recycleProcesses && !recycleProcesses.includes(node.data.process.id)?undefined:recycle,muted:highlight!==null && !node.data.paths.includes(highlight)}})))},[highlight,setNodes,inspect,inspectResource,recycle,recycleProcesses])
   const exportReady=initialized && nodes.length>0 && nodes.length===initialNodes.length
   async function exportBoard(format:BoardImageFormat){
@@ -148,7 +144,7 @@ function Flow({graph:recipeGraph,highlight,inspect,inspectResource,recycle,recyc
       setExporting(null)
     }
   }
-  return <div className="recipe-board">    <section aria-label="Recipe board actions" className="recipe-board-actions"><div className="recipe-board-buttons"><button onClick={()=>arrange()}>Arrange recipes</button><button disabled={!exportReady || !!exporting} onClick={()=>void exportBoard('png')}>Export whole board PNG</button><button disabled={!exportReady || !!exporting} onClick={()=>void exportBoard('svg')}>Export whole board SVG</button></div><p>Scroll the page normally. Ctrl+scroll or pinch zooms the graph. Drag the canvas to pan and a tile header to move it.</p><p>Export, then use the Download link to save. PNG uses 2× tile size. SVG suits larger boards and browser viewing.</p>{!exportReady && <p role="status">Wait for recipe tiles to finish loading before exporting.</p>}{exportNotice && <p role="status">{exportNotice}</p>}{exportImage && <div className="recipe-board-download"><a href={exportImage.image.dataUrl} download={`recipe-board.${exportImage.format}`}>Download {exportImage.format.toUpperCase()}</a><span>recipe-board.{exportImage.format}</span></div>}{exportError && <p className="warning-text" role="alert">{exportError}</p>}</section><div className="recipe-board-canvas"><ReactFlow ref={graphRoot} nodes={nodes} edges={edges} onNodesChange={onNodesChange} nodeTypes={nodeTypes} minZoom={.1} maxZoom={2} nodesConnectable={false} zoomOnScroll={false} panOnScroll={false} preventScrolling={false} zoomOnPinch zoomActivationKeyCode="Control" onNodeClick={(_,node)=>inspect(node.data.inspectId)} fitView ariaLabelConfig={{'controls.fitView.ariaLabel':'Fit all recipes','controls.zoomIn.ariaLabel':'Zoom in','controls.zoomOut.ariaLabel':'Zoom out'}}>
+  return <div className="recipe-board">    <section aria-label="Recipe board actions" className="recipe-board-actions"><div className="recipe-board-buttons"><button onClick={()=>arrange()}>Arrange recipes</button><button disabled={!exportReady || !!exporting} onClick={()=>void exportBoard('png')}>Export whole board PNG</button><button disabled={!exportReady || !!exporting} onClick={()=>void exportBoard('svg')}>Export whole board SVG</button></div><p>Scroll the page normally. Ctrl+scroll or pinch zooms the graph. Drag the canvas to pan and a tile header to move it.</p><p>Export, then use the Download link to save. PNG uses 2× tile size. SVG suits larger boards and browser viewing.</p>{!exportReady && <p role="status">Wait for recipe tiles to finish loading before exporting.</p>}{exportNotice && <p role="status">{exportNotice}</p>}{exportImage && <div className="recipe-board-download"><a href={exportImage.image.dataUrl} download={`recipe-board.${exportImage.format}`}>Download {exportImage.format.toUpperCase()}</a><span>recipe-board.{exportImage.format}</span></div>}{exportError && <p className="warning-text" role="alert">{exportError}</p>}</section><div className="recipe-board-canvas"><ReactFlow ref={graphRoot} nodes={nodes} edges={edges} onNodesChange={onNodesChange} nodeTypes={nodeTypes} minZoom={.1} maxZoom={2} nodesConnectable={false} zoomOnScroll={false} panOnScroll={false} preventScrolling={false} zoomOnPinch zoomActivationKeyCode="Control" onNodeClick={(_,node)=>inspect(node.data.inspectId)} ariaLabelConfig={{'controls.fitView.ariaLabel':'Fit all recipes','controls.zoomIn.ariaLabel':'Zoom in','controls.zoomOut.ariaLabel':'Zoom out'}}>
     <Background gap={20}/><Controls/><MiniMap pannable={false} zoomable={false} style={{pointerEvents:'none'}} nodeColor="#c0dfd3"/>
 
   </ReactFlow></div></div>

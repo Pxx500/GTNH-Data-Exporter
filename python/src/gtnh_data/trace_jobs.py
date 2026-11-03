@@ -7,7 +7,7 @@ import time
 import uuid
 from copy import deepcopy
 
-from .dataset import DatasetError, _json
+from .dataset import DatasetError, TRACE_LIMITS, _json
 
 
 MAX_JOBS = 4
@@ -16,8 +16,9 @@ SLICE_SECONDS = .25
 
 
 def validate_time_budget(value):
-    if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or not .05 <= value <= 60:
-        raise DatasetError('time_budget_seconds must be finite and between 0.05 and 60')
+    if (isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value)
+            or not .05 <= value <= TRACE_LIMITS['time_budget_seconds']):
+        raise DatasetError(f"time_budget_seconds must be finite and between 0.05 and {TRACE_LIMITS['time_budget_seconds']}")
 
 
 class TraceJobs:

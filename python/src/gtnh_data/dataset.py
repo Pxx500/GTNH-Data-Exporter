@@ -22,6 +22,10 @@ from itertools import product
 from pathlib import Path
 
 COLLECTIONS = ("resources", "groups", "processes", "sources", "environments", "coverage")
+TRACE_DEFAULTS = {'max_depth': 64, 'max_processes': 5000, 'max_paths': 20, 'max_extra_steps': 64,
+                  'time_budget_seconds': 60, 'budget_multiplier': 1}
+TRACE_LIMITS = {'max_depth': 128, 'max_processes': 5000, 'max_paths': 100, 'max_extra_steps': 128,
+                'time_budget_seconds': 60, 'budget_multiplier': 10}
 
 
 class DatasetError(ValueError):
@@ -2115,13 +2119,9 @@ class Dataset:
                 if mod['id'] == 'gtnhintergalactic':
                     matching.append(mod)
             cohort = matching[0] if len(matching) == 1 else {}
-            source_hashes = {
-                '5.09.54.221': '60ceb229cd894dd28393efb6d0013de2835289eeef6fcf84ad3e17a6475baf5b',
-                '5.09.54.223': '1d6147a3c41fe624d49b8748971be13d93ea34d1206de83704d03d06a49ffeb2',
-                '5.09.54.225': '5bd8e63070cf1f70785111e5329c58dcc3afaef38c413755958c633bae0b2337'}
-            version = cohort.get('version')
-            verified = (version in source_hashes and cohort.get('source') == f'gregtech-{version}.jar'
-                        and cohort.get('sha256') == source_hashes[version])
+            verified = (isinstance(cohort.get('source'), str) and bool(cohort['source'])
+                        and isinstance(cohort.get('sha256'), str)
+                        and re.fullmatch(r'[0-9a-f]{64}', cohort['sha256']) is not None)
             evidence = {'status': 'verified' if verified else 'unknown', 'mod_id': 'gtnhintergalactic',
                         'version': cohort.get('version'), 'source': cohort.get('source'), 'sha256': cohort.get('sha256')}
             if verified:
@@ -2161,8 +2161,10 @@ class Dataset:
                 'changed': changed, 'eligible_paths': len(kinds), 'classification_visits': visits,
                 'acquisition_classification_visits': acquisition_visits, 'original_path_indices': order}
 
-    def _trace_request(self, *, start_id, target_id, max_depth=12, max_processes=300, max_paths=8,
-                        required_resource_ids=None, excluded_resource_ids=None, excluded_group_ids=None, max_extra_steps=6,
+    def _trace_request(self, *, start_id, target_id, max_depth=TRACE_DEFAULTS['max_depth'],
+                        max_processes=TRACE_DEFAULTS['max_processes'], max_paths=TRACE_DEFAULTS['max_paths'],
+                        required_resource_ids=None, excluded_resource_ids=None, excluded_group_ids=None,
+                        max_extra_steps=TRACE_DEFAULTS['max_extra_steps'],
                         min_tier=None, max_tier=None, unknown_tier_policy='exclude', path_selection='diverse', view='full',
                         terminal_artifact_policy='allow'):
         tier_filter = self._tier_filter(min_tier, max_tier, unknown_tier_policy)
@@ -2172,14 +2174,10 @@ class Dataset:
             raise DatasetError('path_selection must be diverse, shortest or material')
         if terminal_artifact_policy not in ('allow', 'direct_targets_only'):
             raise DatasetError('terminal_artifact_policy must be allow or direct_targets_only')
-        if isinstance(max_depth, bool) or not isinstance(max_depth, int) or not 1 <= max_depth <= 64:
-            raise DatasetError("max_depth must be between 1 and 64")
-        if isinstance(max_processes, bool) or not isinstance(max_processes, int) or not 1 <= max_processes <= 5000:
-            raise DatasetError("max_processes must be between 1 and 5000")
-        if type(max_paths) is not int or not 1 <= max_paths <= 100:
-            raise DatasetError("max_paths must be between 1 and 100")
-        if type(max_extra_steps) is not int or not 0 <= max_extra_steps <= 64:
-            raise DatasetError("max_extra_steps must be between 0 and 64")
+        for name, value, minimum in (('max_depth', max_depth, 1), ('max_processes', max_processes, 1),
+                                     ('max_paths', max_paths, 1), ('max_extra_steps', max_extra_steps, 0)):
+            if type(value) is not int or not minimum <= value <= TRACE_LIMITS[name]:
+                raise DatasetError(f'{name} must be between {minimum} and {TRACE_LIMITS[name]}')
         for name, ids, kind in (("required_resource_ids", required_resource_ids, "resource"),
                                 ("excluded_resource_ids", excluded_resource_ids, "resource"),
                                 ("excluded_group_ids", excluded_group_ids, "group")):
@@ -2213,8 +2211,10 @@ class Dataset:
         return required, excluded, group_exclusions, self._tier_filter(
             request['min_tier'], request['max_tier'], request['unknown_tier_policy'])
 
-    def trace_processes(self, *, start_id, target_id, max_depth=12, max_processes=300, max_paths=8,
-                        required_resource_ids=None, excluded_resource_ids=None, excluded_group_ids=None, max_extra_steps=6,
+    def trace_processes(self, *, start_id, target_id, max_depth=TRACE_DEFAULTS['max_depth'],
+                        max_processes=TRACE_DEFAULTS['max_processes'], max_paths=TRACE_DEFAULTS['max_paths'],
+                        required_resource_ids=None, excluded_resource_ids=None, excluded_group_ids=None,
+                        max_extra_steps=TRACE_DEFAULTS['max_extra_steps'],
                         min_tier=None, max_tier=None, unknown_tier_policy='exclude', path_selection='diverse', view='full',
                         terminal_artifact_policy='allow'):
         request = self._trace_request(start_id=start_id, target_id=target_id, max_depth=max_depth,
@@ -2377,6 +2377,60 @@ class Dataset:
         result.update(self._trace_groups(connection, processes, paths, matching_candidates))
         return self._compact_trace(result, connection, view=view) if view != 'full' else result
 
+    def _material_window_cases(self, path, captured, work, limits):
+        """Enumerate complete deterministic selected-path ledgers under explicit work bounds."""
+        pids, rids = path['process_ids'], path['resource_ids']
+        records = [captured['processes'][pid] for pid in pids]
+        yield 'work', len(records)
+        if not all(self._fixed_material_effects(record) for record in records):
+            yield 'case', None
+            return
+        slots, row_count, case_count = [], 0, 1
+        for record in records:
+            for index, slot in enumerate(record['inputs']):
+                yield 'work', 1
+                rows = [(ci, captured['matching_candidates'][_json({'resource_id': choice.get('resource_id'), 'match': choice['match']})])
+                        for ci, choice in enumerate(slot['choices'])]
+                if any(not ids for _, ids in rows):
+                    yield 'case', None
+                    return
+                length = sum(len(ids) for _, ids in rows)
+                if not length:
+                    yield 'case', None
+                    return
+                row_count += length
+                case_count *= length
+                if case_count > limits['cases_per_window']:
+                    yield 'case', None
+                    return
+                slots.append((record['id'], index, rows))
+        if (work['cases'] + case_count > limits['cases']
+                or work['matching_rows'] + row_count * (case_count + 1) > limits['matching_rows']):
+            yield 'case', None
+            return
+        options = [[(ci, rid) for ci, ids in rows for rid in ids] for _, _, rows in slots]
+        work['matching_rows'] += row_count
+        for assignment in product(*options):
+            yield 'work', 1 + row_count * (len(records) + 1)
+            work['cases'] += 1
+            selections = {pid: {} for pid in pids}
+            for (pid, si, _), (ci, rid) in zip(slots, assignment):
+                selections[pid][si] = {'choice_index': ci, 'resource_id': rid}
+            if any(not any(slot['role'] == 'consume' and selections[record['id']][si]['resource_id'] == rids[i]
+                           and slot['choices'][selections[record['id']][si]['choice_index']]['amount'] > 0
+                           for si, slot in enumerate(record['inputs'])) for i, record in enumerate(records)):
+                continue
+            work['matching_rows'] += row_count
+            try:
+                plan, _, _ = self._path_plan(None, path, 1, selections, 'guaranteed', captured=captured, integer_batches=True)
+            except (DatasetError, ValueError, TypeError, KeyError):
+                yield 'case', None
+                return
+            if plan['status'] != 'complete' or plan['startup']['uncertainty']:
+                yield 'case', None
+                return
+            yield 'case', plan
+
     def _material_detours(self, paths, details, resources, processes, matching_candidates):
         from .balance import ledger_json
         limits = {'windows': 128, 'cases': 256, 'matching_rows': 4096, 'cases_per_window': 16}
@@ -2391,48 +2445,11 @@ class Dataset:
         def window(path, start, size):
             pids = path['process_ids'][start:start + size]
             rids = path['resource_ids'][start:start + size + 1]
-            records = [processes[pid] for pid in pids]
-            if not all(self._fixed_material_effects(record) for record in records):
-                return 'unknown', None
-            slots, row_count, case_count = [], 0, 1
-            for record in records:
-                for index, slot in enumerate(record['inputs']):
-                    rows = [(ci, matching_candidates[_json({'resource_id': choice.get('resource_id'), 'match': choice['match']})])
-                            for ci, choice in enumerate(slot['choices'])]
-                    if any(not ids for _, ids in rows):
-                        return 'unknown', None
-                    length = sum(len(ids) for _, ids in rows)
-                    if not length:
-                        return 'unknown', None
-                    row_count += length
-                    case_count *= length
-                    if case_count > limits['cases_per_window']:
-                        return 'unknown', None
-                    slots.append((record['id'], index, rows))
-            if (work['cases'] + case_count > limits['cases']
-                    or work['matching_rows'] + row_count * (case_count + 1) > limits['matching_rows']):
-                return 'unknown', None
-            options = []
-            for _, _, rows in slots:
-                options.append([(ci, rid) for ci, ids in rows for rid in ids])
-            work['matching_rows'] += row_count
             checked, zeros, witness = 0, 0, None
-            for assignment in product(*options):
-                work['cases'] += 1
-                selections = {pid: {} for pid in pids}
-                for (pid, si, _), (ci, rid) in zip(slots, assignment):
-                    selections[pid][si] = {'choice_index': ci, 'resource_id': rid}
-                if any(not any(slot['role'] == 'consume' and selections[record['id']][si]['resource_id'] == rids[i]
-                               and slot['choices'][selections[record['id']][si]['choice_index']]['amount'] > 0
-                               for si, slot in enumerate(record['inputs'])) for i, record in enumerate(records)):
+            for kind, plan in self._material_window_cases({'process_ids': pids, 'resource_ids': rids}, captured, work, limits):
+                if kind == 'work':
                     continue
-                work['matching_rows'] += row_count
-                try:
-                    plan, _, _ = self._path_plan(None, {'resource_ids': rids, 'process_ids': pids}, 1,
-                                                selections, 'guaranteed', captured=captured, integer_batches=True)
-                except (DatasetError, ValueError, TypeError, KeyError):
-                    return 'unknown', None
-                if plan['status'] != 'complete' or plan['startup']['uncertainty']:
+                if plan is None:
                     return 'unknown', None
                 checked += 1
                 if not plan['ledger']['net']:
@@ -2608,11 +2625,12 @@ class Dataset:
             'outputs': sorted((id, str(quantity)) for id, quantity in outputs.items())}
 
 
-    def start_trace_search(self, *, time_budget_seconds=5, budget_multiplier=1, **arguments):
+    def start_trace_search(self, *, time_budget_seconds=TRACE_DEFAULTS['time_budget_seconds'],
+                           budget_multiplier=TRACE_DEFAULTS['budget_multiplier'], **arguments):
         from .trace_jobs import TraceJobs, validate_time_budget
         validate_time_budget(time_budget_seconds)
-        if type(budget_multiplier) is not int or not 1 <= budget_multiplier <= 10:
-            raise DatasetError('budget_multiplier must be an integer between 1 and 10')
+        if type(budget_multiplier) is not int or not 1 <= budget_multiplier <= TRACE_LIMITS['budget_multiplier']:
+            raise DatasetError(f"budget_multiplier must be an integer between 1 and {TRACE_LIMITS['budget_multiplier']}")
         arguments.setdefault('path_selection', 'material')
         try:
             request = self._trace_request(**arguments)
@@ -2634,7 +2652,7 @@ class Dataset:
     def pause_trace_search(self, job_id):
         return self._trace_job_owner().pause(job_id)
 
-    def continue_trace_search(self, job_id, time_budget_seconds=5):
+    def continue_trace_search(self, job_id, time_budget_seconds=TRACE_DEFAULTS['time_budget_seconds']):
         return self._trace_job_owner().resume(job_id, time_budget_seconds)
 
     def close_trace_search(self, job_id):
@@ -2715,8 +2733,9 @@ class Dataset:
                                                        'Resolve exact resource IDs in the same snapshot for full records.')
         return dict(result, resources=resources, edges=edges, leaves=leaves, presentation=presentation)
 
-    def _choice_resources(self, connection, choice):
+    def _choice_resources(self, connection, choice, *, limit=None):
         match = choice["match"]
+        limit_clause = '' if limit is None else ' LIMIT ?'
         if match["mode"] in ("ore_dict", "unified") and match.get("group_id"):
             nbt_clause, values = "", (match["group_id"],)
             if match.get("nbt_sensitive") is True:
@@ -2726,13 +2745,15 @@ class Dataset:
                     values += (_json(anchor["nbt"]),)
                 else:
                     nbt_clause = " AND candidate.nbt=member.nbt"
+            if limit is not None:
+                values += (limit,)
             return [row[0] for row in connection.execute("""
                 SELECT DISTINCT candidate.id FROM members
                 JOIN resources member ON member.id=members.resource_id
                 JOIN resources candidate ON candidate.kind=member.kind AND candidate.registry_name=member.registry_name
                     AND (member.metadata IS candidate.metadata OR member.metadata=32767)
                 WHERE members.group_id=?
-            """ + nbt_clause + " ORDER BY candidate.id", values)]
+            """ + nbt_clause + " ORDER BY candidate.id" + limit_clause, values)]
         resource_id = choice.get("resource_id")
         if resource_id is None:
             return []
@@ -2746,7 +2767,9 @@ class Dataset:
             if match.get("nbt_sensitive", True):
                 clause += " AND nbt=?"
                 values += (_json(anchor["nbt"]),)
-            return [row[0] for row in connection.execute("SELECT id FROM resources WHERE " + clause + " ORDER BY id", values)]
+            if limit is not None:
+                values += (limit,)
+            return [row[0] for row in connection.execute("SELECT id FROM resources WHERE " + clause + " ORDER BY id" + limit_clause, values)]
         return [resource_id]
 
     def _selected_path(self, connection, path, selections, preferred_input=None, *, captured=None):

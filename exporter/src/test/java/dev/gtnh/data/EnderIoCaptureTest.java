@@ -10,19 +10,15 @@ import org.junit.Test;
 
 public class EnderIoCaptureTest {
     @Test
-    public void sourceProfilesKeepActualVersionAndRejectUnverifiedRuntimes() {
-        for (String version : new String[] {"2.10.49", "2.10.51"}) {
+    public void sourceDeclarationsKeepAnyActualVersionWithoutVersionBasedApproval() {
+        for (String version : new String[] {"2.10.49", "2.10.51", "future-development-version"}) {
             JsonObject source = EnderIoCapture.sourceDeclaration(version);
-            assertTrue(source.get("native_version_supported").getAsBoolean());
+            assertFalse(source.has("native_version_supported"));
             assertEquals(version, source.get("native_version").getAsString());
-            assertEquals("verified_2.10.49_2.10.51_narrow_class_equivalence",
+            assertEquals("native_class_uid_contract",
                 source.get("native_semantics_basis").getAsString());
         }
-        for (String version : new String[] {null, "2.10.50", "2.10.52"}) {
-            JsonObject source = EnderIoCapture.sourceDeclaration(version);
-            assertFalse(source.get("native_version_supported").getAsBoolean());
-            assertEquals("unsupported_native_version", source.get("native_semantics_basis").getAsString());
-        }
+        assertTrue(EnderIoCapture.sourceDeclaration(null).get("native_version").isJsonNull());
     }
 
     @Test

@@ -273,17 +273,12 @@ class BalanceTests(unittest.TestCase):
                     self.assertEqual(result["vector"], expected)
                     self.assertEqual(native["chemistry_purity"], "not_certified")
 
-    def test_unknown_native_versions_and_units_remain_unsupported(self):
-        for version in (None, "5.09.54.220", "5.09.54.222", "5.09.54.224", "5.09.54.226",
-                        "5.09.54.223-dev", "5.09.54.225-dev", "5.09.54.255", "5.09.54.256-dev", "5.09.54.257", "6.0"):
+    def test_current_native_versions_use_declared_shape_and_units(self):
+        for version in ("5.09.54.257", "5.09.54.999-dev", "6.0"):
             with self.subTest(version=version):
                 native = facts(element("Fe"))
-                native["native_version"] = version
-                self.assertEqual(inspect_chemistry(native)["status"], "unsupported")
-        for version in ("5.09.54.221", "5.09.54.223", "5.09.54.225", "5.09.54.256"):
-            with self.subTest(version=version, unit="144"):
-                native = facts(element("Fe"))
-                native["native_version"] = version
+                native["native_version"] = native["profile_version"] = version
+                self.assertEqual(inspect_chemistry(native)["status"], "complete")
                 native["gt_material_unit"] = "144"
                 self.assertEqual(inspect_chemistry(native)["status"], "unsupported")
 

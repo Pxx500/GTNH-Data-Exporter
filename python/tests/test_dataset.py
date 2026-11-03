@@ -65,7 +65,7 @@ class DatasetTests(unittest.TestCase):
         for field in ('route', 'paths', 'path_details', 'branch_coverage', 'processes', 'path_ordering'):
             self.assertEqual(compact[field], result[field])
 
-    def test_acquisition_ordering_requires_verified_cohort_and_specific_native_model(self):
+    def test_acquisition_ordering_uses_current_owner_and_specific_native_model(self):
         cases = ('223', '225', 'unchecked_version', 'bad_hash', 'bad_source', 'other_model', 'eye_of_harmony')
         for case in cases:
             with self.subTest(case=case):
@@ -80,7 +80,7 @@ class DatasetTests(unittest.TestCase):
                     elif case == 'bad_hash':
                         cohort['sha256'] = 'unchecked'
                     elif case == 'bad_source':
-                        cohort['source'] = 'other.jar'
+                        cohort['source'] = ''
                     elif case == 'other_model':
                         recipes[0]['conditions']['native_metadata']['unparsed key']['type'] += 'Other'
                     else:
@@ -89,7 +89,7 @@ class DatasetTests(unittest.TestCase):
                         recipes[0]['conditions']['special_items'] = {'type': 'tectech.recipe.EyeOfHarmonyRecipe'}
                 dataset, _, _ = self.acquisition_trace_fixture('acquisition-' + case, change=change)
                 result = dataset.trace_processes(start_id='start', target_id='target', path_selection='material')
-                verified = case in ('223', '225')
+                verified = case in ('223', '225', 'unchecked_version')
                 self.assertEqual(result['paths'][0]['process_ids'][0], 'b-make' if verified else 'a-mine')
                 if case in ('other_model', 'eye_of_harmony'):
                     self.assertIn('path_ordering', result)

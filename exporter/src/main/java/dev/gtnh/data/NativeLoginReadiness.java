@@ -36,12 +36,13 @@ final class NativeLoginReadiness extends ChannelInboundHandlerAdapter {
 
     static NativeLoginReadiness install() {
         ModContainer owner = Loader.instance().getIndexedModList().get(OWNER);
-        String version = requireSupportedVersion(owner == null ? null : owner.getVersion());
+        if (owner == null) throw new IllegalStateException("Native CoreMod login policy owner is unavailable");
+        String version = owner.getVersion();
         FMLEmbeddedChannel channel = NetworkRegistry.INSTANCE.getChannel(OWNER, Side.CLIENT);
         if (channel == null || channel.attr(NetworkRegistry.CHANNEL_SOURCE).get() != Side.CLIENT
             || !OWNER.equals(channel.attr(NetworkRegistry.FML_CHANNEL).get()))
             throw new IllegalStateException("Native CoreMod client channel is unavailable");
-        // Both verified CoreMod versions register only this one client message on their channel.
+        // Select the native client message wrapper by its actual channel registration.
         // ModularUI2 generates wrapper names, so protocol ownership identifies the target.
         String handlerName = null;
         SimpleChannelHandlerWrapper<?, ?> wrapper = null;
@@ -60,12 +61,6 @@ final class NativeLoginReadiness extends ChannelInboundHandlerAdapter {
         NativeLoginReadiness readiness = new NativeLoginReadiness(wrapper, handlerName, version);
         channel.pipeline().replace(handlerName, handlerName, readiness);
         return readiness;
-    }
-
-    static String requireSupportedVersion(String version) {
-        if (!"2.9.89".equals(version) && !"2.9.98".equals(version))
-            throw new IllegalStateException("Native login readiness requires CoreMod 2.9.89 or 2.9.98");
-        return version;
     }
 
     private static IllegalStateException unsupportedRegistration(FMLEmbeddedChannel channel,

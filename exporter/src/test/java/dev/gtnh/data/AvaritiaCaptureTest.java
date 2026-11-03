@@ -21,8 +21,9 @@ public class AvaritiaCaptureTest {
         ItemStack input = new ItemStack(new Item(), 64, 0);
         ItemStack output = new ItemStack(new Item(), 3, 0);
         AvaritiaCapture.Declaration declaration = AvaritiaCapture.declaration(
-            new ExtremeShapedRecipe(2, 2, new ItemStack[] {input, null, null, input}, output), "1.100");
+            new ExtremeShapedRecipe(2, 2, new ItemStack[] {input, null, null, input}, output), "future-version");
         assertTrue(declaration.known);
+        assertEquals("future-version", declaration.conditions.get("native_version").getAsString());
         assertEquals(4, declaration.inputs.size());
         assertNull(declaration.inputs.get(1));
         assertEquals(64, ((ItemStack) declaration.inputs.get(3)).stackSize);

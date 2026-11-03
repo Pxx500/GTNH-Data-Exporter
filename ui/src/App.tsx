@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import {useTraceJob} from './useTraceJob'
 import type { Environment, Group, Page, Process, Resource, Single, Source, Status, Trace } from './api'
 import { query, useRequest } from './api'
-import { ActionHint, Badge, CoverageList, JsonData, RequestState, SourceDetail, ResourceRef, ProcessInputSummary } from './Details'
+import { ActionHint, Badge, CoverageList, JsonData, RequestState, SourceDetail, ResourceRef, ProcessInputSummary, processName } from './Details'
 import { ProcessInspector } from './RecordInspector'
 import { TraceActivity, TraceView } from './TraceView'
 import type {TraceActivityState} from './TraceView'
@@ -19,7 +19,7 @@ function Pagination({page, setOffset}: {page: Page<unknown>; setOffset: (offset:
 }
 function ProcessCard({process, onSelect}: {process: Process; onSelect: (id: string) => void}) {
   const [open, setOpen] = useState(false)
-  return <article className="process-card"><button className="process-summary" aria-expanded={open} onClick={() => setOpen(!open)}><span><strong>{process.display_name || process.id}</strong><small>{process.family} · <ProcessInputSummary process={process}/> · {process.outputs.length} outputs</small></span><span aria-hidden="true">{open ? '−' : '+'}</span></button>{open && <ProcessInspector process={process} onSelect={onSelect}/>}</article>
+  return <article className="process-card"><button className="process-summary" aria-expanded={open} onClick={() => setOpen(!open)}><span><strong>{processName(process)}</strong><small>{process.family} · <ProcessInputSummary process={process}/> · {process.outputs.length} outputs</small></span><span aria-hidden="true">{open ? '−' : '+'}</span></button>{open && <ProcessInspector process={process} onSelect={onSelect}/>}</article>
 }
 
 export default function App() {
@@ -105,13 +105,16 @@ function SelectedTraceGroup({id,remove}:{id:string;remove:()=>void}) {
   return <li title={id}>{group.data ? <span>{group.data.item.name} · {group.data.item.members.length.toLocaleString()} members · {group.data.item.kind}</span>:id}<button type="button" onClick={remove} aria-label={`Remove group ${id}`}>Remove</button><RequestState {...group} retry={group.reload}/></li>
 }
 
+const TRACE_DEFAULTS={depth:64,maxProcesses:5000,maxPaths:20,extraSteps:64,timeBudget:60,budgetMultiplier:1}
+const TRACE_STEP_LIMIT=128
+
 function TraceWorkspace({snapshotId,startId,targetId,setStartId,setTargetId,onSelect}: {snapshotId:string;startId:string;targetId:string;setStartId:(id:string)=>void;setTargetId:(id:string)=>void;onSelect:(id:string)=>void}) {
   const [resolvedStart,setResolvedStart]=useState('')
   const [resolvedTarget,setResolvedTarget]=useState('')
-  const [depth,setDepth]=useState('12')
-  const [maxProcesses,setMaxProcesses]=useState('150')
-  const [maxPaths,setMaxPaths]=useState('8')
-  const [extraSteps,setExtraSteps]=useState('6')
+  const [depth,setDepth]=useState(String(TRACE_DEFAULTS.depth))
+  const [maxProcesses,setMaxProcesses]=useState(String(TRACE_DEFAULTS.maxProcesses))
+  const [maxPaths,setMaxPaths]=useState(String(TRACE_DEFAULTS.maxPaths))
+  const [extraSteps,setExtraSteps]=useState(String(TRACE_DEFAULTS.extraSteps))
   const [pathSelection,setPathSelection]=useState('material')
   const [terminalArtifactPolicy,setTerminalArtifactPolicy]=useState('allow')
   const [minTier,setMinTier]=useState('')
@@ -125,8 +128,8 @@ function TraceWorkspace({snapshotId,startId,targetId,setStartId,setTargetId,onSe
   const [required,setRequired]=useState<string[]>([])
   const [excluded,setExcluded]=useState<string[]>([])
   const [excludedGroups,setExcludedGroups]=useState<string[]>([])
-  const [timeBudget,setTimeBudget]=useState('5')
-  const [budgetMultiplier,setBudgetMultiplier]=useState(1)
+  const [timeBudget,setTimeBudget]=useState(String(TRACE_DEFAULTS.timeBudget))
+  const [budgetMultiplier,setBudgetMultiplier]=useState(TRACE_DEFAULTS.budgetMultiplier)
   const [submitted,setSubmitted]=useState<{url:string;kind:'job'|'sync'}>()
   const [requestClock,setRequestClock]=useState<{id:string;sampledAt:number;elapsedSeconds:number;pending:boolean;kind:'job'|'sync';failed?:boolean}>()
   const requestSequence=useRef(0)
@@ -158,14 +161,14 @@ function TraceWorkspace({snapshotId,startId,targetId,setStartId,setTargetId,onSe
     return String(value).trim()==='' || !Number.isFinite(number) || (integer && !Number.isInteger(number)) || number<min || number>max?`${label} must be ${integer?'a whole number':'a finite number'} from ${min} to ${max}.`:undefined
   }
   const fieldErrors={
-    depth:numberError(depth,'Maximum depth',1,64),
+    depth:numberError(depth,'Maximum depth',1,TRACE_STEP_LIMIT),
     maxProcesses:numberError(maxProcesses,'Included recipe limit',1,5000),
     maxPaths:numberError(maxPaths,'Paths',1,100),
-    extraSteps:numberError(extraSteps,'Additional steps',0,64),
+    extraSteps:numberError(extraSteps,'Additional steps',0,TRACE_STEP_LIMIT),
     minTier:tierBadInput.minTier?'Minimum recipe voltage tier must be a whole number from 0 to 15.':minTier===''?undefined:numberError(minTier,'Minimum recipe voltage tier',0,15),
     maxTier:tierBadInput.maxTier?'Maximum recipe voltage tier must be a whole number from 0 to 15.':maxTier===''?undefined:numberError(maxTier,'Maximum recipe voltage tier',0,15),
     timeBudget:pathSelection==='material'?numberError(timeBudget,'Search time per run (seconds)',.05,60,false):undefined,
-    budgetMultiplier:pathSelection==='material'?numberError(budgetMultiplier,'Search work budget',1,10):undefined,
+    budgetMultiplier:pathSelection==='material'?numberError(budgetMultiplier,'Search effort',1,10):undefined,
   }
   if(minTier!=='' && maxTier!=='' && !fieldErrors.minTier && !fieldErrors.maxTier && Number(minTier)>Number(maxTier)){
     fieldErrors.minTier='Minimum recipe voltage tier must not exceed the maximum tier.'
@@ -187,7 +190,7 @@ function TraceWorkspace({snapshotId,startId,targetId,setStartId,setTargetId,onSe
   </>
   const disabledReason=validationErrors.length>0?'Fix the highlighted Trace settings before searching.':jobs.busy || ((trace.loading || activeJob?.status==='running') && current)?'Searching paths. Wait for this request to finish.':!startId && !targetId?'Select a supplied start and a target from the search results.':!startId?'Select a supplied start from the search results.':!targetId?'Select a target from the search results.':!ready?'Wait for both selected resources to load.':undefined
   const routeLabel=pathSelection==='material'?'Main material flow':pathSelection==='diverse'?'Diverse routes':'Fewest steps first'
-  const customSearchLimits=[Number(depth)!==12,Number(maxProcesses)!==150,Number(maxPaths)!==8,Number(extraSteps)!==6,pathSelection==='material' && Number(timeBudget)!==5,pathSelection==='material' && budgetMultiplier!==1].filter(Boolean).length
+  const customSearchLimits=[Number(depth)!==TRACE_DEFAULTS.depth,Number(maxProcesses)!==TRACE_DEFAULTS.maxProcesses,Number(maxPaths)!==TRACE_DEFAULTS.maxPaths,Number(extraSteps)!==TRACE_DEFAULTS.extraSteps,pathSelection==='material' && Number(timeBudget)!==TRACE_DEFAULTS.timeBudget,pathSelection==='material' && budgetMultiplier!==TRACE_DEFAULTS.budgetMultiplier].filter(Boolean).length
   const materialSummary=[required.length>0?`${required.length} required`:null,excluded.length>0?`${excluded.length} excluded`:null,excludedGroups.length>0?`${excludedGroups.length} excluded groups`:null,terminalArtifactPolicy==='direct_targets_only'?'Tools: direct targets only':null].filter(Boolean).join(' · ') || 'No material filters'
   const voltageSummary=minTier!=='' || maxTier!==''?`Tiers ${minTier || '0'}–${maxTier || '15'} · Unknown ${unknownTierPolicy==='include'?'included':'excluded'}`:unknownTierPolicy==='include'?'Any tier · Unknown included':'Any tier'
   return <section className="trace-workspace"><div className="panel-heading"><div><h2>Trace production paths</h2><p>Find recipe paths from a supplied resource to a target.</p></div></div><form noValidate onSubmit={event=>{event.preventDefault()
@@ -219,15 +222,15 @@ function TraceWorkspace({snapshotId,startId,targetId,setStartId,setTargetId,onSe
     <details className="trace-settings"><summary><span>Search strategy and budgets</span><small>{routeLabel}{customSearchLimits>0?` · ${customSearchLimits} custom ${customSearchLimits===1?'limit':'limits'}`:''}</small></summary>
       <div className="trace-setting"><label>Route selection<select aria-describedby="trace-strategy-help" value={pathSelection} onChange={event=>setPathSelection(event.target.value)}><option value="diverse">Diverse routes</option><option value="material">Main material flow</option><option value="shortest">Fewest steps first</option></select></label><p id="trace-strategy-help" className="help">{pathSelection==='material'?'Follow native material continuity and target ingredient branches. Recipe variants are representative. Side inputs need external supplies.':pathSelection==='diverse'?'Spread routes across target ingredients, including longer alternatives.':'Show the shortest qualifying paths first.'}</p></div>
       <div className="trace-settings-grid">
-        <div><label>Maximum depth<input {...validationProps('depth','trace-depth-help')} type="number" min="1" max="64" value={depth} onChange={event=>setDepth(event.target.value)} required/></label>{fieldError('depth')}<p id="trace-depth-help" className="help">Recipes per path.</p></div>
-        <div><label>Included recipe limit<input {...validationProps('maxProcesses','trace-recipes-help')} type="number" min="1" max="5000" value={maxProcesses} onChange={event=>setMaxProcesses(event.target.value)} required/></label>{fieldError('maxProcesses')}<p id="trace-recipes-help" className="help">Unique recipes in the combined map.</p></div>
+        <div><label>Maximum depth<input {...validationProps('depth','trace-depth-help')} type="number" min="1" max={TRACE_STEP_LIMIT} value={depth} onChange={event=>setDepth(event.target.value)} required/></label>{fieldError('depth')}<p id="trace-depth-help" className="help">Recipes per path.</p></div>
+        <div><label>Included recipe limit<input {...validationProps('maxProcesses','trace-recipes-help')} type="number" min="1" max="5000" value={maxProcesses} onChange={event=>setMaxProcesses(event.target.value)} required/></label>{fieldError('maxProcesses')}<p id="trace-recipes-help" className="help">Recipes shown on the board, not recipes checked during search.</p></div>
         <div><label>Paths<input {...validationProps('maxPaths','trace-paths-help')} type="number" min="1" max="100" value={maxPaths} onChange={event=>setMaxPaths(event.target.value)} required/></label>{fieldError('maxPaths')}<p id="trace-paths-help" className="help">Maximum alternatives to retain.</p></div>
-        <div><label>Additional steps<input {...validationProps('extraSteps','trace-detour-help')} type="number" min="0" max="64" value={extraSteps} onChange={event=>setExtraSteps(event.target.value)} required/></label>{fieldError('extraSteps')}<p id="trace-detour-help" className="help">Detour beyond the shortest qualifying path.</p></div>
+        <div><label>Additional steps<input {...validationProps('extraSteps','trace-detour-help')} type="number" min="0" max={TRACE_STEP_LIMIT} value={extraSteps} onChange={event=>setExtraSteps(event.target.value)} required/></label>{fieldError('extraSteps')}<p id="trace-detour-help" className="help">Detour beyond the shortest qualifying path.</p></div>
       </div>
       {pathSelection==='material' && <><div className="trace-settings-grid">
         <div><label>Search time per run (seconds)<input {...validationProps('timeBudget','trace-time-help')} type="number" min=".05" max="60" step="any" value={timeBudget} onChange={event=>setTimeBudget(event.target.value)} required/></label>{fieldError('timeBudget')}<p id="trace-time-help" className="help">Time allowed for each run or continuation.</p></div>
-        <div><label>Search work budget<select {...validationProps('budgetMultiplier','trace-work-help')} value={budgetMultiplier} onChange={event=>setBudgetMultiplier(Number(event.target.value))}>{Array.from({length:10},(_,index)=><option key={index+1} value={index+1}>{index+1}×</option>)}</select></label>{fieldError('budgetMultiplier')}<p id="trace-work-help" className="help">Choose before starting a new search.</p></div>
-      </div><p className="help">Results appear while searching. Stop retains results and unfinished work. Continue resumes the same search.</p></>}
+        <div><label>Search effort<select {...validationProps('budgetMultiplier','trace-work-help')} value={budgetMultiplier} onChange={event=>setBudgetMultiplier(Number(event.target.value))}>{Array.from({length:10},(_,index)=><option key={index+1} value={index+1}>{index+1}× · up to {((index+1)*10000).toLocaleString('en-US')} recipes checked</option>)}</select></label>{fieldError('budgetMultiplier')}<p id="trace-work-help" className="help">Candidate-search budget. Does not change the limits above.</p></div>
+      </div><details><summary>What does search effort control?</summary><p>At 1×, the search can check up to 10,000 recipes, visit 20,000 search states and perform 100,000 expansion operations. Higher settings multiply these budgets.</p><p>The included recipe limit controls recipes shown on the board. A 5,000-recipe board can require checking many more candidates.</p><p>Time per run is a separate limit. Increasing effort does not extend it. Choose effort before starting a new search.</p></details><p className="help">Results appear while searching. Stop retains results and unfinished work. Continue resumes the same search.</p></>}
     </details>
   </form>
   {current && pathOrdering?.changed && (pathOrdering.policy==='cutter_consumed_item_first' || (!pathOrdering.acquisition_changed && pathOrdering.cutter_preference?.changed)) && <p className="help">For comparable Cutter recipes, paths through the consumed item are shown first. Fluid routes remain available.</p>}

@@ -523,10 +523,21 @@ def _search_steps(handle, dataset, canonical, start_id, target_id, max_depth, ma
     material_evidence = {'policy': 'native_declaration_basis', 'prepared_resource_lookups': 0,
                          'comparisons': 0, 'uncertain_disjoint_comparisons': 0}
     search['material_evidence'] = material_evidence
+    machine_preference = {'policy': 'deprioritize_primitive_blast_furnace', 'weight': 1,
+                          'scope': 'material_search_order_only'}
+    search['machine_preference'] = machine_preference
     incumbent = {'policy': 'provisional_material_candidate', 'reference_admitted': False,
                  'reference_retained': False, 'reference_replaced': False,
                  'resource_ids': [], 'process_ids': [], 'compatible_improvement_turns': 0, 'charged_work': 0}
     search['reference_candidate'] = incumbent
+    contribution = {'policy': 'reject_source_return_windows', 'scope': 'selected_2_3_recipe_spine_windows',
+        'checked_windows': 0, 'rejected_continuations': 0, 'unknown_windows': 0, 'required_overrides': 0,
+        'cache_hits': 0, 'loaded_process_records': 0, 'matching_rows': 0, 'accounting_matching_rows': 0,
+        'cases': 0, 'charged_work': 0,
+        'non_returning_windows': 0, 'non_rejected_windows': 0,
+        'output_lookups': 0, 'output_cache_hits': 0, 'output_rows': 0,
+        'limits': {'cases_per_window': 16, 'matching_members_per_choice': 17, 'input_slots_per_window': 64}}
+    search['material_contribution'] = contribution
     families, resource_facts = {}, {}
     paths, reasons, branches = [], set(), []
     terminal_categories = {}
@@ -632,6 +643,10 @@ def _search_steps(handle, dataset, canonical, start_id, target_id, max_depth, ma
             families[pid] = connection.execute('SELECT family FROM processes WHERE id=?', (pid,)).fetchone()[0]
             return families[pid]
 
+        def machine_order(pid):
+            family = recipe_family(pid)
+            return 0 if family == 'gregtech:gt.recipe.blastfurnace' else 2 if family == 'gregtech:gt.recipe.primitiveblastfurnace' else 1
+
         def resource_role(rid):
             if rid in resource_facts:
                 recovery['resource_fact_cache_hits'] += 1
@@ -667,7 +682,9 @@ def _search_steps(handle, dataset, canonical, start_id, target_id, max_depth, ma
             material_evidence['comparisons'] += 1
             material_evidence['uncertain_disjoint_comparisons'] += int(
                 discontinuity == 1 and bool(left[0] and right[0]))
-            return discontinuity + (2 if position else 0) + recovery_penalty(pid, source, dest)
+            primitive_blast = recipe_family(pid) == 'gregtech:gt.recipe.primitiveblastfurnace'
+            return (discontinuity + (2 if position else 0) + recovery_penalty(pid, source, dest)
+                    + (machine_preference['weight'] if primitive_blast else 0))
 
         jobs = {}
         target_entries = predecessors(target_id)
@@ -701,6 +718,127 @@ def _search_steps(handle, dataset, canonical, start_id, target_id, max_depth, ma
 
         scope = max_depth
         reference_bounds = set()
+        window_cache, guard_records, guard_matches, output_resources = {}, {}, {}, {}
+        guard_work = {'cases': 0, 'matching_rows': 0}
+
+        def contribution_charge(units):
+            if search['expansion_work'] + units > search['work_limit']:
+                reasons.add('search_work_limit')
+                return False
+            search['expansion_work'] += units
+            contribution['charged_work'] += units
+            return True
+
+        def splitter(pid):
+            if pid in output_resources:
+                contribution['output_cache_hits'] += 1
+            else:
+                if not contribution_charge(1):
+                    return False
+                contribution['output_lookups'] += 1
+                ids = set()
+                for row in connection.execute('SELECT DISTINCT resource_id FROM outputs WHERE process_id=?', (pid,)):
+                    if not contribution_charge(1):
+                        return False
+                    contribution['output_rows'] += 1
+                    ids.add(row[0])
+                output_resources[pid] = frozenset(ids)
+            return len(output_resources[pid]) >= 2
+
+        def source_return_window(path):
+            """A resumable exact proof that the selected entry is returned rather than consumed."""
+            if not contribution_charge(1):
+                return False
+            key = tuple(path['process_ids']), tuple(path['resource_ids'])
+            if key in window_cache:
+                contribution['cache_hits'] += 1
+                return window_cache[key]
+            contribution['checked_windows'] += 1
+            pids, rids = path['process_ids'], path['resource_ids']
+            if required.intersection(rids[1:-1]):
+                contribution['required_overrides'] += 1
+                window_cache[key] = False
+                return False
+            if not splitter(pids[-1]):
+                contribution['non_returning_windows'] += 1
+                window_cache[key] = False
+                return False
+            # A missing exact entry-resource return makes the proposed rejection impossible.
+            if rids[0] not in output_resources[pids[-1]]:
+                contribution['non_returning_windows'] += 1
+                window_cache[key] = False
+                return False
+            yield 'material_contribution'
+            supported = True
+            for pid in pids:
+                if pid not in guard_records:
+                    if not contribution_charge(1):
+                        supported = False
+                        break
+                    guard_records[pid] = dataset._record(canonical, 'processes', pid)
+                    contribution['loaded_process_records'] += 1
+            records = [guard_records[pid] for pid in pids] if supported else []
+            slots = sum(len(record['inputs']) for record in records)
+            if (not supported or slots > contribution['limits']['input_slots_per_window']
+                    or any(len(slot['choices']) > 16 for record in records for slot in record['inputs'])
+                    or not all(dataset._fixed_material_effects(record) for record in records)):
+                supported = False
+            if supported:
+                for record in records:
+                    for slot in record['inputs']:
+                        for choice in slot['choices']:
+                            mk = match_key(choice)
+                            if mk not in guard_matches:
+                                if not contribution_charge(1):
+                                    supported = False
+                                    break
+                                ids = dataset._choice_resources(canonical, choice, limit=17)
+                                if not contribution_charge(len(ids)):
+                                    supported = False
+                                    break
+                                contribution['matching_rows'] += len(ids)
+                                guard_matches[mk] = tuple(ids)
+                            if len(guard_matches[mk]) > 16:
+                                supported = False
+                                break
+                        if not supported:
+                            break
+                    yield 'material_contribution'
+                    if not supported:
+                        break
+            rejected, checked = supported, 0
+            if rejected:
+                ids = set(rids)
+                for record in records:
+                    for slot in record['inputs']:
+                        for choice in slot['choices']:
+                            ids.update(guard_matches[match_key(choice)])
+                captured = {'processes': guard_records, 'resources': dict.fromkeys(ids), 'matching_candidates': guard_matches}
+                bounds = {'cases_per_window': 16, 'cases': search['work_limit'], 'matching_rows': search['work_limit']}
+                for kind, value in dataset._material_window_cases(path, captured, guard_work, bounds):
+                    if kind == 'work':
+                        if not contribution_charge(value):
+                            supported = rejected = False
+                            break
+                        yield 'material_contribution'
+                        continue
+                    if value is None:
+                        supported = rejected = False
+                        break
+                    checked += 1
+                    ledger = value['ledger']
+                    if ledger['net'].get(rids[0], 0) < 0:
+                        rejected = False
+                        break
+                rejected = rejected and checked > 0
+            contribution['cases'] = guard_work['cases']
+            contribution['accounting_matching_rows'] = guard_work['matching_rows']
+            if not supported or not checked:
+                contribution['unknown_windows'] += 1
+            elif not rejected:
+                contribution['non_rejected_windows'] += 1
+            window_cache[key] = rejected
+            return rejected
 
         def release_cursor(job, cursor_id):
             cursor = job['cursors'].pop(cursor_id)
@@ -748,12 +886,31 @@ def _search_steps(handle, dataset, canonical, start_id, target_id, max_depth, ma
                 depth = len(pp)
                 turns += 1
                 search['examined_states'] += 1
+                rejected = False
+                for size in (2, 3):
+                    if depth >= size:
+                        path = {'resource_ids': list(reversed(rr[-size-1:])), 'process_ids': list(reversed(pp[-size:]))}
+                        if (yield from source_return_window(path)):
+                            rejected = True
+                            break
+                if rejected:
+                    contribution['rejected_continuations'] += 1
+                    continue
+                if 'search_work_limit' in reasons:
+                    return None
                 rid = rr[-1]
                 if rid == start_id:
                     if required <= set(rr):
                         return {'resource_ids': list(reversed(rr)), 'process_ids': list(reversed(pp))}
                     continue
-                key = rid, frozenset(required & set(rr)), frozenset(rr) if required else None
+                # Only a final splitter can close the scoped proof. Other suffixes retain old dominance.
+                context = ()
+                if len(pp) >= 2 and splitter(pp[-2]):
+                    context = pp[-2:], rr[-3:]
+                elif pp and splitter(pp[-1]):
+                    context = pp[-1:], rr[-2:]
+                key = (rid, frozenset(required & set(rr)), frozenset(rr) if required else None,
+                       context)
                 frontier = job['seen'].setdefault(key, [])
                 if any(old_score <= score and old_depth <= depth for old_score, old_depth in frontier):
                     continue
@@ -782,7 +939,7 @@ def _search_steps(handle, dataset, canonical, start_id, target_id, max_depth, ma
                     choices.append((next_score, depth + 1 + distances[nodes[input_id]], pid, input_id))
                 if choices:
                     # Repeated AND slots retain one recipe witness and the same spine continuation.
-                    choices = sorted(set(choices), key=lambda child: (child[0], child[1], child[3], child[2]))
+                    choices = sorted(set(choices), key=lambda child: (child[0], child[1], child[3], machine_order(child[2]), child[2]))
                     cursor_id = partial['created_cursors']
                     partial['created_cursors'] += 1
                     partial['sorted_candidates'] += len(choices)
@@ -828,8 +985,11 @@ def _search_steps(handle, dataset, canonical, start_id, target_id, max_depth, ma
                 clear_job(job)
         clear_job(reference)
 
+        # A primitive furnace must not settle a shared ingredient class before its electric alternative.
         ordered = sorted(jobs.values(), key=lambda job: (
-            not any(material_for(rid) & source_materials for rid in job['candidates']), job['pid'], job['slot']))
+            not any(material_for(rid) & source_materials for rid in job['candidates']),
+            machine_order(job['pid']),
+            job['pid'], job['slot']))
 
         signatures, admitted, provisional = {}, set(), None
         handle._ordered = ordered

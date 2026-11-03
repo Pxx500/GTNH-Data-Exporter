@@ -27,11 +27,6 @@ final class AvaritiaCapture {
 
     void capture() throws IOException {
         String version = Loader.instance().getIndexedModList().get("Avaritia").getVersion();
-        if (!"1.100".equals(version)) {
-            capture.coverage("avaritia.extreme_crafting", "unsupported", 0,
-                "Native recipe API is verified only for Avaritia 1.100", object("native_version", version));
-            return;
-        }
         int index = 0;
         int interpreted = 0;
         for (IRecipe recipe : new ArrayList<>(ExtremeCraftingManager.getInstance().getRecipeList())) {
@@ -78,7 +73,7 @@ final class AvaritiaCapture {
                 object("owner", "ExtremeCraftingManager", "index", index++));
         }
         capture.coverage("avaritia.extreme_crafting", "partial", index,
-            "All registered declarations catalogued. Exact 1.100 recipe classes interpreted. Native precedence, repair and container accounting unresolved",
+            "All registered declarations catalogued. Exact native recipe classes interpreted. Native precedence, repair and container accounting unresolved",
             object("native_version", version, "interpreted_declarations", interpreted));
     }
 
@@ -91,7 +86,7 @@ final class AvaritiaCapture {
         List<?> inputs = Collections.emptyList();
         boolean known = false;
         boolean forgeShapeless = false;
-        if (recipe != null && "1.100".equals(version)) {
+        if (recipe != null) {
             if (recipe.getClass() == ExtremeShapedRecipe.class) {
                 ExtremeShapedRecipe shaped = (ExtremeShapedRecipe) recipe;
                 inputs = Arrays.asList(shaped.recipeItems);

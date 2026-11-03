@@ -47,6 +47,20 @@ class TraceJobTests(unittest.TestCase):
         with self.assertRaises(DatasetError):
             self.dataset.continue_trace_search(final['job_id'])
 
+    def test_trace_defaults_are_retained_and_material_paths_can_reach_128_steps(self):
+        defaults = self.wait(self.dataset.start_trace_search(start_id='start', target_id='target'))
+        for field, value in [('max_depth', 64), ('max_processes', 5000), ('max_paths', 20),
+                             ('max_extra_steps', 64), ('budget_multiplier', 1)]:
+            self.assertEqual(defaults['request'][field], value)
+        self.dataset.close_trace_search(defaults['job_id'])
+        root = self.dataset.path.parent
+        chain = Dataset.import_snapshot(snapshot(root / 'deep-capture',
+            resources=[resource(f'r{i}') for i in range(129)],
+            processes=[process(f'p{i}', [slot(choice(f'r{i}'))], [f'r{i+1}']) for i in range(128)]), root / 'deep.sqlite')
+        result = chain.trace_processes(start_id='r0', target_id='r128', max_depth=128,
+            max_extra_steps=128, max_paths=1, path_selection='material')
+        self.assertEqual(len(result['paths'][0]['process_ids']), 128)
+
     def test_partial_publication_pause_and_continue_preserve_work_and_final_result(self):
         args = dict(start_id='start', target_id='target', max_paths=8, path_selection='material')
         expected = self.dataset.trace_processes(**args)

@@ -6,7 +6,7 @@ import json
 import sys
 from pathlib import Path
 
-from .dataset import Dataset, DatasetError
+from .dataset import Dataset, DatasetError, TRACE_DEFAULTS
 
 
 def _json(value):
@@ -76,10 +76,10 @@ def parser():
         if name == "trace":
             command.add_argument("--start-id", required=True)
             command.add_argument("--target-id", required=True)
-            command.add_argument("--max-depth", type=int, default=12)
-            command.add_argument("--max-processes", type=int, default=300)
-            command.add_argument("--max-paths", type=int, default=8)
-            command.add_argument("--max-extra-steps", type=int, default=6)
+            command.add_argument("--max-depth", type=int, default=TRACE_DEFAULTS['max_depth'])
+            command.add_argument("--max-processes", type=int, default=TRACE_DEFAULTS['max_processes'])
+            command.add_argument("--max-paths", type=int, default=TRACE_DEFAULTS['max_paths'])
+            command.add_argument("--max-extra-steps", type=int, default=TRACE_DEFAULTS['max_extra_steps'])
             command.add_argument("--path-selection", choices=("diverse", "shortest", "material"), default="diverse", help="Spread target ingredients, prefer fewest steps, or prioritize native material flow using the prepared index")
             command.add_argument("--view", choices=("full", "compact", "concise"), default="full", help="Expand matches, retain compact graph evidence, or omit resource material facts and provenance while keeping complete recipes")
             command.add_argument("--terminal-artifact-policy", choices=("allow", "direct_targets_only"), default="allow",

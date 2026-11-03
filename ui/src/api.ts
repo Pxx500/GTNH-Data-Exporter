@@ -111,6 +111,12 @@ export interface Trace {
   paths: {resource_ids: string[]; process_ids: string[]}[]
   search: {
     examined_processes:number;limit:number;truncated:boolean
+    material_contribution?: {
+      policy:'reject_source_return_windows';scope:'selected_2_3_recipe_spine_windows'
+      checked_windows:number;rejected_continuations:number;unknown_windows:number;required_overrides:number
+      cache_hits:number;loaded_process_records:number;matching_rows:number;cases:number;charged_work:number
+      limits:{cases_per_window:number;matching_members_per_choice:number;input_slots_per_window:number}
+    }
     terminal_artifacts?: {
       policy:'allow'|'direct_targets_only';basis:'runtime_item_class_hierarchy_or_native_registered_subtype';scope:'selected_consumed_spine_edges'
       recognition_status:'not_requested'|'not_checked'|'captured_for_checked_resources'|'partial'

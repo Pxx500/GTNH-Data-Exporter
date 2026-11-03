@@ -40,11 +40,11 @@ public class BotaniaCaptureTest {
         assertEquals("1.13.41-GTNH", declaration.conditions.get("native_version").getAsString());
         assertEquals("seed_trigger_and_water_refill_accounting_unmodeled",
             declaration.conditions.get("dynamic_inputs").getAsString());
-        assertFalse(BotaniaCapture.petalDeclaration(recipe, "1.13.42-GTNH").known);
+        assertTrue(BotaniaCapture.petalDeclaration(recipe, "future-development-version").known);
     }
 
     @Test
-    public void runicUnsupportedVersionsAndSubclassesNeverProbeNativeOverrides() {
+    public void runicSubclassesRemainUnresolvedWhileUnknownVersionsRetainBaseDeclarations() {
         RecipeRuneAltar unsafe = new RecipeRuneAltar(null, 1) {
             @Override public List<Object> getInputs() { throw new AssertionError("input getter called"); }
             @Override public ItemStack getOutput() { throw new AssertionError("output getter called"); }
@@ -59,8 +59,8 @@ public class BotaniaCaptureTest {
             assertTrue(declaration.conditions.has("dynamic_output"));
         }
         BotaniaCapture.CatalogDeclaration unchecked = BotaniaCapture.runeDeclaration(new RecipeRuneAltar(null, 1), "1.13.40-GTNH");
-        assertFalse(unchecked.known);
-        assertEquals("unsupported_native_version", unchecked.conditions.get("dynamic_inputs").getAsString());
+        assertTrue(unchecked.known);
+        assertEquals("1.13.40-GTNH", unchecked.conditions.get("native_version").getAsString());
         assertNull(unchecked.output);
     }
 
@@ -96,7 +96,7 @@ public class BotaniaCaptureTest {
     }
 
     @Test
-    public void petalCatalogDoesNotProbeSubclassesOrApplyRunicVersionAuthority() {
+    public void petalCatalogDoesNotProbeSubclassesOrRejectVersionMetadata() {
         RecipePetals unsafe = new RecipePetals(null) {
             @Override public List<Object> getInputs() { throw new AssertionError("input getter called"); }
             @Override public ItemStack getOutput() { throw new AssertionError("output getter called"); }
@@ -111,8 +111,8 @@ public class BotaniaCaptureTest {
         }
         for (String version : Arrays.asList("1.13.38-GTNH", "1.13.40-GTNH", null)) {
             BotaniaCapture.CatalogDeclaration declaration = BotaniaCapture.petalDeclaration(new RecipePetals(null, "petalWhite"), version);
-            assertFalse(declaration.known);
-            assertEquals("unsupported_native_version", declaration.conditions.get("dynamic_inputs").getAsString());
+            assertTrue(declaration.known);
+            assertEquals("seed_trigger_and_water_refill_accounting_unmodeled", declaration.conditions.get("dynamic_inputs").getAsString());
             assertNull(declaration.output);
         }
     }

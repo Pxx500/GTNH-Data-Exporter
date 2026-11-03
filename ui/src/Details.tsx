@@ -2,6 +2,10 @@ import { useState } from 'react'
 import type { Coverage, Environment, Group, Output, Process, ProcessInspection, Resource, Single, Source } from './api'
 import { query, useRequest } from './api'
 
+export function processName(process:Process) {
+  return process.family==='gregtech:gt.recipe.blastfurnace'?'Electric Blast Furnace':process.display_name || process.id
+}
+
 export function Badge({children, tone = ''}: {children: React.ReactNode; tone?: string}) {
   return <span className={`badge ${tone}`}>{children}</span>
 }
@@ -187,7 +191,7 @@ export function ProcessMaterialIO({process,inputIndices,onSelect,resources,onRec
 }
 export function ProcessDetail({process, projectionIssue, onSelect, resources, onRecycle}: {process: Process; projectionIssue?:ProcessInspection['projection_issue']; onSelect?: (id: string) => void; resources?: ReadonlyMap<string, Resource>;onRecycle?:(id:string)=>void}) {
   return <section className="process-detail">
-    <div className="detail-title"><div><p className="eyebrow">{process.family}</p><h3>{process.display_name || process.id}</h3><code>{process.id}</code></div>{process.executable !== true && <Badge tone={process.executable === false ? 'warning' : 'muted'}>{process.executable === false ? 'Informational / fake' : 'Execution unknown'}</Badge>}</div>
+    <div className="detail-title"><div><p className="eyebrow">{process.family}</p><h3>{processName(process)}</h3><code>{process.id}</code></div>{process.executable !== true && <Badge tone={process.executable === false ? 'warning' : 'muted'}>{process.executable === false ? 'Informational / fake' : 'Execution unknown'}</Badge>}</div>
     <ProcessExecutionFacts process={process} resources={resources} onSelect={onSelect}/>
     <ProcessMaterialIO process={process} projectionIssue={projectionIssue} resources={resources} onSelect={onSelect} onRecycle={onRecycle}/>
     <ConditionFacts value={process.conditions}/><JsonData label="Technical data: full process record" value={process}/>

@@ -120,7 +120,7 @@ final class NeiReferenceCapture implements Closeable {
             List<ICraftingHandler> handlers = new ArrayList<>(GuiCraftingRecipe.craftinghandlers);
             int parallelCount = handlers.size();
             handlers.addAll(new ArrayList<>(GuiCraftingRecipe.serialCraftingHandlers));
-            if (reference.stillOnly && !reference.selectStill(handlers, manifest)) {
+            if (reference.stillOnly && !reference.selectStill(handlers)) {
                 reference.publish(manifest);
                 return;
             }
@@ -275,10 +275,8 @@ final class NeiReferenceCapture implements Closeable {
             JsonObject gt = component("gregtech");
             JsonObject neiSource = source(GuiCraftingRecipe.class);
             JsonObject gtSource = source(GTNEIDefaultHandler.class);
-            boolean neiVerified = verified(nei, neiSource, "2.8.170-GTNH",
-                "1086201a90bbfae020a42c6bce86d67d82fd0febbcccb72acc430694e978860a");
-            boolean gtVerified = verified(gt, gtSource, "5.09.54.256",
-                "b4f8d38ef734e08564e3ddb793c411a23a7d7df6b86de4994fa3d8f9afe947c3");
+            boolean neiVerified = verified(nei, neiSource);
+            boolean gtVerified = verified(gt, gtSource);
             JsonArray failures = new JsonArray();
             if (neiSource.has("failure")) failures.add(neiSource.get("failure"));
             if (gtSource.has("failure")) failures.add(gtSource.get("failure"));
@@ -295,10 +293,9 @@ final class NeiReferenceCapture implements Closeable {
             return null;
         }
 
-        private static boolean verified(JsonObject mod, JsonObject source, String version, String digest) {
-            return mod != null && version.equals(mod.get("version").getAsString())
-                && !mod.get("sha256").isJsonNull() && digest.equals(mod.get("sha256").getAsString())
-                && !source.get("sha256").isJsonNull() && digest.equals(source.get("sha256").getAsString());
+        private static boolean verified(JsonObject mod, JsonObject source) {
+            return mod != null && !mod.get("sha256").isJsonNull() && !source.get("sha256").isJsonNull()
+                && mod.get("sha256").getAsString().equals(source.get("sha256").getAsString());
         }
 
         private JsonObject source(Class<?> type) {
@@ -413,18 +410,13 @@ final class NeiReferenceCapture implements Closeable {
         }
     }
 
-    private boolean selectStill(List<ICraftingHandler> handlers, JsonObject manifest) {
+    private boolean selectStill(List<ICraftingHandler> handlers) {
         for (ICraftingHandler handler : handlers) {
             if (handler != null && handler.getClass() == NEIHandlerStill.class) selectedHandlers++;
             else excludedHandlers++;
         }
         try {
-            if (!hasComponent(manifest, "Forestry", "4.11.39",
-                "f3cacea1f523a5b94bf3f7bcc811c49dd5224d5024ac3d98fb6ac3b26a51547f")
-                || !hasComponent(manifest, "NotEnoughItems", "2.8.160-GTNH",
-                "723984da9883980f1b13a71e3e500ed52ea3c059141ef931078a8ea511a1ae17")) {
-                selectionFailure = object("reason", "unsupported_component_authority");
-            } else if (selectedHandlers != 1) {
+            if (selectedHandlers != 1) {
                 selectionFailure = object("reason", selectedHandlers == 0 ? "missing_still_handler" : "duplicate_still_handlers");
             } else if (RecipeManagers.stillManager == null || RecipeManagers.stillManager.getClass() != StillRecipeManager.class) {
                 selectionFailure = object("reason", "unsupported_still_manager");
@@ -441,16 +433,6 @@ final class NeiReferenceCapture implements Closeable {
             selectionFailure = object("reason", "still_preflight_failed", "failure", failure("still_preflight", error));
         }
         return selectionFailure == null;
-    }
-
-    private static boolean hasComponent(JsonObject manifest, String id, String version, String sha256) {
-        for (JsonElement entry : manifest.getAsJsonObject("pack").getAsJsonArray("mods")) {
-            JsonObject mod = entry.getAsJsonObject();
-            if (id.equals(mod.get("id").getAsString())) {
-                return version.equals(mod.get("version").getAsString()) && sha256.equals(mod.get("sha256").getAsString());
-            }
-        }
-        return false;
     }
 
     private void handler(ICraftingHandler original, String key, String registration) throws IOException {

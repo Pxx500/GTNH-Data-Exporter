@@ -37,14 +37,6 @@ final class EnderIoCapture {
     void capture() throws IOException {
         ModContainer owner = Loader.instance().getIndexedModList().get("EnderIO");
         String version = owner == null ? null : owner.getVersion();
-        JsonObject source = sourceDeclaration(version);
-        if (!source.get("native_version_supported").getAsBoolean()) {
-            capture.coverage("enderio:sag_mill", "unsupported", 0,
-                "No verified native Sag Mill declaration contract for this version", source);
-            capture.coverage("enderio:alloy_smelter", "unsupported", 0,
-                "No verified native Alloy Smelter declaration contract for this version", source);
-            return;
-        }
         recipes("enderio:sag_mill", "Sag Mill", ModObject.blockSagMill.unlocalisedName,
             new ArrayList<>(CrusherRecipeManager.getInstance().getRecipes()), true, version);
         recipes("enderio:alloy_smelter", "Alloy Smelter", ModObject.blockAlloySmelter.unlocalisedName,
@@ -56,10 +48,7 @@ final class EnderIoCapture {
     }
 
     static JsonObject sourceDeclaration(String version) {
-        boolean known = "2.10.49".equals(version) || "2.10.51".equals(version);
-        return object("native_version", version, "native_version_supported", known,
-            "native_semantics_basis", known ? "verified_2.10.49_2.10.51_narrow_class_equivalence"
-                : "unsupported_native_version");
+        return object("native_version", version, "native_semantics_basis", "native_class_uid_contract");
     }
 
     private void recipes(String family, String label, String machine, List<? extends IRecipe> recipes, boolean sag,

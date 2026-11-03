@@ -48,8 +48,8 @@ public class MaterialFactsTest {
     }
 
     @Test
-    public void exactVerifiedRuntimeVersionsRetainNativeQuantityBases() {
-        for (String version : Arrays.asList("5.09.54.221", "5.09.54.223", "5.09.54.225", "5.09.54.256")) {
+    public void runtimeVersionDoesNotReplaceNativeQuantityEvidence() {
+        for (String version : Arrays.asList("5.09.54.221", "5.09.54.256", "5.09.54.256-dev", "6.0", "unknown", null)) {
             assertQuantity(MaterialFacts.fluidAccounting(version, "molten", false, true),
                 "gt_material_units", "144", "native_top_level_component_parts");
             assertQuantity(MaterialFacts.fluidAccounting(version, "fluid", false, true),
@@ -57,10 +57,6 @@ public class MaterialFactsTest {
             assertUnresolved(MaterialFacts.fluidAccounting(version, "plasma", false, true));
             assertUnresolved(MaterialFacts.fluidAccounting(version, "fluid", true, true));
             assertUnresolved(MaterialFacts.fluidAccounting(version, "fluid", false, false));
-        }
-        for (String version : Arrays.asList("5.09.54.255", "5.09.54.256-dev", "5.09.54.257", "6.0")) {
-            assertUnresolved(MaterialFacts.fluidAccounting(version, "molten", false, true));
-            assertUnresolved(MaterialFacts.fluidAccounting(version, "gas", false, true));
         }
     }
 
