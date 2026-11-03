@@ -1,33 +1,21 @@
 # Dataset explorer UI
 
-This local React interface reads the Dataset HTTP contract in the repository's
-`FORMAT.md`. It does not match ingredients or discover chains in TypeScript.
+The local React interface uses the dataset HTTP API described in
+[FORMAT.md](../FORMAT.md). It requires Node.js 22.12+ or a supported newer
+version.
 
-Use Node.js 22.12+ or a supported newer version. Run `npm ci` in this directory,
-then `npm run build`. FastAPI can serve `ui/dist` on the same origin as `/api`.
-For development, `npm run dev` binds to `127.0.0.1:5173` and proxies `/api` to
-`127.0.0.1:8000`. Adjust that proxy in `vite.config.ts` if using another local
-backend port.
+Run `npm ci` and `npm run build` in this directory. FastAPI can serve `ui/dist`
+on the same origin as `/api`. For development, `npm run dev` starts on
+`127.0.0.1:5173` and proxies `/api` to `127.0.0.1:8000`. Change the proxy in
+`vite.config.ts` if the backend uses another port.
 
-`npm run typecheck` checks the TypeScript contract. `npm test` verifies presence,
-unknown quantities and chances, consumption chance, NBT sensitivity, opaque IDs,
-trace bounds and visible truncation through rendered interfaces. Test data is
-synthetic and is never loaded by the production app.
+Use `npm run typecheck` to check types and `npm test` to run the UI tests.
+Test data is synthetic and is not loaded by the production app.
 
-The library searches resources and pages processes and sources. Process details
-retain input slot roles, alternatives, rational chances, conditions and all raw
-extension fields. The environment catalog distinguishes registered definitions
-from observed world deposits. A supplied trace start remains an explicit
-assumption, and cycle groups are displayed as mutually reachable members.
+The UI supports resource and recipe lookup, source inspection and trace
+visualization. Resource details load up to 500 environment records for name
+resolution and show when more are available. The environment catalog is
+paginated.
 
-The finite SVG graph uses a simple three-lane presentation. Select a node with
-a mouse or by keyboard to inspect its full record. Large results scroll and
-have zoom controls. This layout is intended for inspection, not optimization.
-Each resource detail loads at most 500 environment records for inline name
-resolution and announces that limit if additional records exist. The separate
-environment catalog is paginated.
-
-No snapshot or synthetic production data is bundled. The UI and its own source
-are licensed under GNU LGPL version 3 only (`LGPL-3.0-only`). See [LICENSE](LICENSE)
-and the incorporated GPLv3 terms in [../COPYING](../COPYING).
-Third-party package licenses are retained by npm dependencies.
+The UI is licensed under LGPL-3.0-only. See [LICENSE](LICENSE),
+[../COPYING](../COPYING) and the npm dependency notices.

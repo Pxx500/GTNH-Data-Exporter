@@ -103,9 +103,8 @@ Item resources may carry `item_type`, captured from the registered Item object:
 
 Superclass names run from the immediate parent through the root. Interfaces
 are sorted unique names from the class, its parents and inherited interfaces.
-The capture reads JDK class metadata without invoking item behavior. Variants
-of the same Item object reuse the captured hierarchy. Failure records retain
-the basis, scope and diagnostics, without certifying a partial hierarchy.
+Failure records retain the basis, scope and diagnostics without certifying a
+partial hierarchy.
 Fluids omit this field. Missing or failed evidence means unknown item type.
 These facts do not establish stack usability, acquisition, material contribution
 or native tool wear. Resource identity and recipe accounting remain unchanged.
@@ -164,8 +163,7 @@ identities and native recipe predicates remain separate.
 The unchanged native GT quantity profile is identified by `5.09.54.221` and
 explicitly supports runtime versions `5.09.54.221`, `5.09.54.223`, `5.09.54.225`
 and `5.09.54.256`.
-The relevant native source implementations and runtime classes were compared
-before extending this exact allowlist. `profile_version` identifies the
+`profile_version` identifies the
 interpretation, while `native_version` records the actual captured runtime.
 Other versions and unknown quantity bases remain unsupported. Accepting a
 runtime version does not make unresolved persisted facts eligible, certify
@@ -787,8 +785,6 @@ Startup scope is conservative batch-prefix stock, not globally minimal
 interleaved scheduling. Fractional executions expose `integer_batch_scale`
 and require scaling before native batch feasibility can be claimed. The full
 net ledger retains side effects on the main target and every co-product.
-This is lexical discovery with typo tolerance, without synonym inference,
-translation or embeddings. It does not change ingredient matching semantics.
 
 HTTP routes are read-only under `/api`:
 
@@ -934,11 +930,8 @@ For diverse and shortest selection, the primary `route` remains the shortest
 qualifying witness discovered. Material selection prioritizes native material
 evidence and distinct target requirements through prepared analysis. Its primary
 route follows the presented material witnesses, without a yield or energy claim.
-Recovery preference reads the captured family from prepared process metadata,
-with the existing per-query cache. Its `recipe_family_source` is
-`prepared_process_metadata`. The original process record remains complete in
-canonical inspection and trace results. This changes metadata lookup storage,
-not route scores, recipe eligibility or search bounds.
+The recovery preference reports its `recipe_family_source` as
+`prepared_process_metadata`.
 
 For comparable final Cutter transformations, material presentation lists
 retained paths through the consumed item before paths through consumed fluids.
